@@ -10,7 +10,7 @@ from snapshot_cache import CACHE
 
 def main():
     spec = importlib.util.spec_from_file_location(
-        'performance_original', 'performance-backup-20260913-180807/local_files_mcp.py')
+        'performance_original', 'archive/backups/performance-backup-20260913-180807/local_files_mcp.py')
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     settings = load_settings()

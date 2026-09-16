@@ -70,7 +70,7 @@ read_file 每次最多 400 行，content（含行號、冒號、空白及換行�
 - key_store.py：Windows 使用者 DPAPI。
 - tests/：unittest、實際 STDIO 與 Windows 行為驗證。
 
-本機工程與隔離驗證記錄於 [2026-09-13 工程修正交付報告](MCP-Local_工程修正交付報告_2026-09-13.txt)；遠端驗收須實際列工具、列 shared、讀取 README.md 的「唯讀連線測試成功」、搜尋其行號，並驗證停止失效及重啟恢復。更新後請在用戶端重新整理工具清單，確認九個工具及 `root_id`、`queries`、`context_lines` 等 schema 已載入。
+本機工程與隔離驗證記錄於 [2026-09-13 工程修正交付報告](reports/engineering/MCP-Local_工程修正交付報告_2026-09-13.txt)；遠端驗收須實際列工具、列 shared、讀取 README.md 的「唯讀連線測試成功」、搜尋其行號，並驗證停止失效及重啟恢復。更新後請在用戶端重新整理工具清單，確認九個工具及 `root_id`、`queries`、`context_lines` 等 schema 已載入。
 
 ## 具名多資料夾與專案入口
 
