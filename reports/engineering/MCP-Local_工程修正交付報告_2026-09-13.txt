@@ -12,7 +12,7 @@ Python 3.10.11；MCP 1.30.0；Pydantic 2.13.5；Windows 本機。
 修改後：88 項測試通過；失敗 0；錯誤 0；跳過 0；25.0 秒。
 語法：37 個 Python 檔案 AST 解析通過。pip check 結束代碼：0。
 命令：.\.venv\Scripts\python.exe -B verify_isolated.py
-證據：engineering-results.json、engineering-tests.txt。新增 25 項工程測試，並調整既有非同步保存與讀檔安全開啟測試。
+證據：reports/engineering/engineering-results.json、engineering-tests.txt。新增 25 項工程測試，並調整既有非同步保存與讀檔安全開啟測試。
 主測試程序有 audit guard，拒絕開啟正式狀態檔及執行正式通道／排程命令。子程序使用經審閱的隔離 fixtures。
 本機 Windows 驗證：假金鑰於獨立檔案的 DPAPI、隔離 GUI/Tk 事件迴圈、Hidden、junction、symlink、hardlink、Job 程序樹。
 本機 STDIO：八工具完整 inputSchema 與唯讀標記比對 tool-contract.json，並執行分頁、多根、批次與搜尋案例。
@@ -46,9 +46,9 @@ read_window: 42.596 -> 395.012 ms；Python peak 12387300 -> 218259 bytes；read 
 search_limit: 5.95 -> 9.392 ms；Python peak 449704 -> 452722 bytes；read 14 -> 7 bytes；stat 27 -> 19。
 程序生命週期峰值工作集：55877632 -> 27148288 bytes；包含合成資料建立及全部量測，不能當作單次操作配置量。
 結論：首次列舉較少查詢；行視窗記憶體配置顯著降低；搜尋達上限少讀後續檔案。但行視窗與搜尋此資料集耗時增加，未聲稱全面加速；此版保留記憶體有界與安全驗證的取捨。
-完整每次樣本：engineering-baseline.json、engineering-after.json。
-重現命令：.\.venv\Scripts\python.exe -B benchmark_engineering.py --source engineering-backup-20260913-133727 --output engineering-baseline.json
-重現命令：.\.venv\Scripts\python.exe -B benchmark_engineering.py --output engineering-after.json
+完整每次樣本：reports/engineering/engineering-baseline.json、reports/engineering/engineering-after.json。
+重現命令：.\.venv\Scripts\python.exe -B benchmark_engineering.py --source archive/backups/engineering-backup-20260913-133727 --output reports/engineering/engineering-baseline.json
+重現命令：.\.venv\Scripts\python.exe -B benchmark_engineering.py --output reports/engineering/engineering-after.json
 
 四、人工授權驗收清單（本次未執行）
 1. 使用獨立測試端點及兩個專用根，記錄部署服務版本、MCP 版本與工具 schema；不得擴大正式共享範圍。
@@ -58,8 +58,8 @@ search_limit: 5.95 -> 9.392 ms；Python peak 449704 -> 452722 bytes；read 14 ->
 5. 敵對本機寫入者環境須先完成 Windows 最終路徑／根及祖先控制代碼策略與替換壓力驗證，否則不能部署作為安全隔離。
 
 五、回復
-修改前原始碼與測試：engineering-backup-20260913-133727。
-檔案差異及目前 SHA-256：engineering-delivery.json。只回復清單中 modified 的檔案；新增模組按 added 清單檢查後移除。不要重置整個工作目录。
+修改前原始碼與測試：archive/backups/engineering-backup-20260913-133727。
+檔案差異及目前 SHA-256：reports/engineering/engineering-delivery.json。只回復清單中 modified 的檔案；新增模組按 added 清單檢查後移除。不要重置整個工作目录。
 本次沒有修改正式一般設定或 DPAPI／排程；回復程式碼不應覆寫任何這類資料。若程序正在使用中，先取得中斷授權再切換版本。
 本報告、測試結果與原始規格可保留。備份目錄含修改前完整原始碼，請不要把它新增到遠端共享。
 

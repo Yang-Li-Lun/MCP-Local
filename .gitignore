@@ -11,11 +11,11 @@ local-files-gui.json
 *.p12
 
 # Local backups and benchmark/test outputs
-engineering-backup-*/
-performance-backup-*/
-engineering-*.json
-performance-*.json
-engineering-tests.txt
+/engineering-backup-*/
+/performance-backup-*/
+/engineering-*.json
+/performance-*.json
+/engineering-tests.txt
 
 # Vendor binaries and archives are kept locally or published as Releases
 cloudflared.exe
