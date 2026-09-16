@@ -1,0 +1,128 @@
+{
+  "fixture_version": 1,
+  "repeats": 3,
+  "instrumentation": "tracemalloc and Python stat/read hooks; OS cache not flushed",
+  "samples": [
+    {
+      "first_page": {
+        "read_bytes": 0,
+        "stat_calls": 7012,
+        "lstat_calls": 4007,
+        "elapsed_ms": 1172.348,
+        "python_peak_bytes": 757503
+      },
+      "second_page": {
+        "read_bytes": 0,
+        "stat_calls": 2,
+        "lstat_calls": 1,
+        "elapsed_ms": 1.145,
+        "python_peak_bytes": 34632
+      },
+      "read_window": {
+        "read_bytes": 1950000,
+        "stat_calls": 11,
+        "lstat_calls": 8,
+        "elapsed_ms": 347.548,
+        "python_peak_bytes": 243579
+      },
+      "search_limit": {
+        "read_bytes": 7,
+        "stat_calls": 19,
+        "lstat_calls": 12,
+        "elapsed_ms": 6.928,
+        "python_peak_bytes": 457356
+      }
+    },
+    {
+      "first_page": {
+        "read_bytes": 0,
+        "stat_calls": 7012,
+        "lstat_calls": 4007,
+        "elapsed_ms": 1128.858,
+        "python_peak_bytes": 616317
+      },
+      "second_page": {
+        "read_bytes": 0,
+        "stat_calls": 2,
+        "lstat_calls": 1,
+        "elapsed_ms": 1.163,
+        "python_peak_bytes": 29249
+      },
+      "read_window": {
+        "read_bytes": 1950000,
+        "stat_calls": 11,
+        "lstat_calls": 8,
+        "elapsed_ms": 395.012,
+        "python_peak_bytes": 218259
+      },
+      "search_limit": {
+        "read_bytes": 7,
+        "stat_calls": 19,
+        "lstat_calls": 12,
+        "elapsed_ms": 9.392,
+        "python_peak_bytes": 452618
+      }
+    },
+    {
+      "first_page": {
+        "read_bytes": 0,
+        "stat_calls": 7012,
+        "lstat_calls": 4007,
+        "elapsed_ms": 1671.674,
+        "python_peak_bytes": 614092
+      },
+      "second_page": {
+        "read_bytes": 0,
+        "stat_calls": 2,
+        "lstat_calls": 1,
+        "elapsed_ms": 0.936,
+        "python_peak_bytes": 28845
+      },
+      "read_window": {
+        "read_bytes": 1950000,
+        "stat_calls": 11,
+        "lstat_calls": 8,
+        "elapsed_ms": 471.348,
+        "python_peak_bytes": 218259
+      },
+      "search_limit": {
+        "read_bytes": 7,
+        "stat_calls": 19,
+        "lstat_calls": 12,
+        "elapsed_ms": 12.505,
+        "python_peak_bytes": 452722
+      }
+    }
+  ],
+  "median": {
+    "first_page": {
+      "read_bytes": 0,
+      "stat_calls": 7012,
+      "lstat_calls": 4007,
+      "elapsed_ms": 1172.348,
+      "python_peak_bytes": 616317
+    },
+    "second_page": {
+      "read_bytes": 0,
+      "stat_calls": 2,
+      "lstat_calls": 1,
+      "elapsed_ms": 1.145,
+      "python_peak_bytes": 29249
+    },
+    "read_window": {
+      "read_bytes": 1950000,
+      "stat_calls": 11,
+      "lstat_calls": 8,
+      "elapsed_ms": 395.012,
+      "python_peak_bytes": 218259
+    },
+    "search_limit": {
+      "read_bytes": 7,
+      "stat_calls": 19,
+      "lstat_calls": 12,
+      "elapsed_ms": 9.392,
+      "python_peak_bytes": 452722
+    }
+  },
+  "process_lifetime_peak_working_set_bytes": 27148288
+}

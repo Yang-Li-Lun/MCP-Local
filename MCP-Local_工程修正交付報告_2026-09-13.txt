@@ -1,0 +1,99 @@
+﻿MCP-Local 工程修正交付報告
+日期：2026-09-13（Asia/Taipei）
+服務版本：2026.09.13.1；工具契約版本：2；一般設定格式：v3
+交付狀態：工程核心實作與本機隔離驗證完成；正式遠端驗收及敵對本機寫入者隔離尚未完成。
+依據：使用者提供的 MCP-Local_工程修正與優化規格_v1.0_2026-09-13.txt。原始規格保留，未刪除。
+未啟動／停止正式通道，未使用真實金鑰，未註冊／移除正式工作排程，未安裝或升級套件。
+專案沒有 Git 記錄；以逐檔原始碼備份和 SHA-256 清單識別本次修改。
+
+一、實際驗證
+Python 3.10.11；MCP 1.30.0；Pydantic 2.13.5；Windows 本機。
+修改前：63 項測試通過，38.203 秒（原有完整測試）。
+修改後：88 項測試通過；失敗 0；錯誤 0；跳過 0；25.0 秒。
+語法：37 個 Python 檔案 AST 解析通過。pip check 結束代碼：0。
+命令：.\.venv\Scripts\python.exe -B verify_isolated.py
+證據：engineering-results.json、engineering-tests.txt。新增 25 項工程測試，並調整既有非同步保存與讀檔安全開啟測試。
+主測試程序有 audit guard，拒絕開啟正式狀態檔及執行正式通道／排程命令。子程序使用經審閱的隔離 fixtures。
+本機 Windows 驗證：假金鑰於獨立檔案的 DPAPI、隔離 GUI/Tk 事件迴圈、Hidden、junction、symlink、hardlink、Job 程序樹。
+本機 STDIO：八工具完整 inputSchema 與唯讀標記比對 tool-contract.json，並執行分頁、多根、批次與搜尋案例。
+遠端端點／最終用戶端：未執行；不可由 STDIO 成功推定遠端部署一致。
+
+二、16 工單對照與限制
+ENG-01：create_server 集中八工具註冊，嚴格型別、未知欄位拒絕、服務／契約／MCP 版本、完整 schema 快照。test_contract_full_schema_and_rejection 與 test_mcp_stdio、test_workspace 通過。遠端及最終用戶端仍待驗收。
+ENG-02：load_for_edit 結構解析與啟動驗證分離，逐根 ROOT_INVALID；合法新範圍可修復失效舊設定；未知版本、損毀、過大原件保留。鎖檔、版本衝突與備份／替換／輪替故障測試通過。損毀檔不自動重建。
+ENG-03：第一層導覽已存在，保留語意；合併同一 lstat 的隱藏／連結判斷，排除集合按設定變動更新。保留完整有界排序與第二次名稱核對；首次查詢數下降，有效集合及消失項目回歸通過。
+ENG-04：最多四個工作、無無界等待佇列；30 秒合作期限；單操作累計 1 GiB／300,000 項目，工具較低限制優先。取消、逾時、繁忙、累計預算及名額釋放測試通過。無法硬中斷阻塞中的檔案系統呼叫。
+ENG-05：固定 64 KiB 解碼，僅保留行視窗；精確 total_lines、各 splitlines 分隔符、CRLF、BOM、超過檔末、後段無效 UTF-8／NUL 及 24,000 字元上限測試通過。不啟用無法證明內容不變的索引；每次仍讀完整檔案。
+ENG-06：GUI 單一工作佇列、主執行緒 callback、修復／保存／啟動／停止／退出狀態；重複保存拒絕，停止使延後重連意圖失效。慢保存期間 Tk 事件可處理；舊連線佇列隔離，退出取消 tick。尚未量測正式排程命令下的人機操作延遲。
+ENG-07：相符排程去重、同名異常保留、查詢失敗與不存在分離；先核對排程並補償本次變更，失敗呈现 SETTINGS_TASK_INCONSISTENT。模擬後端涵蓋保存／驗證／補償失敗。正式排程未執行。
+ENG-08：共用 open_checked 核對根身分、已開啟檔案身分、類型、連結數、屬性及讀取期間變更；替換與 Job 相關隔離測試通過。Windows 最終控制代碼路徑及完整祖先锁定方案未完成；不抵禦不受信任本機寫入者持續替換路徑，敵對多使用者環境不得視為隔離完成。
+ENG-09：security_policy 供所有 FileReader／具名根／GUI／CLI 共用，狀態區域雙向重疊拒絕；根祖先 reparse、根以下 Hidden、裝置名稱、尾空白／點、ADS、跳脫與固定排除持續拒絕。使用假狀態目錄測試。
+ENG-10：快照 rows 不可變，狀態複本；單份估算 16 MiB／已保存合計 64 MiB，建立中結果 16 MiB、DirEntry 批次 8 MiB、待掃描目錄 16 MiB，每項操作最多四個並行。TTL／LRU／筆數／游標簽章與根身分限制保留。估算不是程序 RSS 硬上限。
+ENG-11：按剩餘名額搜尋、完成當檔驗證後停止進入後續檔案；保守 truncated。长行片段使用 casefolded_text，不給偽精確原文偏移；最大 casefold 展開測試通過；空白與多行查詢拒絕。
+ENG-12：只有 b"1" 放行包裝器；EOF／錯誤許可不建立子程序；Job 指派後再次確認取消。清理獨立執行並確保 done，清理失敗使用固定類別。供應商未提供可用的結構化認證證據時，不由任意 401／403 字串判斷 AUTH_FAILED。
+ENG-13：改明確保存，不再 700 ms 自動覆蓋；清空保留舊密文；保存與認證分離。未新增刪除或撤銷功能，沒有讀取真實金鑰。既有 DPAPI 與無金鑰輸出／備份回歸保留；Python 字串不宣稱安全清零。
+ENG-14：嚴格數字與字串型別、未知欄位、長路徑、搜尋換行、24,000 content 字元及工具 JSON 2 MiB 總封套。批次 512 KiB／入口 64 KiB，設定讀寫 128 KiB。build_commands 保守 30,000 UTF-16 單位，實際含包裝器命令另在 CreateProcess 前檢查 32,767 上限。
+ENG-15：隔離 runner、基線／修改版同機三次合成量測、原始測試紀錄、契約快照與版本清單。未執行 50,000／100,000 檔、長時間 soak 或正式遠端測試，不作此類負載承諾。
+ENG-16：README、介面與自啟動說明、AGENTS 及本報告更新；完整修改後檔案位於專案，可由清單逐檔回復。沒有新增相依或修改供應商成品。
+
+三、效能：同機合成資料、三次中位數
+資料：1,000 個 7-byte marker 檔，加一個 1,950,000-byte／150,000 行檔案。未清除 OS 檔案快取。
+量測含 tracemalloc 及 Path.stat／Path.lstat／read 掛鉤的額外成本；stat_calls 包含 lstat 經由 Path.stat 的呼叫，不可將兩欄相加。
+指標                 修改前                 修改後
+first_page: 1286.014 -> 1172.348 ms；Python peak 617549 -> 616317 bytes；read 0 -> 0 bytes；stat 11019 -> 7012。
+second_page: 0.776 -> 1.145 ms；Python peak 10140 -> 29249 bytes；read 0 -> 0 bytes；stat 3 -> 2。
+read_window: 42.596 -> 395.012 ms；Python peak 12387300 -> 218259 bytes；read 1950000 -> 1950000 bytes；stat 10 -> 11。
+search_limit: 5.95 -> 9.392 ms；Python peak 449704 -> 452722 bytes；read 14 -> 7 bytes；stat 27 -> 19。
+程序生命週期峰值工作集：55877632 -> 27148288 bytes；包含合成資料建立及全部量測，不能當作單次操作配置量。
+結論：首次列舉較少查詢；行視窗記憶體配置顯著降低；搜尋達上限少讀後續檔案。但行視窗與搜尋此資料集耗時增加，未聲稱全面加速；此版保留記憶體有界與安全驗證的取捨。
+完整每次樣本：engineering-baseline.json、engineering-after.json。
+重現命令：.\.venv\Scripts\python.exe -B benchmark_engineering.py --source engineering-backup-20260913-133727 --output engineering-baseline.json
+重現命令：.\.venv\Scripts\python.exe -B benchmark_engineering.py --output engineering-after.json
+
+四、人工授權驗收清單（本次未執行）
+1. 使用獨立測試端點及兩個專用根，記錄部署服務版本、MCP 版本與工具 schema；不得擴大正式共享範圍。
+2. 最終用戶端刷新八工具，逐欄對照 tool-contract.json；兩根各建立至少 201 個非敏感檔案，實測分頁、root_id 隔離、context_lines=0/1/3、合法與非法混合批次。
+3. 僅在另行允許正式中斷後，驗證停止前成功、停止後不可用、重新啟動恢復；remote_smoke_test.py 已加完整契約與固定批次／前後文檢查。
+4. 真實排程：同設定保存不重建；停用只移除已驗證工作；慢命令期間視窗仍回應。此項未以 mock 成功代替。
+5. 敵對本機寫入者環境須先完成 Windows 最終路徑／根及祖先控制代碼策略與替換壓力驗證，否則不能部署作為安全隔離。
+
+五、回復
+修改前原始碼與測試：engineering-backup-20260913-133727。
+檔案差異及目前 SHA-256：engineering-delivery.json。只回復清單中 modified 的檔案；新增模組按 added 清單檢查後移除。不要重置整個工作目录。
+本次沒有修改正式一般設定或 DPAPI／排程；回復程式碼不應覆寫任何這類資料。若程序正在使用中，先取得中斷授權再切換版本。
+本報告、測試結果與原始規格可保留。備份目錄含修改前完整原始碼，請不要把它新增到遠端共享。
+
+六、修改清單
+modified AGENTS.md
+modified autostart_windows.py
+added benchmark_engineering.py
+modified connection_runtime.py
+modified connection_settings.py
+added gui_tasks.py
+modified local_files_gui.py
+modified local_files_mcp.py
+added operation_budget.py
+modified README_繁體中文.md
+modified remote_smoke_test.py
+added security_policy.py
+modified snapshot_cache.py
+added stream_read.py
+modified stream_search.py
+added tests/test_engineering.py
+modified tests/test_mcp_stdio.py
+modified tests/test_workspace.py
+added tool_contract.py
+added verify_isolated.py
+modified workspace_reader.py
+modified workspace_settings.py
+modified 介面使用說明.md
+modified 自啟動與優化說明.md
+
+七、公開技術依據
+Microsoft CreateProcessW：完整命令含 Unicode 終止 NUL 最長 32,767；本版在產生命令及最終包裝器兩層檢查。
+https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-createprocessw
+Microsoft PROCESS_MEMORY_COUNTERS：峰值工作集是程序生命週期量測；與 Python 配置峰值分開報告。
+https://learn.microsoft.com/en-us/windows/win32/api/psapi/ns-psapi-process_memory_counters
+MCP 調度與參數驗證依本機已安裝 1.30.0 原始碼核對；沒有升級套件。
+
+報告結束。
