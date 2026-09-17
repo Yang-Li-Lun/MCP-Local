@@ -20,27 +20,6 @@ def estimated_bytes(value):
     return sys.getsizeof(value)
 
 
-class SnapshotBuilder:
-    """內部平面字串列建構器；容量在 append 時計算一次。"""
-    def __init__(self):
-        self.rows = []
-        self.size = 1024
-
-    def append(self, row: dict) -> bool:
-        if not isinstance(row, dict) or not all(isinstance(k, str) and isinstance(v, str)
-                                               for k, v in row.items()):
-            raise ValueError('快照列必須為平面字串欄位。')
-        cost = estimated_bytes(row) + 16
-        if len(self.rows) >= 100000 or self.size + cost > SNAPSHOT_BYTES:
-            return False
-        self.rows.append(MappingProxyType(dict(row)))
-        self.size += cost
-        return True
-
-    def sort(self):
-        self.rows.sort(key=lambda row: (row['path'].casefold(), row['path']))
-
-
 class SnapshotCache:
     def __init__(self, clock=time.monotonic):
         self.clock = clock
@@ -56,25 +35,19 @@ class SnapshotCache:
     def put(self, owner: str, fingerprint: str, rows: list, status: dict) -> str:
         with self.lock:
             self._expire()
-            if isinstance(rows, SnapshotBuilder):
-                size = rows.size
-                rows = tuple(rows.rows)
-            else:
-                if len(rows) > 100000:
-                    rows = rows[:100000]
-                    status = dict(status, truncated=True)
-                bounded_rows = []
-                size = 1024
-                for row in rows:
-                    cost = estimated_bytes(row) + 16
-                    if size + cost > SNAPSHOT_BYTES:
-                        status = dict(status, truncated=True, truncation_reason='SNAPSHOT_BYTES')
-                        break
-                    bounded_rows.append(dict(row) if isinstance(row, dict) and all(
-                        isinstance(v, (str, int, float, bool, type(None))) for v in row.values())
-                        else copy.deepcopy(row))
-                    size += cost
-                rows = tuple(MappingProxyType(row) if isinstance(row, dict) else row for row in bounded_rows)
+            if len(rows) > 100000:
+                rows = rows[:100000]
+                status = dict(status, truncated=True)
+            bounded_rows = []
+            size = 1024
+            for row in rows:
+                cost = estimated_bytes(row) + 16
+                if size + cost > SNAPSHOT_BYTES:
+                    status = dict(status, truncated=True, truncation_reason='SNAPSHOT_BYTES')
+                    break
+                bounded_rows.append(copy.deepcopy(row))
+                size += cost
+            rows = tuple(MappingProxyType(row) if isinstance(row, dict) else row for row in bounded_rows)
             own = [key for key, value in self.items.items() if value['owner'] == owner]
             while len(own) >= 8:
                 del self.items[own.pop(0)]

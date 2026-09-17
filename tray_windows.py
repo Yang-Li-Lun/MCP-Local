@@ -89,6 +89,16 @@ class Job:
             self.close()
             raise OSError('無法設定子程序清理機制。')
 
+    def set_cpu_hard_cap(self, percent: int | None) -> None:
+        """能力預留；Connection 不呼叫此 API，避免限制 Tunnel。"""
+        if percent is not None and (type(percent) is not int or not 10 <= percent <= 100):
+            raise ValueError('CPU 配額必須為 10 至 100 的整數。')
+        class CpuRate(c.Structure):
+            _fields_ = [('flags', w.DWORD), ('rate', w.DWORD)]
+        value = CpuRate(5 if percent is not None else 0, percent * 100 if percent is not None else 0)
+        if not kernel.SetInformationJobObject(self.handle, 15, c.byref(value), c.sizeof(value)):
+            raise OSError('CPU 配額設定失敗。')
+
     def assign(self, process) -> None:
         if not kernel.AssignProcessToJobObject(self.handle, w.HANDLE(int(process._handle))):
             raise c.WinError(c.get_last_error())
@@ -105,7 +115,8 @@ class Job:
 
 class Tray:
     """左鍵開啟設定，右鍵開啟操作選單；Explorer 重啟時恢復圖示。"""
-    def __init__(self, show, menu):
+    def __init__(self, show, menu, notify=None):
+        self.notify = notify
         self.show = show
         self.menu = menu
         self.events = deque()
@@ -136,6 +147,8 @@ class Tray:
                 self.events.append('show')
             elif lp == 0x205:
                 self.events.append('menu')
+            if self.notify:
+                self.notify()
             return 0
         return user.DefWindowProcW(hwnd, message, wp, lp)
 
@@ -150,8 +163,11 @@ class Tray:
             raise c.WinError(c.get_last_error())
         selected = 0
         try:
-            for index, (label, enabled, _) in enumerate(actions, 1):
+            for index, action in enumerate(actions, 1):
+                label, enabled, _ = action[:3]
                 flags = 0x800 if not label else (0 if enabled else 0x1)
+                if len(action) > 3 and action[3]:
+                    flags |= 0x8
                 if not user.AppendMenuW(menu, flags, index, label):
                     raise c.WinError(c.get_last_error())
             point = w.POINT()
@@ -164,7 +180,7 @@ class Tray:
         finally:
             user.DestroyMenu(menu)
         if 1 <= selected <= len(actions):
-            _, enabled, callback = actions[selected - 1]
+            _, enabled, callback = actions[selected - 1][:3]
             if enabled and callback:
                 callback()
 

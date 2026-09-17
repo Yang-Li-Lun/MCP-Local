@@ -21,7 +21,6 @@ def scan_file_many(handle, maximum: int, budget: int, needles: list[str],
     valid = True
     snippets = [''] * len(needles)
     prefix = ''
-    tail_lengths = [max(1, len(needle) - 1) for needle in needles]
     tails = [''] * len(needles)
     length = 0
     found = [False] * len(needles)
@@ -43,7 +42,7 @@ def scan_file_many(handle, maximum: int, budget: int, needles: list[str],
                 begin = max(0, position - min(120, max(0, (600 - len(needle)) // 2)))
                 snippets[i] = folded[begin:begin + 600]
                 found[i] = True
-            tails[i] = folded[-tail_lengths[i]:]
+            tails[i] = folded[-max(1, len(needle) - 1):]
 
     def finish():
         nonlocal prefix, length, number

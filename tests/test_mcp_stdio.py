@@ -83,10 +83,12 @@ class McpSmokeTests(unittest.TestCase):
                     listing = await session.list_tools()
                     self.assertEqual({tool.name for tool in listing.tools},
                                      {'list_directory', 'list_files', 'read_file', 'search_text',
-                                      'workspace_info', 'list_projects', 'project_context', 'read_files', 'search_texts'})
+                                      'workspace_info', 'list_projects', 'project_context', 'read_files', 'search_texts', 'read_file_ranges', 'find_files'})
                     for name, args in [('list_directory', {}), ('list_files', {}), ('read_file', {'path': 'README.md'}),
                                        ('search_text', {'query': 'MCP_GUI_SMOKE'}),
-                                       ('search_texts', {'queries': ['MCP_GUI_SMOKE', 'absent']})]:
+                                       ('search_texts', {'queries': ['MCP_GUI_SMOKE', 'absent']}),
+                                       ('find_files', {'queries': ['README']}),
+                                       ('read_file_ranges', {'path': 'README.md', 'ranges': [{'start_line': 1, 'line_count': 1}]})]:
                         result = await session.call_tool(name, args)
                         self.assertFalse(result.isError)
                         self.assertIn('README.md', str(result.content))

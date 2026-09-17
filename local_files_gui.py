@@ -9,6 +9,8 @@ import re
 import threading
 import time
 from gui_tasks import GuiTasks
+from power_policy import PowerPolicyManager, PowerMode, normalize_power, tick_interval
+from workspace_settings import create_workspace_root
 from connection_settings import load_for_edit, read_settings_data
 from autostart_windows import (BackgroundStatus, apply_settings_transaction, get_background_status,
                                stop_background)
@@ -47,7 +49,12 @@ class App:
                 self.key_load_error = '無法讀取已保存的金鑰，原檔已保留；請重新輸入金鑰。'
         self.finished = False
         self.tick_timer = None
-        self.tasks = GuiTasks()
+        self.wake_event = threading.Event()
+        self.bridge_closed = threading.Event()
+        self.tasks = GuiTasks(self.wake_event.set)
+        self.power = PowerPolicyManager(CONFIG_DIR / 'power-runtime.json', options=settings.get('power'))
+        self.power_mode = tk.StringVar(value='off')
+        self.power_status = tk.StringVar(value='電源模式：關閉')
         self.dirty = False
         self.key_dirty = False
         self.suppress_dirty = True
@@ -57,7 +64,7 @@ class App:
         self.repair_required = False
         self.settings_revision = None
         self.intent = 0
-        self.connection = Connection()
+        self.connection = Connection(power=self.power, notify=self.wake_event.set)
         self.running = False
         self.quitting = False
         self.restart_pending = False
@@ -77,13 +84,8 @@ class App:
         frame.columnconfigure(0, weight=1)
         ttk.Label(frame, text='本機檔案唯讀連線', font=('Microsoft JhengHei UI', 16, 'bold')).grid(
             row=0, column=0, sticky='w', pady=(0, 14))
-        ttk.Label(frame, text='可讀取資料夾（下拉選單可切換最近使用的目錄）').grid(row=1, column=0, sticky='w')
-        self.root = tk.StringVar(value=settings['root'])
-        self.roots = ttk.Combobox(frame, textvariable=self.root, values=settings['recent'])
-        self.roots.grid(row=2, column=0, sticky='ew', pady=(4, 10))
-        ttk.Button(frame, text='瀏覽…', command=self.browse).grid(row=2, column=1, padx=(8, 0))
+        self.create_folder_selector(frame)
         ttk.Label(frame, text='通道識別碼').grid(row=3, column=0, sticky='w')
-        self.create_workspace_tab()
         self.tunnel = tk.StringVar(value=settings['tunnel'])
         ttk.Entry(frame, textvariable=self.tunnel).grid(row=4, column=0, columnspan=2, sticky='ew', pady=(4, 10))
         ttk.Label(frame, text='API 金鑰（按儲存設定後加密保存；清空輸入不會刪除舊金鑰）').grid(row=5, column=0, sticky='w')
@@ -115,10 +117,18 @@ class App:
         self.apply_button.pack(side='left', padx=6)
         self.stop_button = ttk.Button(buttons, text='停止連線', command=self.stop, state='disabled')
         self.stop_button.pack(side='left', padx=6)
+        power_frame = ttk.LabelFrame(outer, text='電源模式', padding=6)
+        power_frame.pack(fill='x', pady=(8, 0))
+        self.power_buttons = []
+        for mode, label in (('off', '關閉'), ('extreme', '極致節能')):
+            button = ttk.Radiobutton(power_frame, text=label, variable=self.power_mode, value=mode,
+                                     command=lambda value=mode: self.change_power_mode(value))
+            button.pack(side='left', padx=5)
+            self.power_buttons.append(button)
+        ttk.Label(outer, textvariable=self.power_status, wraplength=710).pack(fill='x')
         self.status = tk.StringVar(value='尚未啟動；請確認資料夾並輸入金鑰。')
         self.suppress_dirty = False
-        for variable in (self.root, self.tunnel, self.hidden, self.auto_start,
-                         self.workspace_default, *self.reader_numbers.values()):
+        for variable in (self.tunnel, self.hidden, self.auto_start, *self.reader_numbers.values()):
             variable.trace_add('write', self.mark_dirty)
         for editor in self.reader_lists.values():
             editor.edit_modified(False)
@@ -126,8 +136,10 @@ class App:
         self.refresh_controls()
         self.key.trace_add('write', self.schedule_key_save)
         ttk.Label(outer, textvariable=self.status, wraplength=710).pack(fill='x', pady=(10, 0))
-        self.tray = Tray(lambda: window.after(0, self.show), lambda: window.after(0, self.popup))
-        window.protocol('WM_DELETE_WINDOW', window.withdraw)
+        self.tray = Tray(lambda: window.after(0, self.show), lambda: window.after(0, self.popup), self.wake_event.set)
+        window.protocol('WM_DELETE_WINDOW', self.hide)
+        window.bind('<<MCPWake>>', lambda event: self.wake_tick())
+        self.start_event_bridge()
         window.bind('<Control-s>', lambda event: self.save())
         window.bind('<Unmap>', self.minimized)
         self.tick_timer = window.after(100, self.tick)
@@ -225,11 +237,13 @@ class App:
 
     def minimized(self, event) -> None:
         if event.widget == self.window and self.window.state() == 'iconic':
-            self.window.withdraw()
+            self.hide()
 
     def show(self) -> None:
         self.window.deiconify()
         self.window.lift()
+        self.power.set_window_visible(True)
+        self.wake_tick()
 
     def popup(self) -> None:
         self.tray.popup([
@@ -237,100 +251,146 @@ class App:
             ('啟動連線', self.control_states()['start'], self.start),
             ('停止連線', self.control_states()['stop'], self.stop),
             ('', False, None),
+            *[(label, not self.quitting and not self.tasks.busy,
+               lambda value=mode: self.change_power_mode(value), self.power.mode.value == mode)
+              for mode, label in (('off', '電源：關閉'), ('extreme', '電源：極致節能'))],
             ('退出程式', not self.quitting, self.quit),
         ])
 
-    def create_workspace_tab(self) -> None:
-        """管理明確授權的具名資料夾，不自動加入最近路徑。"""
-        frame = ttk.Frame(self.tabs, padding=16)
-        self.tabs.add(frame, text='共享資料夾')
-        ttk.Label(frame, text='最多八個資料夾；連線設定頁的路徑對應此處選定的預設資料夾。').pack(anchor='w')
-        self.workspace_rows = [dict(item) for item in self.settings.get('roots', [
+    def create_folder_selector(self, parent) -> None:
+        frame = ttk.LabelFrame(parent, text='允許讀取的資料夾', padding=6)
+        frame.grid(row=1, column=0, columnspan=2, sticky='ew', pady=(0, 10))
+        self.workspace_rows = [dict(row) for row in self.settings.get('roots', [
             {'id': 'main', 'name': 'main', 'path': self.settings['root'], 'excluded_names': []}])]
-        self.workspace_default = tk.StringVar(value=self.settings.get('default_root', 'main'))
-        self.workspace_list = tk.Listbox(frame, height=8)
-        self.workspace_list.pack(fill='x', pady=8)
-        self.workspace_list.bind('<<ListboxSelect>>', self.select_workspace_row)
-        self.workspace_fields = {}
-        for key, label in [('id', '代號'), ('name', '名稱'), ('path', '絕對資料夾路徑'),
-                           ('excluded_names', '額外排除名稱（逗號分隔）')]:
-            ttk.Label(frame, text=label).pack(anchor='w')
-            variable = tk.StringVar()
-            self.workspace_fields[key] = variable
-            ttk.Entry(frame, textvariable=variable).pack(fill='x')
+        self.invalid_root_ids = set()
+        self.folder_list = tk.Listbox(frame, height=4, selectmode='extended', exportselection=False)
+        self.folder_list.pack(fill='x')
+        scroll = ttk.Scrollbar(frame, orient='horizontal', command=self.folder_list.xview)
+        scroll.pack(fill='x')
+        self.folder_list.configure(xscrollcommand=scroll.set)
         actions = ttk.Frame(frame)
-        actions.pack(fill='x', pady=8)
-        ttk.Button(actions, text='瀏覽', command=self.browse_workspace).pack(side='left')
-        ttk.Button(actions, text='加入／更新代號', command=self.update_workspace_row).pack(side='left', padx=6)
-        ttk.Button(actions, text='移除選取', command=self.remove_workspace_row).pack(side='left')
-        ttk.Label(frame, text='預設資料夾代號').pack(anchor='w')
-        self.workspace_choice = ttk.Combobox(frame, textvariable=self.workspace_default, state='readonly')
-        self.workspace_choice.pack(fill='x')
-        self.workspace_choice.bind('<<ComboboxSelected>>', self.change_workspace_default)
-        self.refresh_workspace_rows()
+        actions.pack(fill='x', pady=4)
+        self.folder_buttons = []
+        for label, callback in [('加入資料夾…', self.add_folder), ('變更選取…', self.change_selected_folder),
+                                ('移除選取', self.remove_selected_folders)]:
+            button = ttk.Button(actions, text=label, command=callback)
+            button.pack(side='left', padx=(0, 6))
+            self.folder_buttons.append(button)
+        self.folder_status = tk.StringVar()
+        ttk.Label(frame, textvariable=self.folder_status, wraplength=690).pack(anchor='w')
+        self.refresh_folder_list()
 
-    def refresh_workspace_rows(self) -> None:
-        self.workspace_list.delete(0, 'end')
-        for item in self.workspace_rows:
-            self.workspace_list.insert('end', item['id'] + ' | ' + item['name'] + ' | ' + item['path'])
-        self.workspace_choice.configure(values=[item['id'] for item in self.workspace_rows])
+    def refresh_folder_list(self) -> None:
+        self.folder_list.delete(0, 'end')
+        for row in self.workspace_rows:
+            self.folder_list.insert('end', row['path'] + (' （無法使用）' if row['id'] in self.invalid_root_ids else ''))
+        count = len(self.workspace_rows)
+        self.folder_status.set(f'已加入 {count} 個資料夾（最多 8 個）；清單皆為唯讀授權範圍。' if count
+                               else '至少需要加入一個允許讀取的資料夾。')
 
-    def select_workspace_row(self, event=None) -> None:
-        selection = self.workspace_list.curselection()
-        if selection:
-            item = self.workspace_rows[selection[0]]
-            for key, variable in self.workspace_fields.items():
-                variable.set(', '.join(item.get(key, [])) if key == 'excluded_names' else item[key])
-
-    def browse_workspace(self) -> None:
-        folder = filedialog.askdirectory(parent=self.window, title='選擇新增的專用共享資料夾', mustexist=True)
-        if folder:
-            self.workspace_fields['path'].set(folder)
-
-    def update_workspace_row(self) -> None:
-        from workspace_settings import normalize_workspace
+    def edit_folder(self, index=None) -> None:
+        if self.tasks.busy or self.quitting:
+            return
+        folder = filedialog.askdirectory(parent=self.window, title='選擇允許讀取的專用資料夾', mustexist=True)
+        if not folder:
+            return
         try:
-            item = {key: variable.get().strip() for key, variable in self.workspace_fields.items()}
-            item['excluded_names'] = [part.strip() for part in item['excluded_names'].split(',') if part.strip()]
-            rows = [dict(row) for row in self.workspace_rows]
-            existing = next((i for i, row in enumerate(rows) if row['id'] == item['id']), None)
-            if existing is None:
-                rows.append(item)
+            previous = self.workspace_rows[index] if index is not None else None
+            row = create_workspace_root(folder, self.workspace_rows, self.collect_advanced(), previous=previous)
+            if index is None:
+                self.workspace_rows.append(row)
             else:
-                rows[existing] = item
-            normalized = normalize_workspace(rows, self.workspace_default.get(), self.collect_advanced(), validate_paths=False)
-            self.workspace_rows = normalized['roots']
-            self.change_workspace_default()
-            self.refresh_workspace_rows()
-        except (ValueError, OSError) as exc:
+                self.workspace_rows[index] = row
+            self.invalid_root_ids.discard(row['id'])
+            self.refresh_folder_list()
+            self.mark_dirty()
+        except (OSError, ValueError) as exc:
             messagebox.showerror('無法更新資料夾', str(exc), parent=self.window)
 
-    def remove_workspace_row(self) -> None:
-        selection = self.workspace_list.curselection()
-        if not selection:
+    def add_folder(self) -> None:
+        self.edit_folder()
+
+    def change_selected_folder(self) -> None:
+        selection = self.folder_list.curselection()
+        if len(selection) == 1:
+            self.edit_folder(selection[0])
+
+    def remove_selected_folders(self) -> None:
+        if self.tasks.busy or self.quitting:
             return
-        item = self.workspace_rows[selection[0]]
-        if item['id'] == self.workspace_default.get():
-            messagebox.showerror('無法移除', '請先選擇其他預設資料夾。', parent=self.window)
-            return
-        del self.workspace_rows[selection[0]]
+        for index in reversed(self.folder_list.curselection()):
+            self.invalid_root_ids.discard(self.workspace_rows[index]['id'])
+            del self.workspace_rows[index]
+        self.refresh_folder_list()
         self.mark_dirty()
-        self.refresh_workspace_rows()
 
-    def change_workspace_default(self, event=None) -> None:
-        item = next(row for row in self.workspace_rows if row['id'] == self.workspace_default.get())
-        self.root.set(item['path'])
+    def hide(self) -> None:
+        self.window.withdraw()
+        self.power.set_window_visible(False)
+        self.wake_tick()
 
-    def browse(self) -> None:
-        folder = filedialog.askdirectory(parent=self.window, title='選擇允許讀取的專用資料夾', mustexist=True)
-        if folder:
-            self.root.set(folder)
+    def start_event_bridge(self) -> None:
+        # A separate Python thread marshals notifications through Tcl's thread queue.
+        # Never call Tk from a ctypes WNDPROC, where Tcl may already be dispatching.
+        def bridge():
+            while True:
+                self.wake_event.wait()
+                self.wake_event.clear()
+                if self.bridge_closed.is_set():
+                    return
+                try:
+                    self.window.event_generate('<<MCPWake>>', when='tail')
+                except (RuntimeError, tk.TclError):
+                    return
+        threading.Thread(target=bridge, name='mcp-ui-events', daemon=True).start()
+
+    def wake_tick(self) -> None:
+        if self.finished:
+            return
+        if self.tick_timer is not None:
+            self.window.after_cancel(self.tick_timer)
+        self.tick_timer = self.window.after(0, self.tick)
+
+    def tick_interval_ms(self) -> int:
+        return tick_interval(self.power.mode.value, self.window.state() != 'withdrawn', self.state,
+                             self.tasks.busy, not self.connection.events.empty() or not self.tasks.events.empty())
+
+    def change_power_mode(self, mode: str) -> None:
+        self.power_mode.set(self.power.mode.value)
+        if self.tasks.busy or self.quitting:
+            return
+        def complete(value, error):
+            self.power_mode.set(self.power.mode.value)
+            if error:
+                self.power_status.set(str(error))
+                messagebox.showerror('電源模式未套用', str(error), parent=self.window)
+            else:
+                self.mark_dirty()
+                self.update_power_status()
+            self.refresh_controls()
+        self.tasks.submit(lambda: self.power.apply(mode), complete)
+        self.refresh_controls()
+        self.wake_tick()
+
+    def update_power_status(self) -> None:
+        label = {'off': '關閉', 'extreme': '極致節能'}[self.power.mode.value]
+        status = '電源模式：' + label
+        if self.power.mode != PowerMode.OFF:
+            status += '｜顯示器可休眠'
+            status += '｜連線保持喚醒' if self.power.request_handle else '｜等待連線'
+            if (self.power.options['manage_windows_power_mode'] and
+                    not any(code.startswith('POWER_USER_MODE_') for code in self.power.warnings)):
+                status += '｜Windows 最佳電源效率'
+        if self.power.warnings:
+            status += '｜部分能力未生效：' + ', '.join(self.power.warnings)
+        self.power_status.set(status)
 
     def mark_dirty(self, *args) -> None:
         if not self.suppress_dirty:
             self.dirty = True
             self.edit_generation += 1
             self.refresh_controls()
+            self.wake_tick()
 
     def list_modified(self, event) -> None:
         if event.widget.edit_modified():
@@ -342,10 +402,10 @@ class App:
         stable = available and self.state in ('IDLE', 'RUNNING', 'REPAIR')
         bg = self.background_status
         return {
-            'save': stable and (self.dirty or self.key_dirty or self.repair_required),
-            'start': stable and not self.running and not self.repair_required
+            'save': stable and bool(self.workspace_rows) and (self.dirty or self.key_dirty or self.repair_required),
+            'start': stable and bool(self.workspace_rows) and not self.running and not self.repair_required
                      and not (bg and bg.running),
-            'apply': stable and self.running and not self.repair_required,
+            'apply': stable and bool(self.workspace_rows) and self.running and not self.repair_required,
             'stop': available and self.state in ('IDLE', 'STARTING', 'RUNNING', 'REPAIR')
                     and (self.running or self.retry_timer is not None
                          or bool(bg and bg.running and bg.task_valid and not bg.error_code)),
@@ -357,6 +417,11 @@ class App:
             button = getattr(self, name + '_button')
             state = 'normal' if enabled else 'disabled'
             # 重設相同 state 會中斷 Windows 原生 hover / pressed 動畫。
+            if str(button.cget('state')) != state:
+                button.configure(state=state)
+        enabled = not self.quitting and not self.tasks.busy
+        for button in self.power_buttons + self.folder_buttons:
+            state = 'normal' if enabled else 'disabled'
             if str(button.cget('state')) != state:
                 button.configure(state=state)
         bg = self.background_status
@@ -404,14 +469,12 @@ class App:
             self.settings_revision = editable.revision if editable.revision is not None else ''
             self.repair_required = editable.state == 'REPAIR_REQUIRED'
             value = self.settings
-            self.root.set(value['root'])
             self.tunnel.set(value['tunnel'])
             self.hidden.set(value['start_hidden'])
             self.auto_start.set(value.get('auto_start', False))
             self.workspace_rows = [dict(row) for row in value['roots']]
-            self.workspace_default.set(value['default_root'])
-            self.refresh_workspace_rows()
-            self.roots.configure(values=value['recent'])
+            self.invalid_root_ids = {row['root_id'] for row in editable.errors}
+            self.refresh_folder_list()
             self.fill_advanced(normalize_reader_settings(value.get('reader')))
             for editor in self.reader_lists.values():
                 editor.edit_modified(False)
@@ -426,26 +489,26 @@ class App:
         if self.tasks.busy or self.quitting or self.state not in ('IDLE', 'RUNNING', 'REPAIR'):
             return False
         try:
-            settings = {'root': self.root.get().strip(), 'tunnel': self.tunnel.get().strip()}
-            settings['recent'] = list(dict.fromkeys([settings['root'], *self.settings['recent']]))[:8]
+            if not self.workspace_rows:
+                raise ValueError('至少需要加入一個允許讀取的資料夾。')
+            settings = {'root': self.workspace_rows[0]['path'], 'tunnel': self.tunnel.get().strip()}
+            settings['recent'] = list(self.settings.get('recent', []))
+            settings['power'] = {**normalize_power(self.settings.get('power')), 'mode': self.power.mode.value}
             settings['start_hidden'] = self.hidden.get()
             settings['auto_start'] = self.auto_start.get()
             settings['auto_connect'] = self.auto_start.get()
             if settings['auto_start'] and (not self.key_store or not self.key.get().strip()):
                 raise ValueError('自動啟動需要已保存的 DPAPI 金鑰。')
             settings['reader'] = self.collect_advanced()
-            settings['default_root'] = self.workspace_default.get()
+            settings['default_root'] = self.workspace_rows[0]['id']
             settings['roots'] = [dict(row) for row in self.workspace_rows]
-            for row in settings['roots']:
-                if row['id'] == settings['default_root']:
-                    row['path'] = settings['root']
-            if self.settings.get('settings_version') not in (1, 2, 3):
+            if self.settings.get('settings_version') not in (1, 2, 3, 4, 5):
                 if not messagebox.askyesno('首次共用設定遷移',
                         '舊 PowerShell 分享範圍為 D:\\codee；GUI 使用獨立設定。\n'
                         f'確認兩個入口今後都使用：\n{settings["root"]}\n{settings["tunnel"]}\n'
                         '確認後會備份並保存一般設定；加密金鑰保留。', parent=self.window):
                     return False
-            settings['settings_version'] = 3
+            settings['settings_version'] = 5
             previous = self.settings.copy()
             key = self.key.get().strip()
             saved_key = self.saved_key
@@ -499,15 +562,14 @@ class App:
                 if generation == self.edit_generation:
                     self.suppress_dirty = True
                     self.workspace_rows = [dict(row) for row in value['roots']]
-                    self.refresh_workspace_rows()
-                    self.root.set(value['root'])
-                    self.roots.configure(values=value['recent'])
+                    self.invalid_root_ids.clear()
+                    self.refresh_folder_list()
                     self.suppress_dirty = False
                     self.dirty = False
                 self.key_dirty = self.key.get().strip() != key
                 self.background_status = None
                 self.refresh_controls()
-                self.status.set('一般設定已儲存；金鑰保存不代表已通過遠端認證。')
+                self.status.set('設定已儲存；新的資料夾範圍會在下次連線時使用。')
                 if after and intent == self.intent and generation == self.edit_generation and not self.key_dirty:
                     after()
                 elif not after:
@@ -516,6 +578,7 @@ class App:
             self.status.set('正在驗證與儲存設定…')
             submitted = self.tasks.submit(work, complete)
             self.refresh_controls()
+            self.wake_tick()
             return submitted
         except Exception as exc:
             self.show()
@@ -555,7 +618,7 @@ class App:
             self.window.after(50, self.launch)
             return
         # 每次連線使用獨立事件佇列，舊事件不會污染新連線。
-        self.connection = Connection()
+        self.connection = Connection(power=self.power, notify=self.wake_event.set)
         try:
             self.connection.start(self.settings.copy(), self.key.get().strip())
             self.running = True
@@ -582,6 +645,7 @@ class App:
             apply()
 
     def stop(self) -> None:
+        self.wake_tick()
         self.retry_enabled = False
         if self.retry_timer is not None:
             self.window.after_cancel(self.retry_timer)
@@ -607,7 +671,18 @@ class App:
     def finish(self) -> None:
         if self.finished:
             return
+        try:
+            self.power.close()
+        except Exception as exc:
+            self.quitting = False
+            self.state = 'IDLE'
+            self.status.set(str(exc))
+            messagebox.showerror('電源還原未完成', str(exc), parent=self.window)
+            self.wake_tick()
+            return
         self.finished = True
+        self.bridge_closed.set()
+        self.wake_event.set()
         if self.retry_timer is not None:
             self.window.after_cancel(self.retry_timer)
             self.retry_timer = None
@@ -643,6 +718,11 @@ class App:
         self.tray.pump()
         while not self.connection.events.empty():
             kind, text = self.connection.events.get_nowait()
+            if kind == 'power_warning':
+                if text not in self.power.warnings:
+                    self.power.warnings.append(text)
+                self.update_power_status()
+                continue
             if kind == 'error' and self.retry_enabled and self.connection.error_kind in self.retry_policy.retryable:
                 self.status.set('連線暫時失敗，將自動重試。')
                 continue
@@ -676,7 +756,10 @@ class App:
             self.status.set(text + ('；遠端可用性請以實際工具呼叫確認。' if text == '通道程序執行中' else ''))
             self.tray.update(text)
         self.refresh_controls()
-        self.tick_timer = self.window.after(100, self.tick)
+        self.update_power_status()
+        if self.tick_timer is not None:
+            self.window.after_cancel(self.tick_timer)
+        self.tick_timer = self.window.after(self.tick_interval_ms(), self.tick)
 
 
 def main(*, startup: bool = False) -> int:
@@ -701,11 +784,17 @@ def main(*, startup: bool = False) -> int:
             return 0
         from key_store import KeyStore
         app = App(window, settings, KeyStore(CONFIG_DIR / 'api-key.dpapi'), startup=startup)
+        app.power.recover()
+        app.power.apply(normalize_power(settings.get('power'))['mode'])
+        app.power_mode.set(app.power.mode.value)
+        app.update_power_status()
         app.settings_revision = editable.revision if editable.revision is not None else ''
         app.repair_required = editable.state == 'REPAIR_REQUIRED'
         if app.repair_required:
             app.state = 'REPAIR'
-            app.status.set('修復模式；失效資料夾代號：' + ', '.join(row['root_id'] for row in editable.errors))
+            app.invalid_root_ids = {row['root_id'] for row in editable.errors}
+            app.refresh_folder_list()
+            app.status.set('修復模式：請變更或移除標示為無法使用的資料夾。')
         if app.repair_required or (not startup and not settings['start_hidden']):
             app.show()
         app.refresh_controls()
@@ -720,6 +809,9 @@ def main(*, startup: bool = False) -> int:
         kernel.CloseHandle(mutex)
         if 'app' in locals():
             app.connection.stop()
+            if app.connection.thread:
+                app.connection.thread.join(timeout=10)
+            app.power.close()
 
 
 if __name__ == '__main__':

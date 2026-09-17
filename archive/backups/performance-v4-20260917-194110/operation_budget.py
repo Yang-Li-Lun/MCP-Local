@@ -62,20 +62,13 @@ def operation(budget=None):
         SLOTS.release()
 
 
-def ensure_output_limit(result):
-    if len(json.dumps(result, ensure_ascii=False, indent=2).encode('utf-8')) > 2 * 1024 * 1024:
-        raise OperationError('OUTPUT_LIMIT：回傳資料超過 2 MiB，請縮小範圍。')
-
-
 def bounded(function):
     @functools.wraps(function)
     def call(*args, **kwargs):
-        outermost = ACTIVE.get() is None
         with operation():
             result = function(*args, **kwargs)
-            checkpoint()
-            if outermost:
-                ensure_output_limit(result)
+            if isinstance(result, dict) and len(json.dumps(result, ensure_ascii=False, indent=2).encode('utf-8')) > 2 * 1024 * 1024:
+                raise OperationError('OUTPUT_LIMIT：回傳資料超過 2 MiB，請縮小範圍。')
             return result
     return call
 
@@ -94,8 +87,8 @@ def asynchronous(function):
             try:
                 budget.check()
                 result = function(*args, **kwargs)
-                checkpoint()
-                ensure_output_limit(result)
+                if len(json.dumps(result, ensure_ascii=False, indent=2).encode('utf-8')) > 2 * 1024 * 1024:
+                    raise OperationError('OUTPUT_LIMIT：回傳資料超過 2 MiB，請縮小範圍。')
                 return result
             finally:
                 ACTIVE.reset(token)

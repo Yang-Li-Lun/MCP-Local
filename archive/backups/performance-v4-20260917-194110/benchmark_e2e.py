@@ -42,41 +42,6 @@ async def measure(call, cases, repeats):
     return rows
 
 
-async def compare_stdio(args):
-    """新舊獨立連線逐次交錯；共用既有 cases 與 percentile 彙整。"""
-    from contextlib import AsyncExitStack
-    from tool_contract import contract
-    baseline = Path(args.baseline_source).resolve()
-    cases = json.loads(Path(args.cases).read_text(encoding='utf-8'))
-    async with AsyncExitStack() as stack:
-        sessions = {}
-        for label, folder in [('baseline', baseline), ('v4', Path(__file__).resolve().parent)]:
-            params = StdioServerParameters(command=sys.executable, args=[
-                '-B', str(folder / 'local_files_mcp.py'), '--root', str(Path(args.root).resolve())])
-            read, write = await stack.enter_async_context(stdio_client(params))
-            session = await stack.enter_async_context(ClientSession(read, write))
-            await session.initialize()
-            expected = json.loads((folder / 'tool-contract.json').read_text(encoding='utf-8'))
-            if contract((await session.list_tools()).tools) != expected:
-                raise ValueError('基線或新版工具契約不符。')
-            sessions[label] = session
-        rows = []
-        for case in cases:
-            values = {label: [] for label in sessions}
-            for index in range(args.repeats + 1):
-                order = ['baseline', 'v4'] if index % 2 == 0 else ['v4', 'baseline']
-                for label in order:
-                    started = time.perf_counter()
-                    result = await sessions[label].call_tool(case['tool'], case.get('arguments', {}))
-                    if result.isError:
-                        raise ValueError('交錯量測工具呼叫失敗。')
-                    values[label].append((time.perf_counter() - started) * 1000)
-            rows.append({'case': case['name'], **{label: {
-                'first_call_ms': samples[0], 'warm_ms': summarize(samples[1:])}
-                for label, samples in values.items()}})
-        return {'cases': rows, 'comparison': '兩條 STDIO 連線逐次交錯，不並行執行工具。'}
-
-
 async def run(args):
     cases = json.loads(Path(args.cases).read_text(encoding='utf-8'))
     started = time.perf_counter()
@@ -122,14 +87,11 @@ def main():
     parser.add_argument('--cases', required=True, help='僅使用明確授權路徑的案例 JSON')
     parser.add_argument('--repeats', type=int, default=20)
     parser.add_argument('--output', required=True)
-    parser.add_argument('--baseline-source', help='STDIO 新舊交錯比較；來源須含相依模組及各自契約')
     args = parser.parse_args()
     if args.repeats < 20 or (args.mode == 'https' and not args.url):
         parser.error('至少重複 20 次；HTTPS 需要 URL')
-    if args.baseline_source and args.mode != 'stdio':
-        parser.error('--baseline-source 僅適用 STDIO')
     try:
-        report = asyncio.run(compare_stdio(args) if args.baseline_source else run(args))
+        report = asyncio.run(run(args))
     except Exception:
         print('BENCHMARK_FAILED：請檢查案例、端點及認證；未輸出內容或原始例外。')
         return 1

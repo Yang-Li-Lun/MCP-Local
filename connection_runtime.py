@@ -14,6 +14,7 @@ from enum import Enum
 from collections import deque
 from connection_settings import PROJECT, require_migration, build_commands, backup_connection_profile
 from integrity import IntegrityError
+from power_windows import CancelEvent
 
 START_WRAPPER = ('import subprocess,sys; '
                  'permit=sys.stdin.buffer.read(1); '
@@ -68,9 +69,11 @@ def existing_tunnel() -> bool:
 
 class Connection:
     """背景執行連線流程，將狀態送回介面執行緒。"""
-    def __init__(self, stage_timeout: float = 60):
-        self.events = queue.Queue()
-        self.cancel = threading.Event()
+    def __init__(self, stage_timeout: float = 60, *, power=None, notify=None):
+        from gui_tasks import WakeQueue
+        self.events = WakeQueue(notify)
+        self.power = power
+        self.cancel = CancelEvent()
         self.lock = threading.Lock()
         self.job = None
         self.thread = None
@@ -98,6 +101,7 @@ class Connection:
         from tray_windows import Job, kernel
         mutex = None
         process = None
+        power_started = False
         try:
             self.error_kind = ConnectionErrorKind.MIGRATION_REQUIRED
             require_migration(settings)
@@ -110,7 +114,12 @@ class Connection:
             if existing_tunnel():
                 raise ValueError('已有 tunnel-client 執行中。請先在原本視窗按 Ctrl+C 停止，再從此介面啟動。')
             self.error_kind = ConnectionErrorKind.CONFIG_INVALID
-            commands = build_commands(settings)
+            if self.power:
+                self.power.connection_started()
+                power_started = True
+                commands = build_commands(settings, power_channel=self.power.connection_arguments())
+            else:
+                commands = build_commands(settings)
             backup_connection_profile(commands)
             self.error_kind = ConnectionErrorKind.START_FAILED
             environment = os.environ.copy()
@@ -154,18 +163,22 @@ class Connection:
                 output = deque(maxlen=8)
                 def drain(stream=process.stdout, buffer=output):
                     try:
-                        while chunk := stream.read(1024):
+                        tail = b''
+                        warned = set()
+                        while chunk := stream.read1(1024):
                             buffer.append(chunk)
+                            tail = (tail + chunk)[-2048:]
+                            for code in ('POWER_QOS_APPLY_FAILED', 'POWER_QOS_RESTORE_FAILED'):
+                                if code.encode('ascii') in tail and code not in warned:
+                                    warned.add(code)
+                                    self.events.put(('power_warning', code))
                     finally:
                         stream.close()
                 drainer = threading.Thread(target=drain, daemon=True)
                 drainer.start()
-                deadline = time.monotonic() + self.stage_timeout
-                while process.poll() is None:
-                    if self.cancel.wait(.05):
-                        break
-                    if stage != '通道程序執行中' and time.monotonic() >= deadline:
-                        raise RuntimeError(f'{stage}逾時（{self.stage_timeout:g} 秒）。請檢查網路及通道設定後重新啟動。')
+                timeout = None if stage == '通道程序執行中' else self.stage_timeout
+                if not self.cancel.wait_process(process, timeout):
+                    raise RuntimeError(f'{stage}逾時（{self.stage_timeout:g} 秒）。請檢查網路及通道設定後重新啟動。')
                 if self.cancel.is_set():
                     break
                 code = process.returncode
@@ -212,6 +225,9 @@ class Connection:
                 cleanup(process.stdout.close)
             if mutex:
                 cleanup(lambda: kernel.CloseHandle(mutex))
+            if power_started:
+                cleanup(self.power.connection_stopped)
+            cleanup(self.cancel.close)
             if self.cancel.is_set():
                 self.error_kind = ConnectionErrorKind.CANCELLED
             if cleanup_failed:

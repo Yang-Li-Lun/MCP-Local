@@ -3,9 +3,20 @@ import queue
 import threading
 
 
+class WakeQueue(queue.Queue):
+    def __init__(self, notify=None):
+        super().__init__()
+        self.notify = notify
+
+    def put(self, item, block=True, timeout=None):
+        super().put(item, block, timeout)
+        if self.notify:
+            self.notify()
+
+
 class GuiTasks:
-    def __init__(self):
-        self.events = queue.Queue()
+    def __init__(self, notify=None):
+        self.events = WakeQueue(notify)
         self.busy = False
         self.closed = False
         self.generation = 0

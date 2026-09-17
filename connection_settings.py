@@ -14,6 +14,7 @@ from local_files_mcp import FileReader
 from workspace_settings import normalize_workspace, encode_workspace
 from reader_settings import normalize_reader_settings, encode_reader_settings
 from backup_rotation import rotate_backups
+from power_policy import normalize_power, POWER_DEFAULTS
 from integrity import verify_client
 
 PROJECT = Path(__file__).resolve().parent
@@ -40,10 +41,10 @@ def normalize_connection(settings: dict, *, validate_paths: bool = True) -> dict
     if not isinstance(settings, dict):
         raise ValueError('設定檔格式錯誤。')
     version = settings.get('settings_version', 0)
-    if type(version) is not int or version not in (0, 1, 2, 3):
+    if type(version) is not int or version not in (0, 1, 2, 3, 4, 5):
         raise ValueError('共用設定版本不支援，原檔已保留。')
     reader = normalize_reader_settings(settings.get('reader'))
-    if version in (2, 3) and ('roots' not in settings or 'default_root' not in settings):
+    if version in (2, 3, 4, 5) and ('roots' not in settings or 'default_root' not in settings):
         raise ValueError('多資料夾設定不完整。')
     roots = settings.get('roots', [{'id': 'main', 'name': 'main', 'path': settings.get('root')}])
     workspace = normalize_workspace(roots, settings.get('default_root', 'main'), reader, validate_paths=validate_paths)
@@ -63,7 +64,22 @@ def normalize_connection(settings: dict, *, validate_paths: bool = True) -> dict
             'recent': recent[:8], 'start_hidden': settings.get('start_hidden') is True,
             'auto_start': settings.get('auto_start', False),
             'auto_connect': settings.get('auto_connect', False),
-            'settings_version': 3 if version in (1, 2, 3) else 0}
+            'power': normalize_power(migrate_power_v4_to_v5(settings.get('power', {})) if version == 4
+                                     else settings.get('power') if version == 5 else None),
+            'settings_version': 5 if version in (1, 2, 3, 4, 5) else 0}
+
+
+def migrate_power_v4_to_v5(power: dict | None) -> dict:
+    """Conservatively map the removed LOW mode to OFF."""
+    power = power if isinstance(power, dict) else {}
+    mode = power.get('mode', 'off')
+    if mode == 'low' or mode not in ('off', 'extreme'):
+        mode = 'off'
+    return {'mode': mode, 'restore_original_plan': True,
+            'keep_system_awake': True,
+            'manage_power_scheme': power.get('manage_power_scheme', True),
+            'manage_windows_power_mode': True,
+            'advanced_job_cpu_cap_percent': power.get('advanced_job_cpu_cap_percent')}
 
 
 def load_settings(path: Path = CONFIG_FILE) -> dict:
@@ -74,7 +90,7 @@ def load_settings(path: Path = CONFIG_FILE) -> dict:
     if not isinstance(saved, dict):
         raise ValueError('設定檔格式錯誤。')
     settings = normalize_connection(saved)
-    if saved.get('settings_version') in (1, 2):
+    if saved.get('settings_version') in (1, 2, 3, 4):
         save_settings(settings, path, expected_revision=revision)
     return settings
 
@@ -86,7 +102,7 @@ def _write_settings(safe: dict, path: Path, previous: dict | None) -> None:
     if previous is not None:
         backup = path.with_name(path.name + '.' + uuid.uuid4().hex + '.bak')
         # 備份只保留一般設定欄位，排除任何意外混入的金鑰。
-        allowed = {'root', 'roots', 'default_root', 'tunnel', 'recent', 'start_hidden', 'reader', 'settings_version', 'auto_start', 'auto_connect'}
+        allowed = {'root', 'roots', 'default_root', 'tunnel', 'recent', 'start_hidden', 'reader', 'settings_version', 'auto_start', 'auto_connect', 'power'}
         clean = {key: value for key, value in previous.items() if key in allowed}
         if 'roots' in clean:
             clean['roots'] = [{key: value for key, value in item.items()
@@ -94,6 +110,8 @@ def _write_settings(safe: dict, path: Path, previous: dict | None) -> None:
         if 'reader' in clean:
             clean['reader'] = {key: value for key, value in clean['reader'].items()
                                if key in normalize_reader_settings()}
+        if 'power' in clean:
+            clean['power'] = {key: value for key, value in clean['power'].items() if key in POWER_DEFAULTS}
         backup.write_text(json.dumps(clean, ensure_ascii=False, indent=2), encoding='utf-8')
     temporary = path.with_name(path.name + '.' + uuid.uuid4().hex + '.tmp')
     try:
@@ -126,7 +144,7 @@ def read_settings_data(path: Path) -> tuple[dict, str]:
     except (ValueError, UnicodeError):
         raise SettingsError('SETTINGS_CORRUPT', '設定損毀，原件已保留；請由已知的一般設定備份修復。') from None
     version = value.get('settings_version', 0)
-    if type(version) is not int or version not in (0, 1, 2, 3):
+    if type(version) is not int or version not in (0, 1, 2, 3, 4, 5):
         raise SettingsError('SETTINGS_VERSION', '未知設定版本，請使用相容版本；禁止自動覆寫。')
     return value, hashlib.sha256(data).hexdigest()
 
@@ -184,7 +202,7 @@ def save_settings(settings: dict, path: Path = CONFIG_FILE, *, expected_revision
 
 def require_migration(settings: dict) -> None:
     """未明確選定分享範圍的歷史設定不得啟動。"""
-    if settings.get('settings_version') not in (1, 2, 3):
+    if settings.get('settings_version') not in (1, 2, 3, 4, 5):
         raise ValueError('尚未完成共用設定遷移。請開啟連線設定介面，選定分享資料夾及通道後按儲存設定並確認。')
 
 
@@ -205,7 +223,7 @@ def backup_connection_profile(commands: list[list[str]]) -> None:
         rotate_backups(source, 3, folder)
 
 
-def build_commands(settings: dict, profile_dir: Path = CONFIG_DIR / 'profiles') -> list[list[str]]:
+def build_commands(settings: dict, profile_dir: Path = CONFIG_DIR / 'profiles', *, power_channel=None) -> list[list[str]]:
     """命令透過參數陣列傳遞；不經命令殼層解譯。"""
     settings = normalize_connection(settings)
     verify_client(PROJECT)
@@ -220,6 +238,12 @@ def build_commands(settings: dict, profile_dir: Path = CONFIG_DIR / 'profiles') 
     mcp_command += ' --root "' + settings['root'].replace('\\', '/') + '"'
     mcp_command += ' --workspace-settings ' + encode_workspace(settings)
     mcp_command += ' --reader-settings ' + encode_reader_settings(settings.get('reader'))
+    if power_channel:
+        token, owner = power_channel
+        import re
+        if not re.fullmatch(r'[0-9a-f]{32}', token) or type(owner) is not int or owner <= 0:
+            raise ValueError('電源通道無效。')
+        mcp_command += f' --power-channel {token} --power-owner {owner}'
     common = ['--profile', 'local-files-gui', '--profile-dir', str(profile_dir)]
     commands = [
         [str(client), 'init', '--force', '--sample', 'sample_mcp_stdio_local',
