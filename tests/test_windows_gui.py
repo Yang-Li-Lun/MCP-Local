@@ -35,6 +35,9 @@ signature(user, 'GetWindowThreadProcessId', wintypes.DWORD, wintypes.HWND,
           ctypes.POINTER(wintypes.DWORD))
 w = tk.Tk()
 a = App(w, load_settings(Path('nonexistent-test-settings.json')))
+from power_policy import PowerMode
+# Exercise five-second hidden ticks without applying Windows policy.
+a.power.mode = PowerMode.EXTREME
 w.withdraw()
 a.key.set('fake-key-retained')
 observed = []
@@ -62,6 +65,7 @@ def check_menu():
     w.after(300, finish)
 def finish():
     observed.append(w.state())
+    a.power.mode = PowerMode.OFF
     a.quit()
 worker = threading.Thread(target=notifications, daemon=True)
 worker.start()
@@ -132,7 +136,7 @@ print('REAL_TRAY_EVENTS_OK')
             with patch('tray_windows.user.TrackPopupMenuEx', return_value=2), patch.object(app, 'start') as start:
                 app.popup()
                 start.assert_called_once()
-            with patch('tray_windows.user.TrackPopupMenuEx', return_value=5), patch.object(app, 'quit') as quit_app:
+            with patch('tray_windows.user.TrackPopupMenuEx', return_value=7), patch.object(app, 'quit') as quit_app:
                 app.popup()
                 quit_app.assert_called_once()
             app.show()

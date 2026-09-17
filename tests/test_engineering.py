@@ -207,7 +207,7 @@ class EngineeringTests(unittest.TestCase):
             with self.assertRaises(Exception):
                 await server.call_tool('workspace_info', {'unknown': 1})
         asyncio.run(check())
-        self.assertEqual(workspace.workspace_info()['contract_version'], 3)
+        self.assertEqual(workspace.workspace_info()['contract_version'], 4)
 
     def test_cancel_timeout_busy_and_release(self):
         budget = Budget()

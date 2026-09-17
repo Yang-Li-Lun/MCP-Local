@@ -113,7 +113,7 @@ class WorkspaceTests(unittest.TestCase):
             self.reader.read_file('private.txt', root_id='other')
 
     def test_batch_limits_and_context_budget(self):
-        for files in ([], [{'path': 'README.md'}] * 11):
+        for files in ([], [{'path': 'README.md'}] * 33):
             with self.assertRaises(ValueError):
                 self.reader.read_files(files)
         for index in range(10):
@@ -154,7 +154,7 @@ class WorkspaceTests(unittest.TestCase):
                'key': 'fake-secret'}
         target.write_text(json.dumps(old), encoding='utf-8')
         loaded = load_settings(target)
-        self.assertEqual(loaded['settings_version'], 3)
+        self.assertEqual(loaded['settings_version'], 5)
         self.assertEqual(len(loaded['roots']), 1)
         self.assertEqual(loaded['roots'][0]['path'], str(self.a))
         self.assertEqual(loaded['recent'], old['recent'])
@@ -303,9 +303,9 @@ class WorkspaceTests(unittest.TestCase):
         with patch('tray_windows.Tray'):
             app = App(window, settings, store)
         try:
-            app.workspace_default.set('other')
-            app.change_workspace_default()
-            self.assertEqual(app.root.get(), str(self.b))
+            app.folder_list.selection_set(0)
+            app.remove_selected_folders()
+            self.assertEqual(app.workspace_rows[0]['path'], str(self.b))
             target = self.base / 'settings.json'
             with patch('local_files_gui.save_settings', side_effect=lambda value: save_settings(value, target)):
                 self.assertTrue(app.save())
@@ -318,7 +318,8 @@ class WorkspaceTests(unittest.TestCase):
             loaded = load_settings(target)
             self.assertEqual(loaded['default_root'], 'other')
             self.assertEqual(loaded['root'], str(self.b))
-            self.assertEqual(len(loaded['roots']), 2)
+            self.assertEqual(len(loaded['roots']), 1)
+            self.assertEqual(loaded['roots'][0]['excluded_names'], ['private.txt'])
         finally:
             app.quit()
 

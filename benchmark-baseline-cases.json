@@ -1,0 +1,24 @@
+[
+  {
+    "name": "list_directory",
+    "tool": "list_directory"
+  },
+  {
+    "name": "read_file",
+    "tool": "read_file",
+    "arguments": {
+      "path": "README.md",
+      "line_count": 20
+    }
+  },
+  {
+    "name": "search_texts",
+    "tool": "search_texts",
+    "arguments": {
+      "queries": [
+        "MCP",
+        "UTF-8"
+      ]
+    }
+  }
+]

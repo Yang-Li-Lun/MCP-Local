@@ -10,7 +10,7 @@ from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
 
 EXPECTED = {'list_directory', 'list_files', 'read_file', 'search_text',
-            'workspace_info', 'list_projects', 'project_context', 'read_files', 'search_texts'}
+            'workspace_info', 'list_projects', 'project_context', 'read_files', 'search_texts', 'find_files', 'read_file_ranges'}
 
 
 async def smoke(url: str, root_id: str) -> None:
@@ -54,6 +54,11 @@ async def smoke(url: str, root_id: str) -> None:
                 groups = json.loads(searched.content[0].text)['results']
                 if not groups[0]['matches'] or groups[1]['matches']:
                     raise ValueError('批次搜尋結果不符。')
+                for name, arguments in [('find_files', {'queries': ['README']}),
+                        ('read_file_ranges', {'path': 'README.md', 'ranges': [{'start_line': 1, 'line_count': 20}]})]:
+                    result = await session.call_tool(name, dict(arguments, root_id=root_id))
+                    if result.isError:
+                        raise ValueError('新增工具遠端驗收失敗。')
                 for path in ('C:\\Windows\\win.ini', '../README.md', '.hidden.txt'):
                     if not (await session.call_tool('read_file', {'path': path, 'root_id': root_id})).isError:
                         raise ValueError('遠端路徑防護測試失敗。')

@@ -15,6 +15,8 @@ def main():
     os.chdir(root)
     state = (Path(os.environ.get('LOCALAPPDATA', str(Path.home()))) / 'MCP-Local').resolve()
     def guard(event, arguments):
+        if event == 'mcp.power.mutate':
+            raise RuntimeError('ISOLATION_GUARD：禁止測試修改真實 Windows 電源狀態。')
         if event == 'open' and isinstance(arguments[0], (str, bytes, os.PathLike)):
             path = Path(os.fsdecode(arguments[0])).absolute()
             if path.is_relative_to(state):
@@ -36,7 +38,7 @@ def main():
               'pip_check': dependencies.returncode, 'tests': result.testsRun,
               'failures': len(result.failures), 'errors': len(result.errors),
               'skipped': len(result.skipped), 'elapsed_seconds': round(time.monotonic()-started, 3),
-              'remote_acceptance': 'NOT_RUN', 'production_scheduler': 'NOT_RUN',
+              'remote_acceptance': 'NOT_RUN', 'production_scheduler': 'NOT_RUN', 'system_power_changes': 'BLOCKED_BY_AUDIT_GUARD',
               'isolation': 'audit guard for main test process; subprocess fixtures separately reviewed'}
     (root / 'engineering-results.json').write_text(json.dumps(report, indent=2), encoding='utf-8')
     print(json.dumps(report))

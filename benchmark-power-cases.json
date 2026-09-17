@@ -1,0 +1,11 @@
+[
+  {"name":"workspace", "tool":"workspace_info", "arguments":{}},
+  {"name":"directory", "tool":"list_directory", "arguments":{}},
+  {"name":"files", "tool":"list_files", "arguments":{}},
+  {"name":"read", "tool":"read_file", "arguments":{"path":"README.md"}},
+  {"name":"batch_read", "tool":"read_files", "arguments":{"files":[{"path":"README.md"}]}},
+  {"name":"search", "tool":"search_text", "arguments":{"query":"MCP"}},
+  {"name":"batch_search", "tool":"search_texts", "arguments":{"queries":["MCP","測試"]}},
+  {"name":"projects", "tool":"list_projects", "arguments":{}},
+  {"name":"context", "tool":"project_context", "arguments":{}}
+]

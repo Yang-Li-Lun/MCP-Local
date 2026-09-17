@@ -23,3 +23,5 @@ tunnel-client.exe
 tunnel-client-*.zip
 tunnel-client-*.spdx.json
 tunnel-client-*-licenses.txt
+
+/engineering-unit-tests.txt

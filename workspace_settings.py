@@ -65,3 +65,51 @@ def decode_workspace(value: str, settings: dict | None = None) -> dict:
         return normalize_workspace(decoded['roots'], decoded['default_root'], settings)
     except (ValueError, KeyError, TypeError, UnicodeError):
         raise ValueError('共享資料夾快照無效。') from None
+
+
+def allocate_root_id(roots: list[dict]) -> str:
+    """配置穩定且不碰撞的內部識別碼。"""
+    import uuid
+    used = {row['id'].casefold() for row in roots}
+    while True:
+        identifier = 'root_' + uuid.uuid4().hex[:12]
+        if identifier.casefold() not in used:
+            return identifier
+
+
+def derive_root_name(path: str) -> str:
+    name = Path(path).name
+    return ''.join(char for char in name if ord(char) >= 32).strip()[:80] or '資料夾'
+
+
+def create_workspace_root(path: str, roots: list[dict], settings: dict | None = None,
+                          *, previous: dict | None = None) -> dict:
+    """選取時驗證新範圍；修復其他失效列時不要求它們已可讀。"""
+    from connection_settings import CONFIG_DIR
+    from local_files_mcp import FileReader
+    if previous is None and len(roots) >= MAX_ROOTS:
+        raise ValueError('最多只能加入 8 個允許讀取的資料夾。')
+    if not isinstance(path, str) or len(path) > 4096 or not Path(path).is_absolute():
+        raise ValueError('請選取有效的絕對資料夾路徑。')
+    exclusions = list(previous.get('excluded_names', [])) if previous else []
+    effective = normalize_reader_settings(settings)
+    effective['excluded_names'] = sorted(set(effective['excluded_names']) | set(exclusions))
+    try:
+        reader = FileReader(Path(path), effective)
+    except (OSError, ValueError):
+        raise ValueError('此資料夾不存在或不符合 MCP-Local 的安全讀取規則。') from None
+    if CONFIG_DIR.resolve().is_relative_to(reader.root):
+        raise ValueError('讀取範圍不可包含本程式的設定、備份或加密金鑰目錄。')
+    for row in roots:
+        if previous and row['id'] == previous['id']:
+            continue
+        other = Path(row['path']).resolve()
+        if reader.root == other:
+            raise ValueError('此資料夾已在允許讀取清單中。')
+        if reader.root.is_relative_to(other):
+            raise ValueError('此資料夾已包含在另一個允許讀取的資料夾中。')
+        if other.is_relative_to(reader.root):
+            raise ValueError('此資料夾會擴大目前的讀取範圍，請先移除較小範圍後再加入。')
+    return {'id': previous['id'] if previous else allocate_root_id(roots),
+            'name': derive_root_name(str(reader.root)), 'path': str(reader.root),
+            'excluded_names': exclusions}

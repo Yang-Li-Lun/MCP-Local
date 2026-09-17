@@ -1,6 +1,6 @@
 # MCP-Local 本機檔案唯讀工具
 
-限定專用資料夾內的 UTF-8 文字及程式碼；提供九個唯讀工具：`list_directory`、`list_files`、`read_file`、`search_text`、`workspace_info`、`list_projects`、`project_context`、`read_files`、`search_texts`。不提供寫入、刪除或指令執行能力。
+限定專用資料夾內的 UTF-8 文字及程式碼；提供十一個唯讀工具：`list_directory`、`list_files`、`read_file`、`search_text`、`workspace_info`、`list_projects`、`project_context`、`read_files`、`search_texts`、`find_files`、`read_file_ranges`。不提供寫入、刪除或指令執行能力。
 
 ## 環境與啟動
 
@@ -62,7 +62,7 @@ read_file 每次最多 400 行，content（含行號、冒號、空白及換行�
 ## 模組與驗證
 
 - local_files_mcp.py：STDIO 伺服器、單資料夾讀取器、游標、掃描及路徑防護。
-- workspace_settings.py / workspace_reader.py：具名資料夾驗證與九個 MCP 工具。
+- workspace_settings.py / workspace_reader.py：具名資料夾驗證與十一個 MCP 工具。
 - reader_settings.py：讀取限制與白名單驗證。
 - connection_settings.py：共用設定、備份、遷移與指令建立。
 - connection_cli.py / start-local-files-tunnel.ps1：命令列入口。
@@ -70,11 +70,11 @@ read_file 每次最多 400 行，content（含行號、冒號、空白及換行�
 - key_store.py：Windows 使用者 DPAPI。
 - tests/：unittest、實際 STDIO 與 Windows 行為驗證。
 
-本機工程與隔離驗證記錄於 [2026-09-13 工程修正交付報告](reports/engineering/MCP-Local_工程修正交付報告_2026-09-13.txt)；遠端驗收須實際列工具、列 shared、讀取 README.md 的「唯讀連線測試成功」、搜尋其行號，並驗證停止失效及重啟恢復。更新後請在用戶端重新整理工具清單，確認九個工具及 `root_id`、`queries`、`context_lines` 等 schema 已載入。
+本機工程與隔離驗證記錄於 [2026-09-13 工程修正交付報告](reports/engineering/MCP-Local_工程修正交付報告_2026-09-13.txt)；遠端驗收須實際列工具、列 shared、讀取 README.md 的「唯讀連線測試成功」、搜尋其行號，並驗證停止失效及重啟恢復。更新後請在用戶端重新整理工具清單，確認十一個工具及 `root_id`、`queries`、`context_lines` 等 schema 已載入。
 
 ## 具名多資料夾與專案入口
 
-在 GUI「共享資料夾」分頁設定最多八筆代號、名稱、絕對資料夾路徑及額外排除名稱；每個資料夾都單獨驗證。代號以英文字母開頭，最多 32 個英數字、底線或連字號，大小寫不同也不可重複。設定一個 `default_root`，所有舊工具省略 `root_id` 時只使用此範圍。最近使用的資料夾不會自動加入分享。
+在連線設定首頁按「加入資料夾…」選取最多八個互相獨立的授權位置；清單只顯示路徑。選取一筆可變更路徑，也可選多筆移除。程式自動產生識別碼，新名稱由資料夾名稱取得；修改路徑仍保留既有識別碼與排除規則。舊自訂名稱在未修改路徑時保留。每次 GUI 保存以第一筆作為相容性預設根；省略 `root_id` 的呼叫僅讀此根。最近路徑不再顯示或新增，也不自動成為授權範圍。清單可暫時清空，但不能儲存或啟動。
 
 | 工具 | 呼叫範例與限制 |
 | --- | --- |
@@ -88,7 +88,7 @@ read_file 每次最多 400 行，content（含行號、冒號、空白及換行�
 
 固定入口：README.md、README.txt、README、AGENTS.md、package.json、pyproject.toml、requirements.txt、settings.gradle、settings.gradle.kts、build.gradle、build.gradle.kts、Cargo.toml、go.mod、CMakeLists.txt。使用者縮小文字白名單或增加排除時，入口仍受相同限制。
 
-GUI 與 PowerShell/CLI 共用 v3 設定。已確認的 v1 設定載入時先驗證全部欄位，再備份並原子替換，僅將原 root 轉成 `main`；尚未確認的 v0 設定仍須在 GUI 完成首次確認。設定未知版本或損毀時保留原件並拒絕覆寫。已知版本的失效資料夾可在 GUI 修復，保存前完整驗證全部新根；失效舊設定仍禁止連線。每次保存均保留一般設定白名單備份；DPAPI 金鑰檔不參與遷移。還原時停止連線、退出介面，再將選定的 `settings.json.<識別碼>.bak` 複製回 `settings.json`，保留 `api-key.dpapi`，重新開啟確認範圍。
+GUI 與 PowerShell/CLI 共用 v5 設定。已確認的 v1/v2/v3 設定載入時先驗證全部欄位，再備份並原子替換，v1 的原 root 轉成 `main`，多根順序、識別碼及排除完整保留，電源模式預設 off；尚未確認的 v0 設定仍須在 GUI 完成首次確認。設定未知版本或損毀時保留原件並拒絕覆寫。已知版本的失效資料夾可在 GUI 修復，保存前完整驗證全部新根；失效舊設定仍禁止連線。每次保存均保留一般設定白名單備份；DPAPI 金鑰檔不參與遷移。還原時停止連線、退出介面，再將選定的 `settings.json.<識別碼>.bak` 複製回 `settings.json`，保留 `api-key.dpapi`，重新開啟確認範圍。
 
 本機舊 `--root` 仍可使用；多資料夾可透過 `--workspace-settings` 傳入 `workspace_settings.encode_workspace` 產生的快照，包含 `roots` 與 `default_root`。若同時有 `--root`，具名快照優先。快照只能包含一般資料夾設定，Base64 是編碼而非加密；金鑰不進入參數。連線使用啟動時快照，修改設定後需「儲存並重連」，並在 MCP 用戶端重新整理工具清單。
 
@@ -97,7 +97,7 @@ GUI 與 PowerShell/CLI 共用 v3 設定。已確認的 v1 設定載入時先驗�
 
 ## 2026-09-13 工程修正與批次搜尋
 
-目前服務版本為 `2026.09.13.2`、契約版本 3，共提供九個唯讀工具。新增的 `search_texts` 可一次搜尋 1 至 10 個字面查詢，共用目錄掃描與每檔讀取，並沿用完整 UTF-8／NUL 驗證及搜尋容量限制。省略 `root_id` 時仍只使用明確設定的預設根；完整輸入結構及唯讀標記保存在 `tool-contract.json`。MCP 1.30.0 的同步方法使用最多四個工作執行緒、無等待佇列，合作式期限為 30 秒；每個操作另有 1 GiB 累計讀取與 300,000 項目硬上限，各工具較低設定仍優先。忙碌、取消及期限分別回報 RESOURCE_BUSY、OPERATION_CANCELLED、OPERATION_TIMEOUT。網路磁碟不承諾有界底層 I/O；部署以可信使用者的本機專用資料夾為前提。
+目前服務版本為 `2026.09.17.3`、契約版本 4，共提供十一個唯讀工具。新增的 `search_texts` 可一次搜尋 1 至 10 個字面查詢，共用目錄掃描與每檔讀取，並沿用完整 UTF-8／NUL 驗證及搜尋容量限制。省略 `root_id` 時仍只使用明確設定的預設根；完整輸入結構及唯讀標記保存在 `tool-contract.json`。MCP 1.30.0 的同步方法使用最多四個工作執行緒、無等待佇列，合作式期限為 30 秒；每個操作另有 1 GiB 累計讀取與 300,000 項目硬上限，各工具較低設定仍優先。忙碌、取消及期限分別回報 RESOURCE_BUSY、OPERATION_CANCELLED、OPERATION_TIMEOUT。網路磁碟不承諾有界底層 I/O；部署以可信使用者的本機專用資料夾為前提。
 
 所有工具返回資料 JSON（ensure_ascii=False、indent=2 的 UTF-8 編碼，不含 MCP 文字／結構化重複封套）最高 2 MiB；超限拒絕。批次仍最高 512 KiB、專案入口 64 KiB。搜尋命中物件累計 100,000 字元；空白或含換行的查詢不支援。長行增加 `match_snippet`，格式為 casefolded_text，沒有宣稱原文字元偏移。已達命中上限即保守截斷，不再為尋找額外命中讀完整工作區。
 
@@ -125,3 +125,26 @@ GUI 儲存與背景控制透過單一工作佇列完成，儲存中重複提交�
 
 介面統一使用「啟動連線」「儲存並重連」「停止連線」。儲存或啟停過程中，相關按鈕會暫時停用。登入啟動遇到暫時網路錯誤會延遲重試；按「停止連線」可取消重試。永久錯誤會提示使用者修正，不會無限重試。
 
+
+
+## 電源模式
+
+關閉、極致節能可由 GUI 或系統匣即時切換；按「儲存設定」保存偏好。資料夾變更仍須重連，電源模式切換不重連。極致節能對 GUI 啟用 EcoQoS，並透過事件立即通知已執行的 MCP 子程序啟用 EcoQoS。Tunnel 不套用 EcoQoS 或 Job CPU 硬限制。
+
+EXTREME 複製原電源方案，禁止閒置睡眠；連線存活期間建立 SystemRequired，不要求顯示器持續點亮。正常退出先停止連線再還原。獨立還原程序透過匿名 pipe EOF 偵測 GUI/CLI 終止，沒有定時輪詢；執行期 journal v2 保存方案 GUID、AC/DC 使用者電源模式原值與程序身分。若使用者自行改選其他電源方案，退出會保留該選擇並刪除本程式臨時方案。
+
+Windows 原生電源能力不足時顯示固定錯誤碼或降級警告。實機 AC/DC、功耗、雙模式延遲及 8/24 小時遠端穩定性仍需另行驗收；隔離測試不代表這些門檻已通過。詳見 [低功耗模式工程設計](低功耗模式工程設計.md)。
+
+Windows 11 支援時，極致節能會設定 AC/DC「最佳電源效率」；API 不可用或失敗時顯示警告，其餘策略繼續。此功能不強制開啟 Windows 節能器。退出時僅在目前值仍為本程式套用值時還原；使用者中途改選其他模式會被保留。設定 v4 的 low 遷移為 off，extreme 保留；v5 拒絕 low。manage_windows_power_mode 預設 true，可在一般設定停用。舊 journal v1 僅用於復原，不能進入 low 執行狀態。
+
+## 2026-09-17 性能工具（契約 4）
+
+服務版本 `2026.09.17.3`，共 11 個唯讀工具；設定版本維持 5。
+
+- 已知專案先用 `project_context`；定位檔名用 `find_files`。它以相對路徑做不分大小寫字面包含比對，最多 10 詞、每詞 50 筆、合計 200 筆與 100 KiB；達上限即停，不保證完整清冊。
+- 多個已知檔案使用 `read_files`，每次最多 32 檔、總回傳仍為 512 KiB。
+- 同檔多區段使用 `read_file_ranges(path, ranges, root_id)`；每區段指定 `start_line`、`line_count`，最多 16 區段，每區段 400 行及 24,000 字元，總回傳最多 512 KiB。原始順序、重疊與重複區段均保留；只開檔一次但仍驗證到 EOF。
+- `read_file_ranges.truncated` 表示文字或總容量截斷；因總容量未納入的區段回傳空內容及可重試的 `next_start_line`。總容量包含保守封套預留；`next_start_line` 與單段讀取相同，不等同截斷旗標。
+- 探索先用 `list_directory`，多詞內容搜尋用 `search_texts` 並指定最小目錄；完整且全域排序清冊才用 `list_files`。
+
+維持 4 worker、30 秒期限、1 GiB／300,000 項硬預算。未加入平行檔案搜尋、內容索引或驗證快取。更新後需在 MCP 用戶端重新整理工具契約；本機測試成功不代表遠端用戶端已接受更新。性能測試方式及本次實測見 `性能優化交付報告.md`。

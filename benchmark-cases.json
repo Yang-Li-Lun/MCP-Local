@@ -1,0 +1,51 @@
+[
+  {
+    "name": "list_directory",
+    "tool": "list_directory"
+  },
+  {
+    "name": "read_file",
+    "tool": "read_file",
+    "arguments": {
+      "path": "README.md",
+      "line_count": 20
+    }
+  },
+  {
+    "name": "search_texts",
+    "tool": "search_texts",
+    "arguments": {
+      "queries": [
+        "MCP",
+        "UTF-8"
+      ]
+    }
+  },
+  {
+    "name": "find_files",
+    "tool": "find_files",
+    "arguments": {
+      "queries": [
+        "README"
+      ],
+      "limit_per_query": 1
+    }
+  },
+  {
+    "name": "read_file_ranges",
+    "tool": "read_file_ranges",
+    "arguments": {
+      "path": "README.md",
+      "ranges": [
+        {
+          "start_line": 1,
+          "line_count": 5
+        },
+        {
+          "start_line": 6,
+          "line_count": 5
+        }
+      ]
+    }
+  }
+]
