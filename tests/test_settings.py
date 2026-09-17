@@ -35,7 +35,7 @@ class SettingsTests(unittest.TestCase):
             validate_settings(str(self.root), 'invalid --other-flag')
 
     def test_unsafe_root_rejected(self):
-        for root in (Path(self.root.anchor), Path.home(), self.root / 'missing'):
+        for root in (Path.home(), self.root / 'missing'):
             with self.subTest(root=root), self.assertRaises(ValueError):
                 validate_settings(str(root), 'tunnel_test')
 

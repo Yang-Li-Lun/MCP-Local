@@ -78,7 +78,7 @@ def allocate_root_id(roots: list[dict]) -> str:
 
 
 def derive_root_name(path: str) -> str:
-    name = Path(path).name
+    name = Path(path).name or Path(path).anchor
     return ''.join(char for char in name if ord(char) >= 32).strip()[:80] or '資料夾'
 
 
@@ -96,9 +96,15 @@ def create_workspace_root(path: str, roots: list[dict], settings: dict | None = 
     effective['excluded_names'] = sorted(set(effective['excluded_names']) | set(exclusions))
     try:
         reader = FileReader(Path(path), effective)
-    except (OSError, ValueError):
-        raise ValueError('此資料夾不存在或不符合 MCP-Local 的安全讀取規則。') from None
-    if CONFIG_DIR.resolve().is_relative_to(reader.root):
+    except ValueError as exc:
+        raise ValueError(f'無法使用選取的資料夾：{exc}') from None
+    except PermissionError:
+        raise ValueError('沒有權限存取選取的資料夾或其上層目錄，請選取目前帳號可讀取的專用資料夾。') from None
+    except FileNotFoundError:
+        raise ValueError('選取的資料夾或其上層目錄已不存在，請重新選取。') from None
+    except OSError:
+        raise ValueError('無法存取選取的資料夾，請確認磁碟或網路位置可用後再試。') from None
+    if reader.root != Path(reader.root.anchor) and CONFIG_DIR.resolve().is_relative_to(reader.root):
         raise ValueError('讀取範圍不可包含本程式的設定、備份或加密金鑰目錄。')
     for row in roots:
         if previous and row['id'] == previous['id']:

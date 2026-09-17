@@ -58,7 +58,6 @@ class WorkspaceTests(unittest.TestCase):
         for roots, default in [(self.roots * 5, 'main'), (self.roots + [self.roots[0]], 'main'),
                                (self.roots, 'absent'), ([], 'main'),
                                ([dict(self.roots[0], path=str(Path.home()))], 'main'),
-                               ([dict(self.roots[0], path=str(Path(self.a.anchor)))], 'main'),
                                ([dict(self.roots[0], path='relative')], 'main')]:
             with self.subTest(roots=roots), self.assertRaises(ValueError):
                 normalize_workspace(roots, default)

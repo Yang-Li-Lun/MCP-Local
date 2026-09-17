@@ -25,3 +25,11 @@ tunnel-client-*.spdx.json
 tunnel-client-*-licenses.txt
 
 /engineering-unit-tests.txt
+
+# Private credentials, connection snapshots, and local captures
+*.dpapi
+settings.json.*.bak
+local-files-gui.json.*.bak
+/profiles/
+/control-plane*.json
+/codex-clipboard-*

@@ -48,7 +48,7 @@ class FolderPowerGuiTests(unittest.TestCase):
         self.assertEqual(replacement['name'], 'folder1')
 
     def test_new_root_safety_and_settings_boundary(self):
-        for path in (self.base / 'missing', Path.home(), Path(self.base.anchor), Path('relative')):
+        for path in (self.base / 'missing', Path.home(), Path('relative')):
             with self.assertRaises(ValueError):
                 create_workspace_root(str(path), [])
         with patch('connection_settings.CONFIG_DIR', self.folders[0] / 'settings'):

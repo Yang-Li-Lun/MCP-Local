@@ -17,7 +17,7 @@ import sys
 from itertools import islice
 from contextlib import contextmanager
 from operation_budget import ACTIVE, bounded, checkpoint
-from security_policy import validate_root_policy
+from security_policy import validate_root_policy, validate_read_policy
 from stream_read import read_window, read_ranges, validate_ranges
 from snapshot_cache import CACHE, SnapshotBuilder
 from stream_search import scan_file, scan_file_many
@@ -54,15 +54,15 @@ class FileReader:
                 raise ValueError('共享路徑的祖先不可為符號連結或重新解析點。')
         if linked(original):
             raise ValueError('共享資料夾不可為符號連結或重新解析點。')
-        if hidden(original):
+        if original != Path(original.anchor) and hidden(original):
             raise ValueError('共享資料夾不可具有隱藏屬性或點號名稱。')
         self.root = original.resolve(strict=True)
         validate_root_policy(self.root)
         self._root_identity = (self.root.stat().st_dev, self.root.stat().st_ino)
         self._exclusion_names = tuple(self.settings['excluded_names'])
         self._exclusions = frozenset(self._exclusion_names) | DEFAULT_EXCLUSIONS
-        if self.root == Path(self.root.anchor) or self.root == Path.home().resolve():
-            raise ValueError('不可共享整個磁碟根目錄或使用者家目錄。請指定專用資料夾。')
+        if self.root == Path.home().resolve():
+            raise ValueError('不可共享整個使用者家目錄。請指定專用資料夾。')
 
     def checked(self, relative: str) -> Path:
         checkpoint()
@@ -80,7 +80,8 @@ class FileReader:
         info = current.lstat()
         if (info.st_dev, info.st_ino) != self._root_identity:
             raise ValueError('共享資料夾身分已變更，請重新啟動服務。')
-        if linked(current, info) or hidden(current, info):
+        validate_read_policy(current)
+        if linked(current, info) or (current != Path(current.anchor) and hidden(current, info)):
             raise ValueError('共享資料夾已變更為連結或隱藏路徑。')
         for part in raw.parts:
             if part in ('', '.'):
@@ -90,12 +91,14 @@ class FileReader:
             if part.endswith((' ', '.')) or PureWindowsPath(part).is_reserved() or any(ord(c) < 32 or c in '*?"<>|' for c in part):
                 raise ValueError('不允許特殊裝置名稱或含糊路徑語法。')
             current = current / part
+            validate_read_policy(current)
             info = current.lstat()
             if hidden(current, info):
                 raise ValueError('此路徑具有隱藏屬性，禁止讀取。')
             if linked(current, info):
                 raise ValueError('不允許讀取符號連結、重新解析點或多重硬連結檔案。')
         resolved = current.resolve(strict=True)
+        validate_read_policy(resolved)
         if not resolved.is_relative_to(self.root):
             raise ValueError('路徑超出共享資料夾。')
         return resolved
@@ -156,6 +159,7 @@ class FileReader:
                 or any(ord(c) < 32 or c in '\\/:*?"<>|' for c in name)):
             raise ValueError('此名稱不符合安全列舉規則。')
         path = folder / name
+        validate_read_policy(path)
         if len(self.relative(path)) > 4096:
             raise ValueError('相對路徑過長。')
         info = entry.stat(follow_symlinks=False)
