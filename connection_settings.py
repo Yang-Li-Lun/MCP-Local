@@ -29,7 +29,7 @@ def validate_settings(root: str, tunnel: str) -> dict:
         reader = FileReader(Path(root))
     except OSError:
         raise ValueError('共享資料夾無法安全存取。') from None
-    if CONFIG_DIR.resolve().is_relative_to(reader.root):
+    if reader.root != Path(reader.root.anchor) and CONFIG_DIR.resolve().is_relative_to(reader.root):
         raise ValueError('共享範圍不可包含本程式的一般設定、備份或加密金鑰目錄。')
     if not isinstance(tunnel, str) or not re.fullmatch(r'tunnel_[A-Za-z0-9_-]+', tunnel):
         raise ValueError('通道識別碼必須以 tunnel_ 開頭，且只能包含英數字、底線及連字號。')
