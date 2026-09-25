@@ -2,6 +2,7 @@
 import ctypes as c
 from ctypes import wintypes as w
 from collections import deque
+from pathlib import Path
 
 user = c.WinDLL('user32', use_last_error=True)
 kernel = c.WinDLL('kernel32', use_last_error=True)
@@ -61,6 +62,9 @@ signature(user, 'CreateWindowExW', w.HWND, w.DWORD, w.LPCWSTR, w.LPCWSTR,
           w.HWND, w.HMENU, w.HINSTANCE, c.c_void_p)
 signature(user, 'DefWindowProcW', LRESULT, w.HWND, w.UINT, w.WPARAM, w.LPARAM)
 signature(user, 'LoadIconW', w.HICON, w.HINSTANCE, c.c_void_p)
+signature(user, 'LoadImageW', w.HANDLE, w.HINSTANCE, w.LPCWSTR, w.UINT,
+          c.c_int, c.c_int, w.UINT)
+signature(user, 'DestroyIcon', w.BOOL, w.HICON)
 signature(user, 'DestroyWindow', w.BOOL, w.HWND)
 signature(user, 'RegisterWindowMessageW', w.UINT, w.LPCWSTR)
 signature(user, 'PeekMessageW', w.BOOL, c.POINTER(w.MSG), w.HWND, w.UINT, w.UINT, w.UINT)
@@ -124,19 +128,26 @@ class Tray:
         self.callback = WNDPROC(self._message)
         instance = kernel.GetModuleHandleW(None)
         self.class_name = 'MCP_Local_Tray_Window'
+        self.icon = user.LoadImageW(None, str(Path(__file__).resolve().parent / 'mcp-local.ico'),
+                                    1, 0, 0, 0x10 | 0x40)
+        if not self.icon:
+            raise c.WinError(c.get_last_error())
         window_class = WindowClass(proc=self.callback, instance=instance, name=self.class_name)
         if not user.RegisterClassW(c.byref(window_class)):
+            user.DestroyIcon(self.icon)
             raise c.WinError(c.get_last_error())
         self.window = user.CreateWindowExW(0, self.class_name, '', 0, 0, 0, 0, 0,
                                            None, None, instance, None)
         if not self.window:
+            user.DestroyIcon(self.icon)
             raise c.WinError(c.get_last_error())
         self.data = NotifyIcon(size=c.sizeof(NotifyIcon), window=self.window, id=1,
                                flags=7, message=0x8001,
-                               icon=user.LoadIconW(None, c.c_void_p(32516)),
+                               icon=self.icon,
                                tip='MCP-Local：尚未啟動')
         if not shell.Shell_NotifyIconW(0, c.byref(self.data)):
             user.DestroyWindow(self.window)
+            user.DestroyIcon(self.icon)
             raise OSError('無法建立系統匣圖示，請重新啟動程式。')
 
     def _message(self, hwnd, message, wp, lp):
@@ -201,3 +212,4 @@ class Tray:
     def close(self) -> None:
         shell.Shell_NotifyIconW(2, c.byref(self.data))
         user.DestroyWindow(self.window)
+        user.DestroyIcon(self.icon)

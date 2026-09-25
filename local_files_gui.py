@@ -69,6 +69,7 @@ class App:
         self.quitting = False
         self.restart_pending = False
         window.title('MCP-Local｜連線與快捷設定')
+        window.iconbitmap(str(PROJECT / 'mcp-local.ico'))
         window.geometry('800x820')
         window.minsize(780, 800)
         window.option_add('*Font', ('Microsoft JhengHei UI', 10))
