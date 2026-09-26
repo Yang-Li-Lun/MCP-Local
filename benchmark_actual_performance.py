@@ -8,11 +8,22 @@ from connection_settings import load_settings
 from local_files_mcp import FileReader
 from snapshot_cache import CACHE
 
-def main():
-    spec = importlib.util.spec_from_file_location(
-        'performance_original', 'archive/backups/performance-backup-20260913-180807/local_files_mcp.py')
+def load_original_module():
+    project_root = Path(__file__).resolve().parent
+    snapshot = (project_root / 'archive/backups/performance-backup-20260913-180807'
+                / 'local_files_mcp.py').resolve(strict=True)
+    if not snapshot.is_relative_to(project_root) or not snapshot.is_file():
+        raise ValueError('Original performance snapshot must be a repository file')
+    spec = importlib.util.spec_from_file_location('performance_original', snapshot)
+    if spec is None or spec.loader is None:
+        raise ImportError(f'Cannot load original performance snapshot: {snapshot}')
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
+    return module
+
+
+def main():
+    module = load_original_module()
     settings = load_settings()
     root = Path(settings['root'])
     report = {'repeats': 3, 'scope': 'existing default root',
