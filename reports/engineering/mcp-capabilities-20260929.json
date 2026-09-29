@@ -1,0 +1,88 @@
+{
+  "service_version": "2026.09.29.1",
+  "contract_version": 5,
+  "registered_tools": [
+    "list_directory",
+    "list_files",
+    "read_file",
+    "search_text",
+    "workspace_info",
+    "list_projects",
+    "project_context",
+    "read_files",
+    "search_texts",
+    "read_file_ranges",
+    "find_files",
+    "hash_files",
+    "compare_paths",
+    "project_status",
+    "server_diagnostics"
+  ],
+  "contract_matches": true,
+  "actual_contract_sha256": "a7d44f96a2bf53a73b10a632540bb90f2341b75dbd8eae29f7eaf2ad431a29a1",
+  "diagnostics_consistent": true,
+  "fixture_location": "tests/ temporary directory; removed after evidence collection",
+  "unchanged_scan": {
+    "bytes_read": 0,
+    "reused_hashes": 3
+  },
+  "mutations": {
+    "counts": {
+      "added": 1,
+      "deleted": 1,
+      "modified": 1,
+      "same": 2
+    },
+    "changes": {
+      "added": [
+        {
+          "path": "added.txt",
+          "type": "file"
+        }
+      ],
+      "deleted": [
+        {
+          "path": "deleted.txt",
+          "type": "file"
+        }
+      ],
+      "modified": [
+        {
+          "path": "modified.txt",
+          "type": "file"
+        }
+      ],
+      "same": [
+        {
+          "path": ".",
+          "type": "directory"
+        },
+        {
+          "path": "unchanged.txt",
+          "type": "file"
+        }
+      ]
+    },
+    "bytes_read": 10,
+    "hashed_files": 2,
+    "reused_hashes": 1
+  },
+  "source_tree_unchanged_by_tools": true,
+  "full_suite": {
+    "python": "3.10.11",
+    "mcp": "1.30.0",
+    "pydantic": "2.13.5",
+    "syntax_files": 57,
+    "pip_check": 0,
+    "tests": 231,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "elapsed_seconds": 51.484,
+    "remote_acceptance": "NOT_RUN",
+    "production_scheduler": "NOT_RUN",
+    "system_power_changes": "BLOCKED_BY_AUDIT_GUARD",
+    "isolation": "audit guard for main test process; subprocess fixtures separately reviewed"
+  },
+  "client_discovery": "NOT_VERIFIED; local STDIO only"
+}

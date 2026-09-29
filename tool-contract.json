@@ -512,5 +512,203 @@
       "idempotentHint": true,
       "openWorldHint": false
     }
+  },
+  "hash_files": {
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "paths": {
+          "items": {
+            "maxLength": 4096,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 32,
+          "minItems": 1,
+          "title": "Paths",
+          "type": "array"
+        },
+        "root_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Root Id"
+        }
+      },
+      "required": [
+        "paths"
+      ],
+      "title": "hash_filesArguments",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  "compare_paths": {
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "left": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "title": "Left",
+          "type": "string"
+        },
+        "right": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "title": "Right",
+          "type": "string"
+        },
+        "root_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Root Id"
+        },
+        "right_root_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Right Root Id"
+        }
+      },
+      "required": [
+        "left",
+        "right"
+      ],
+      "title": "compare_pathsArguments",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  "project_status": {
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "directory": {
+          "default": ".",
+          "maxLength": 4096,
+          "minLength": 1,
+          "title": "Directory",
+          "type": "string"
+        },
+        "baseline_id": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{32}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Baseline Id"
+        },
+        "force_hash": {
+          "default": false,
+          "title": "Force Hash",
+          "type": "boolean"
+        },
+        "root_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Root Id"
+        }
+      },
+      "title": "project_statusArguments",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  "server_diagnostics": {
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {},
+      "title": "server_diagnosticsArguments",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  "read_image": {
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "title": "Path",
+          "type": "string"
+        },
+        "root_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Root Id"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "title": "read_imageArguments",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
   }
 }

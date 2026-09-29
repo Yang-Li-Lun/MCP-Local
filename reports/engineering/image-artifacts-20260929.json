@@ -1,0 +1,14 @@
+{
+  "AGENTS.md": "533fa55460a869c8136169f057035a3cd3417e9ef7b44ac048c0d916c867b75d",
+  "image_reader.py": "0a45f5db04534550f32c39094cc79e46fdae5f9d4b770a8c961f565389b3368c",
+  "local_files_mcp.py": "6436df8ce292358fe25e24f307b0181fa09258e3a06c386a786801fa725c2f3c",
+  "workspace_reader.py": "f3c38485a502072297dc59877b788123867cde9745237c6a0dd1f4ab51654ab6",
+  "operation_budget.py": "354612e01b4c69483a12dd97f68ab95441d252f822e1039a0b2a0960bffeb4a6",
+  "capability_diagnostics.py": "c42fd7d21b15e7241469b77c8a4c655ce863ba922f11b55daf6b6cad7fa83ca1",
+  "tool_contract.py": "24f0fceca4fd19e7675f9ba8fc93c4368128994cdcd0036b1352b8ff21089017",
+  "tool-contract.json": "a6a2a18b34bd4cf233718751b8d17273c83b594046fcc6f2d776b98ced468d65",
+  "requirements.txt": "73c7bcd90d20c1032e431f3c018f0ba9035822f7a0878e79686339d3fa7bc7f4",
+  "requirements-lock.txt": "9afb816cf0a0887634a84c81c8595c3b4c3be14d93377f6752a3feceb595bb8b",
+  "tests/test_images.py": "a655f0de316f266ed4893e568b537fb6af6c8057fa60b5011dd6afb47e0e8420",
+  "shared/image-acceptance.png": "20f743eb4c061a3f86a1a9266ddec79fb7457fa24b77560034fd744850df4166"
+}

@@ -1,0 +1,23 @@
+{
+  "service_version": "2026.09.29.2",
+  "mcp_transport": "stdio",
+  "contract_match": true,
+  "tool_count": 16,
+  "native_image_blocks": 1,
+  "mime_type": "image/png",
+  "base64_valid": true,
+  "decoded_format": "PNG",
+  "decoded_size": [
+    1000,
+    650
+  ],
+  "image_bytes": 12870,
+  "content_types": [
+    "text",
+    "image"
+  ],
+  "structured_content": null,
+  "source_sha256": "20f743eb4c061a3f86a1a9266ddec79fb7457fa24b77560034fd744850df4166",
+  "source_unchanged": true,
+  "chatgpt_visual_acceptance": "UNRESOLVED"
+}

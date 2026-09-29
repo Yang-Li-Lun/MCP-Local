@@ -1,7 +1,11 @@
 """服務端與授權遠端驗收共用的完整輸入契約核對。"""
 import json
+
 from pathlib import Path
 from mcp.server.fastmcp.utilities.func_metadata import FuncMetadata
+
+SERVICE_VERSION = '2026.09.29.2'
+CONTRACT_VERSION = 6
 
 
 class StrictArguments(FuncMetadata):
@@ -13,7 +17,7 @@ class StrictArguments(FuncMetadata):
 
 def contract(tools):
     return {tool.name: {'inputSchema': tool.inputSchema,
-            'annotations': tool.annotations.model_dump(exclude_none=True)} for tool in tools}
+            'annotations': tool.annotations.model_dump(exclude_none=True) if tool.annotations else None} for tool in tools}
 
 
 def verify_contract(tools):

@@ -63,6 +63,16 @@ def operation(budget=None):
 
 
 def ensure_output_limit(result):
+    from mcp.types import CallToolResult, ImageContent, TextContent
+    if isinstance(result, CallToolResult):
+        from image_reader import MAX_BASE64_BYTES, MAX_IMAGE_RESPONSE_BYTES
+        images = [item for item in result.content if isinstance(item, ImageContent)]
+        if (len(images) != 1 or len(result.content) > 2 or result.structuredContent is not None
+                or any(not isinstance(item, (ImageContent, TextContent)) for item in result.content)
+                or images[0].mimeType != 'image/png' or len(images[0].data) > MAX_BASE64_BYTES
+                or len(result.model_dump_json(by_alias=True, exclude_none=True).encode('utf-8')) > MAX_IMAGE_RESPONSE_BYTES):
+            raise OperationError('IMAGE_OUTPUT_LIMIT：圖片回傳超過傳輸預算。')
+        return
     if len(json.dumps(result, ensure_ascii=False, indent=2).encode('utf-8')) > 2 * 1024 * 1024:
         raise OperationError('OUTPUT_LIMIT：回傳資料超過 2 MiB，請縮小範圍。')
 

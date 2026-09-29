@@ -1,0 +1,15 @@
+{
+  "local_reconnected": true,
+  "healthz": 200,
+  "readyz": 200,
+  "old_tunnel_pids": [
+    50596
+  ],
+  "new_tunnel_pid": 50120,
+  "scheduled_task_state": "Running",
+  "settings_bytes_unchanged": true,
+  "credential_metadata_unchanged": true,
+  "task_definition_unchanged": true,
+  "chatgpt_visual_acceptance": "UNRESOLVED",
+  "scope": "Restart existing least-privilege task only; no sharing, tunnel, credential or permission settings changed."
+}

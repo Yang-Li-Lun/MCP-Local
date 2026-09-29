@@ -111,10 +111,12 @@ class FileReader:
                 or path.name.casefold() in self.settings['text_names'])
 
     @contextmanager
-    def open_checked(self, path: Path):
+    def open_checked(self, path: Path, *, image: bool = False):
         """查驗已開啟的同一物件；可信本機寫入者模型仍是部署前提。"""
         path = self.checked(self.relative(path))
-        if not path.is_file() or not self.is_text(path):
+        from image_reader import IMAGE_EXTENSIONS, MAX_SOURCE_BYTES
+        allowed = path.suffix.casefold() in IMAGE_EXTENSIONS if image else self.is_text(path)
+        if not path.is_file() or not allowed:
             raise ValueError('只支援允許的純文字與程式碼格式。')
         before = path.stat()
         with path.open('rb') as handle:
@@ -126,11 +128,14 @@ class FileReader:
             current = self.checked(self.relative(path)).stat()
             if (current.st_dev, current.st_ino) != (info.st_dev, info.st_ino):
                 raise ValueError('檔案身分已變更。')
-            if info.st_size > self.settings['max_file_bytes']:
+            maximum = min(self.settings['max_file_bytes'], MAX_SOURCE_BYTES) if image else self.settings['max_file_bytes']
+            if info.st_size > maximum:
                 raise ValueError('檔案超過設定容量上限。')
             yield handle
             after = os.fstat(handle.fileno())
-            self.checked(self.relative(path))
+            final = self.checked(self.relative(path)).stat()
+            if (final.st_dev, final.st_ino) != (info.st_dev, info.st_ino):
+                raise ValueError('讀取期間檔案身分已變更。')
             if (after.st_size, after.st_mtime_ns, after.st_ctime_ns, after.st_nlink) != (
                     info.st_size, info.st_mtime_ns, info.st_ctime_ns, 1):
                 raise ValueError('讀取期間檔案已變更，請重試。')
@@ -172,7 +177,7 @@ class FileReader:
         return path, info
 
     def walk(self, directory: str, status: dict[str, Any], shallow: bool = False,
-             *, _with_info: bool = False) -> Iterator[Path | tuple[Path, os.stat_result]]:
+             *, _with_info: bool = False, _strict_errors: bool = False) -> Iterator[Path | tuple[Path, os.stat_result]]:
         """輸出本次通過列表級驗證的名稱；metadata 不可作為讀檔授權。"""
         root = self.checked(directory)
         if not root.is_dir():
@@ -233,9 +238,15 @@ class FileReader:
                                 yield (path, info) if _with_info else path
                             else:
                                 status['skipped_entries'] += 1
-                        except (OSError, ValueError):
+                        except OSError:
+                            if _strict_errors:
+                                raise
+                            status['skipped_entries'] += 1
+                        except ValueError:
                             status['skipped_entries'] += 1
             except (OSError, ValueError):
+                if _strict_errors:
+                    raise
                 status['skipped_entries'] += 1
             checkpoint()
 
@@ -516,15 +527,26 @@ def create_server(reader):
                                  idempotentHint=True, openWorldHint=False)
     for tool in (reader.list_directory, reader.list_files, reader.read_file, reader.search_text,
                  reader.workspace_info, reader.list_projects, reader.project_context, reader.read_files,
-                 reader.search_texts, reader.read_file_ranges, reader.find_files):
+                 reader.search_texts, reader.read_file_ranges, reader.find_files,
+                 reader.hash_files, reader.compare_paths, reader.project_status, reader.server_diagnostics,
+                 reader.read_image):
         from operation_budget import asynchronous
-        server.add_tool(asynchronous(tool), annotations=annotation)
+        server.add_tool(asynchronous(tool), annotations=(
+            annotation.model_copy(update={'idempotentHint': False})
+            if tool.__name__ == 'project_status' else annotation))
         from tool_contract import StrictArguments
         registered = server._tool_manager.get_tool(tool.__name__)
         registered.fn_metadata = StrictArguments(**registered.fn_metadata.__dict__)
         registered.fn_metadata.arg_model.model_config.update(extra='forbid', strict=True)
         registered.fn_metadata.arg_model.model_rebuild(force=True)
         registered.parameters = registered.fn_metadata.arg_model.model_json_schema()
+    from mcp.types import Tool
+    from tool_contract import SERVICE_VERSION
+    server._mcp_server.version = SERVICE_VERSION
+    reader._registered_service_version_provider = lambda: server._mcp_server.version
+    reader._registered_tools_provider = lambda: [
+        Tool(name=tool.name, inputSchema=tool.parameters, annotations=tool.annotations)
+        for tool in server._tool_manager.list_tools()]
     return server
 
 

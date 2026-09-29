@@ -1,0 +1,47 @@
+{
+  "service_version": "2026.09.29.2",
+  "contract_version": 6,
+  "consistent": true,
+  "registered_tools": [
+    "compare_paths",
+    "find_files",
+    "hash_files",
+    "list_directory",
+    "list_files",
+    "list_projects",
+    "project_context",
+    "project_status",
+    "read_file",
+    "read_file_ranges",
+    "read_files",
+    "read_image",
+    "search_text",
+    "search_texts",
+    "server_diagnostics",
+    "workspace_info"
+  ],
+  "actual_contract_sha256": "2b195d722f528533b51968dd7b19ad259b97f047c58f1881024ae995e850188d",
+  "expected_contract_sha256": "2b195d722f528533b51968dd7b19ad259b97f047c58f1881024ae995e850188d",
+  "image_limits": {
+    "formats": [
+      "PNG",
+      "JPEG",
+      "WebP"
+    ],
+    "output_mime_type": "image/png",
+    "max_source_bytes": 16777216,
+    "source_bytes_policy": "min(max_source_bytes, root.max_file_bytes)",
+    "max_source_side": 16384,
+    "max_source_pixels": 25000000,
+    "max_output_side": 2048,
+    "max_image_bytes": 3145728,
+    "max_base64_bytes": 4194304,
+    "max_response_bytes": 4259840,
+    "animation": "rejected",
+    "metadata": "stripped",
+    "resize": "aspect ratio preserved; never upscale"
+  },
+  "client_callable_read_image": false,
+  "chatgpt_visual_acceptance": "UNRESOLVED",
+  "reason": "Existing connector diagnostic call reaches new server; current conversation tool catalog has no read_image. No image received by model via this connector."
+}

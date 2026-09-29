@@ -1,0 +1,14 @@
+{
+  "local_reconnected": true,
+  "healthz": 200,
+  "readyz": 200,
+  "scheduled_task_state": "Running",
+  "old_tunnel_pids": [
+    23200
+  ],
+  "new_tunnel_pid": 49380,
+  "settings_bytes_unchanged": true,
+  "credential_metadata_unchanged": true,
+  "remote_tool_discovery": "NOT_VERIFIED",
+  "scope": "Restarted existing local task only; no sharing, tunnel, credential or permission settings edited"
+}

@@ -10,7 +10,7 @@ from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
 
 EXPECTED = {'list_directory', 'list_files', 'read_file', 'search_text',
-            'workspace_info', 'list_projects', 'project_context', 'read_files', 'search_texts', 'find_files', 'read_file_ranges'}
+            'workspace_info', 'list_projects', 'project_context', 'read_files', 'search_texts', 'find_files', 'read_file_ranges', 'hash_files', 'compare_paths', 'project_status', 'server_diagnostics', 'read_image'}
 
 
 async def smoke(url: str, root_id: str) -> None:
