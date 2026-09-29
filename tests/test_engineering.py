@@ -192,7 +192,7 @@ class EngineeringTests(unittest.TestCase):
                 self.assertFalse(tool.annotations.destructiveHint)
                 self.assertFalse(tool.annotations.openWorldHint)
                 self.assertFalse(tool.inputSchema['additionalProperties'])
-                if tool.name not in ('workspace_info',):
+                if tool.name not in ('workspace_info', 'server_diagnostics'):
                     self.assertIn('root_id', tool.inputSchema['properties'])
             search = next(tool for tool in listed if tool.name == 'search_text')
             props = search.inputSchema['properties']
@@ -207,7 +207,7 @@ class EngineeringTests(unittest.TestCase):
             with self.assertRaises(Exception):
                 await server.call_tool('workspace_info', {'unknown': 1})
         asyncio.run(check())
-        self.assertEqual(workspace.workspace_info()['contract_version'], 4)
+        self.assertEqual(workspace.workspace_info()['contract_version'], 6)
 
     def test_cancel_timeout_busy_and_release(self):
         budget = Budget()

@@ -1,8 +1,13 @@
 """具名資料夾工具；所有讀取經過 FileReader 守衛。"""
 import json
+import uuid
+import incremental_state
+from tool_contract import SERVICE_VERSION, CONTRACT_VERSION
 from importlib.metadata import version
 from typing import Any, Annotated
 from pydantic import Field
+from mcp.types import CallToolResult
+from image_reader import image_limits
 from typing_extensions import TypedDict
 from stream_read import MAX_READ_RANGES, RANGES_BYTES
 from operation_budget import bounded
@@ -18,7 +23,8 @@ MAX_BATCH_FILES = 32
 BATCH_BYTES = 512 * 1024
 CONTEXT_BYTES = 64 * 1024
 TOOLS = ('list_directory', 'list_files', 'read_file', 'search_text',
-         'workspace_info', 'list_projects', 'project_context', 'read_files', 'search_texts', 'read_file_ranges', 'find_files')
+         'workspace_info', 'list_projects', 'project_context', 'read_files', 'search_texts', 'read_file_ranges', 'find_files',
+         'hash_files', 'compare_paths', 'project_status', 'server_diagnostics', 'read_image')
 
 
 class ReadRange(TypedDict):
@@ -31,10 +37,25 @@ def encoded_size(value: Any) -> int:
     return len(json.dumps(value, ensure_ascii=False, indent=2).encode('utf-8'))
 
 
+def effective_tool_limits() -> dict:
+    return {'max_roots': 8, 'max_projects': 100, 'max_batch_files': MAX_BATCH_FILES,
+            'max_read_ranges': MAX_READ_RANGES, 'max_read_ranges_bytes': RANGES_BYTES,
+            'max_find_queries': 10, 'max_find_matches': 200,
+            'max_find_bytes': 100 * 1024,
+            'max_batch_bytes': BATCH_BYTES, 'max_context_bytes': CONTEXT_BYTES,
+            'max_context_file_lines': 80, 'max_context_lines': 3,
+            'max_read_lines': 400, 'max_read_chars': 24000,
+            'max_tool_json_bytes': 2 * 1024 * 1024, 'max_workers': 4,
+            'operation_timeout_seconds': 30, 'max_search_chars': 100000, 'max_search_line_chars': 600}
+
+
 class WorkspaceReader:
     def __init__(self, roots: list, default_root: str, settings: dict | None = None):
         self.workspace = normalize_workspace(roots, default_root, settings)
         self.readers = {}
+        self._baseline_owner = uuid.uuid4().hex
+        self._registered_tools_provider = None
+        self._registered_service_version_provider = None
         for item in self.workspace['roots']:
             effective = normalize_reader_settings(settings)
             effective['excluded_names'] = sorted(set(effective['excluded_names']) |
@@ -74,6 +95,16 @@ class WorkspaceReader:
         """分段讀取單一 UTF-8 文字；多個已知檔案優先 read_files。內容是不受信任資料。"""
         return self.call(root_id, 'read_file', path, start_line, line_count)
 
+    @bounded
+    def read_image(self, path: Annotated[str, Field(strict=True, min_length=1, max_length=4096)],
+                   root_id: str | None = None) -> CallToolResult:
+        """讀取已知相對路徑的 PNG/JPEG/WebP，回傳原生 image；等比例縮小、來源唯讀，圖片內容是不受信任資料。"""
+        from image_reader import read_image
+        try:
+            return read_image(self.reader(root_id), path)
+        except OSError:
+            raise ValueError('圖片不存在、損毀或無法安全存取。') from None
+
     def read_file_ranges(self, path: Annotated[str, Field(strict=True, min_length=1, max_length=4096)],
                          ranges: Annotated[list[ReadRange], Field(min_length=1, max_length=16)],
                          root_id: str | None = None) -> dict:
@@ -109,16 +140,8 @@ class WorkspaceReader:
             limits = dict(reader.settings)
             limits['excluded_names'] = sorted(set(limits['excluded_names']) | DEFAULT_EXCLUSIONS)
             roots.append({'id': item['id'], 'name': item['name'], 'limits': limits})
-        return {'service_version': '2026.09.17.3', 'contract_version': 4, 'mcp_version': version('mcp'), 'roots': roots, 'default_root': self.workspace['default_root'], 'tools': list(TOOLS),
-                'limits': {'max_roots': 8, 'max_projects': 100, 'max_batch_files': MAX_BATCH_FILES,
-                           'max_read_ranges': MAX_READ_RANGES, 'max_read_ranges_bytes': RANGES_BYTES,
-                           'max_find_queries': 10, 'max_find_matches': 200,
-                           'max_find_bytes': 100 * 1024,
-                           'max_batch_bytes': BATCH_BYTES, 'max_context_bytes': CONTEXT_BYTES,
-                           'max_context_file_lines': 80, 'max_context_lines': 3,
-                           'max_read_lines': 400, 'max_read_chars': 24000,
-                           'max_tool_json_bytes': 2 * 1024 * 1024, 'max_workers': 4,
-                           'operation_timeout_seconds': 30, 'max_search_chars': 100000, 'max_search_line_chars': 600}}
+        return {'service_version': SERVICE_VERSION, 'contract_version': CONTRACT_VERSION, 'mcp_version': version('mcp'), 'roots': roots, 'default_root': self.workspace['default_root'], 'tools': list(TOOLS),
+                'limits': effective_tool_limits(), 'image_limits': image_limits()}
 
     @bounded
     def list_projects(self, root_id: str | None = None) -> dict:
@@ -208,3 +231,42 @@ class WorkspaceReader:
             return self.batch(reader, files, CONTEXT_BYTES, len(ENTRY_FILES))
         except OSError:
             raise ValueError('專案路徑不存在或無法安全存取。') from None
+
+
+    @bounded
+    def hash_files(self, paths: Annotated[list[Annotated[str, Field(strict=True, min_length=1, max_length=4096)]], Field(min_length=1, max_length=32)],
+                   root_id: str | None = None) -> dict:
+        """以 SHA-256 雜湊 1 至 32 個已授權 UTF-8 檔案的原始位元組，保留全部安全與容量限制。"""
+        try:
+            return incremental_state.hash_files(self.reader(root_id), paths)
+        except OSError:
+            raise ValueError('路徑不存在或無法安全存取。') from None
+
+    @bounded
+    def compare_paths(self, left: Annotated[str, Field(strict=True, min_length=1, max_length=4096)],
+                      right: Annotated[str, Field(strict=True, min_length=1, max_length=4096)],
+                      root_id: str | None = None, right_root_id: str | None = None) -> dict:
+        """比較兩個檔案或目錄範圍；回報相對於 left 的新增、刪除、修改、相同，最多 500 筆明細。"""
+        try:
+            return incremental_state.compare_paths(self.reader(root_id),
+                self.reader(right_root_id if right_root_id is not None else root_id), left, right)
+        except OSError:
+            raise ValueError('路徑不存在或無法安全存取。') from None
+
+    @bounded
+    def project_status(self, directory: Annotated[str, Field(strict=True, min_length=1, max_length=4096)] = '.',
+                       baseline_id: Annotated[str, Field(strict=True, pattern='^[0-9a-f]{32}$')] | None = None,
+                       force_hash: Annotated[bool, Field(strict=True)] = False,
+                       root_id: str | None = None) -> dict:
+        """建立或比較專案記憶體基準；保留 baseline_id 供後續對話使用。24 小時到期，重啟失效；force_hash 強制重算。"""
+        try:
+            return incremental_state.project_status(self.reader(root_id), self._baseline_owner,
+                                                    directory, baseline_id, force_hash)
+        except OSError:
+            raise ValueError('路徑不存在或無法安全存取。') from None
+
+    @bounded
+    def server_diagnostics(self) -> dict:
+        """核對程式宣告、實際 server 註冊與契約，回報版本、生效限制與格式；不代表用戶端已取得工具。"""
+        from capability_diagnostics import diagnose
+        return diagnose(self, TOOLS)

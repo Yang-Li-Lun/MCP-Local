@@ -190,9 +190,9 @@ class WorkspaceTests(unittest.TestCase):
                     for tool in tools:
                         self.assertTrue(tool.annotations.readOnlyHint)
                         self.assertFalse(tool.annotations.destructiveHint)
-                        self.assertTrue(tool.annotations.idempotentHint)
+                        self.assertEqual(tool.annotations.idempotentHint, tool.name != 'project_status')
                         self.assertFalse(tool.annotations.openWorldHint)
-                        if tool.name != 'workspace_info':
+                        if tool.name not in ('workspace_info', 'server_diagnostics'):
                             self.assertIn('root_id', tool.inputSchema['properties'])
                     for name, args in [('workspace_info', {}), ('list_projects', {}), ('project_context', {}),
                                        ('list_directory', {}), ('list_files', {}),
