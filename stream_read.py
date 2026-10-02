@@ -69,6 +69,10 @@ def read_ranges(handle, maximum: int, ranges: list,
             break
         used += len(chunk)
         checkpoint(bytes_read=len(chunk))
+        if used == len(chunk):
+            from format_reader import known_binary
+            if known_binary(chunk):
+                raise ValueError('已辨識的二進位格式不可用文字 reader 讀取。')
         if used > maximum or b'\x00' in chunk:
             raise ValueError('檔案過大或不是支援的文字格式。')
         try:

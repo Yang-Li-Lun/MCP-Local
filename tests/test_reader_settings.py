@@ -56,11 +56,11 @@ class ReaderSettingsTests(unittest.TestCase):
             (root / 'build').mkdir()
             (root / 'build' / 'allowed.custom').write_text('marker', encoding='utf-8')
             reader = FileReader(root, {'extensions': ['custom'], 'text_names': ['special'], 'excluded_names': []})
-            self.assertEqual(set(reader.list_files()['files']), {'sample.custom', 'SPECIAL'})
+            self.assertEqual(set(reader.list_files()['files']), {'sample.custom', 'sample.txt', 'SPECIAL'})
             self.assertIn('marker', reader.read_file('sample.custom')['content'])
             self.assertEqual(len(reader.search_text('marker')['matches']), 2)
             blocked = FileReader(root, {'extensions': ['custom'], 'excluded_names': ['sample.custom', 'build']})
-            self.assertEqual(blocked.list_files()['files'], [])
+            self.assertEqual(set(blocked.list_files()['files']), {'sample.txt', 'SPECIAL'})
             for name in ('sample.custom', 'build/allowed.custom', '.hidden.custom', '../outside.custom'):
                 with self.subTest(name=name), self.assertRaises(ValueError):
                     blocked.read_file(name)

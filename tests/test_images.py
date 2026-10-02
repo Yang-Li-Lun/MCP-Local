@@ -232,7 +232,7 @@ class ImageTests(unittest.TestCase):
             self.workspace.read_image('missing.png')
         with self.assertRaises(ValueError):
             self.workspace.read_file('image.png')
-        self.assertEqual(self.workspace.list_files()['files'], [])
+        self.assertEqual(self.workspace.list_files()['files'], ['image.png'])
         self.reader._root_identity = (0, 0)
         with self.assertRaises(ValueError):
             self.workspace.read_image('image.png')
@@ -262,7 +262,7 @@ class ImageTests(unittest.TestCase):
                     self.assertEqual(initialized.serverInfo.version, SERVICE_VERSION)
                     tools = (await session.list_tools()).tools
                     verify_contract(tools)
-                    self.assertEqual(len(tools), 16)
+                    self.assertEqual(len(tools), 21)
                     result = await session.call_tool('read_image', {'path': 'image.png'})
                     self.assertFalse(result.isError)
                     self.assertGreater(len(result.content[1].data), 2*1024*1024)

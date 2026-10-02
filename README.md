@@ -1,8 +1,8 @@
 # MCP-Local 本機檔案唯讀工具
 
-MCP-Local 是 Windows 上的本機檔案唯讀 MCP 服務，在使用者明確授權的資料夾或磁碟範圍內，提供 UTF-8 文字與程式碼的列舉、搜尋及讀取，以及 PNG/JPEG/WebP 原生圖片讀取能力。支援本機 STDIO，也可透過已設定的遠端通道連線。
+MCP-Local 是 Windows 上的本機檔案唯讀 MCP 服務，在使用者明確授權的資料夾或磁碟範圍內，提供一般檔案探索、格式辨識、metadata、雜湊與有界原始資料，並支援文字、文件、靜態圖片、影音 metadata 與壓縮檔清冊。支援本機 STDIO，也可透過已設定的遠端通道連線。
 
-**服務版本：`2026.09.29.2` · MCP 工具契約：6 · 設定版本：5 · 唯讀工具：16 個**
+**服務版本：`2026.10.03.1` · MCP 工具契約：8 · 設定版本：5 · 唯讀工具：21 個**
 
 ## 主要功能
 
@@ -61,11 +61,16 @@ py -3 -m venv .venv
 
 | 工具 | 用途 |
 | --- | --- |
-| `read_image` | 從已知相對路徑讀取 PNG/JPEG/WebP，以原生 image 回傳有界 PNG |
+| `read_image` | 讀取 image_limits 公開的靜態格式（含 ICO/PNM 與可用 AVIF），原生 image 回傳有界 PNG |
+| `file_info` | 大小、時間、屬性、實際 header／容器格式與可用能力 |
+| `read_document` | PDF/Office/OpenDocument/EPUB、結構化資料、郵件與字幕的有界分頁 |
+| `inspect_media` | MP3/FLAC/Ogg/WAV/MP4/AVI 的 metadata |
+| `inspect_archive` | ZIP/TAR/TAR.GZ 安全分頁清冊與完整驗證後的成員 byte range |
+| `read_binary` | 最多 16 KiB 的 base64 位元組區段 |
 | `workspace_info` | 查看共享根代號、名稱、版本與生效限制 |
 | `list_projects` | 查看共享根下的直接子資料夾與專案入口存在性 |
 | `project_context` | 讀取 README 等固定入口的有界摘要 |
-| `list_directory` | 分頁列出直接子目錄與允許格式的檔案 |
+| `list_directory` | 分頁列出直接子目錄與安全規則允許的一般檔案 |
 | `list_files` | 取得有界掃描、全域排序後的分頁檔案清冊 |
 | `find_files` | 依相對路徑做不分大小寫的字面包含比對，定位檔名 |
 | `read_file` | 讀取單檔指定行視窗 |
@@ -73,7 +78,7 @@ py -3 -m venv .venv
 | `read_file_ranges` | 一次讀取同檔最多 16 個區段，總回傳上限 512 KiB |
 | `search_text` | 搜尋單個字面查詢，可附前後文 |
 | `search_texts` | 一次搜尋最多 10 個字面查詢，共用掃描與檔案讀取 |
-| `hash_files` | 對 1 至 32 個授權文字檔的原始位元組計算 SHA-256 |
+| `hash_files` | 對 1 至 32 個授權一般檔案的原始位元組計算 SHA-256 |
 | `compare_paths` | 比較檔案或目錄，辨識新增、刪除、修改及相同項目 |
 | `project_status` | 建立或比較限時記憶體基準；metadata 未變時重用雜湊 |
 | `server_diagnostics` | 核對程式宣告、實際註冊與契約，回報版本、限制及格式 |
@@ -82,12 +87,14 @@ py -3 -m venv .venv
 
 建議先用 `workspace_info` 確認範圍；已知專案用 `project_context`，探索目錄用 `list_directory`，找檔名用 `find_files`。內容搜尋盡量指定較小目錄，多個已知檔案用 `read_files`，同檔多段用 `read_file_ranges`。
 
+完整格式、限制、呼叫範例與部署方式見 [格式讀取說明](格式讀取說明.md)。一般列舉不做內容解析；副檔名設定只控制文字 reader，與檔案是否可見分離。
+
 ## 限制與安全邊界
 
 - 單檔預設上限 2 MiB，可調至 64 MiB；單次讀取視窗最多 400 行、24,000 字元。
 - `find_files` 最多 10 個查詢，每詞最多 50 筆，合計最多 200 筆與 100 KiB；達上限即停止，不保證完整清冊。
 - 列舉與搜尋均有掃描及輸出預算。`has_more` 代表快照仍有下一頁；`scan_truncated` 代表掃描未完成，需縮小範圍。
-- 讀取與內容搜尋保留整檔 UTF-8、NUL 與容量驗證；多區段讀取只開檔一次，仍驗證到檔尾。一般文字讀取與內容搜尋不解析 PDF、Office、圖片或壓縮檔；圖片請使用 `read_image`，目前支援 PNG、JPEG、WebP。
+- 讀取與內容搜尋保留整檔 UTF-8、NUL 與容量驗證；多區段讀取只開檔一次，仍驗證到檔尾。一般文字讀取與內容搜尋不解析 PDF、Office、圖片或壓縮檔；圖片請使用 `read_image`，另有文件、媒體與壓縮檔專用工具，詳見格式讀取說明。
 - 拒絕工具輸入中的絕對路徑、向上跳脫、點號名稱、Hidden 項目、符號連結、重新解析點與多重硬連結。
 - 整碟授權仍套用排除規則；程式狀態目錄禁止列舉與讀取。檔名排除不能辨識所有內容機密，應只授權願意交給連線用戶端的範圍。
 - MCP 中繼資料不揭露主機根目錄絕對路徑；金鑰不放入命令列參數。檔案內容本身可能含路徑或敏感資訊。
@@ -103,7 +110,7 @@ Windows 11 支援時會套用「最佳電源效率」，不強制開啟 Windows 
 
 `verify_isolated.py` 執行隔離語法、相依套件及回歸檢查，並寫出測試報告。一般電源測試使用 mock；真實系統電源測試需另外明確授權。本機驗收與正式用戶端工具發現分別記錄。
 
-遠端驗收須在實際 MCP 用戶端重新整理並確認 16 個工具、比對契約，以及實際列目錄、讀檔與搜尋。本機測試成功不能代替遠端驗收。
+遠端驗收須在實際 MCP 用戶端重新整理並確認 21 個工具、比對契約，以及實際列目錄、讀檔與搜尋。本機測試成功不能代替遠端驗收。
 
 - [增量與診斷工具說明](增量與診斷工具說明.md)：呼叫範例、基準生命週期、差異語意與驗收。
 - [完整繁體中文說明](README_繁體中文.md)：容量、游標、多根設定、遷移及錯誤處理。
@@ -117,12 +124,16 @@ Windows 11 支援時會套用「最佳電源效率」，不強制開啟 Windows 
 
 ## 2026-09-29 雜湊、差異與增量診斷
 
-新增 `hash_files`、`compare_paths`、`project_status`、`server_diagnostics`。服務版本 `2026.09.29.2`、契約 6、共 16 工具，設定版本仍為 5。
+新增 `hash_files`、`compare_paths`、`project_status`、`server_diagnostics`。服務版本 `2026.10.03.1`、契約 8、共 21 工具，設定版本仍為 5。
 
-雜湊保留 UTF-8／格式白名單、Hidden、link、排除名稱、共享根及容量限制。增量基準僅存在 MCP 程序記憶體，最長 24 小時，每個 workspace 最多 8 份；重啟或淘汰後須重新建立。只快取 metadata 與雜湊，文字讀取仍完整驗證。
+雜湊涵蓋一般檔案的原始位元組，保留 Hidden、link、排除名稱、共享根及容量限制。增量基準僅存在 MCP 程序記憶體，最長 24 小時，每個 workspace 最多 8 份；重啟或淘汰後須重新建立。只快取 metadata 與雜湊，文字讀取仍完整驗證。
 
 更新服務後，用 `server_diagnostics` 核對實際註冊，再從用戶端 `tools/list` 確認工具可見；server 無法自行證明 ChatGPT 已取得工具。完整參數、界線與示例見 [增量與診斷工具說明](增量與診斷工具說明.md)。
 
-## 原生圖片讀取（契約 6）
+## 原生圖片讀取（契約 8）
 
-新增 `read_image(path, root_id?)`，以原生 MCP `ImageContent` 傳回 PNG 圖片，原有 15 個工具皆保留，目前共 16 個唯讀工具。支援 PNG、JPEG、WebP；僅使用既有授權根，檔案須通過路徑、Hidden、link、排除名稱、狀態目錄及檔案身分檢查。詳見 [圖片讀取說明](圖片讀取說明.md)。
+新增 `read_image(path, root_id?)`，以原生 MCP `ImageContent` 傳回 PNG 圖片，既有工具皆保留，目前共 21 個唯讀工具。支援靜態 PNG、JPEG、WebP、GIF、BMP、TIFF、ICO、PNM 與可用 build 的 AVIF；僅使用既有授權根，檔案須通過路徑、Hidden、link、排除名稱、狀態目錄及檔案身分檢查。詳見 [圖片讀取說明](圖片讀取說明.md)。
+
+## 契約 8 格式擴充
+
+保留 21 工具，在 read_document 加入 format_hint/table/expected_sha256，在 inspect_archive 加入 member_path/offset/length/expected_sha256。支援結構化資料、OpenDocument、EPUB、郵件、外掛字幕與更多圖片／媒體 metadata；來源唯讀與原有安全上限保留。詳見 [格式讀取說明](格式讀取說明.md)。

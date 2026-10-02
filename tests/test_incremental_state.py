@@ -206,12 +206,12 @@ class IncrementalTests(unittest.TestCase):
             for call in (lambda: self.workspace.hash_files(['invalid.txt']),
                          lambda: self.workspace.project_status(),
                          lambda: self.workspace.compare_paths('.', '.')):
-                with self.assertRaises(ValueError):
-                    call()
+                self.assertIsInstance(call(), dict)
+            with self.assertRaises(ValueError):
+                self.workspace.read_file('invalid.txt')
         (self.root / 'invalid.txt').unlink()
         self.write('denied.bin', 'abc')
-        with self.assertRaises(ValueError):
-            self.workspace.hash_files(['denied.bin'])
+        self.assertEqual(self.workspace.hash_files(['denied.bin'])['hashed_files'], 1)
         for setting, limit in [('max_file_bytes', 2), ('max_scan_bytes', 2),
                                ('max_scan_files', 1), ('max_scan_entries', 1)]:
             with patch.dict(self.reader.settings, {setting: limit}):
@@ -353,7 +353,7 @@ class IncrementalTests(unittest.TestCase):
             async with stdio_client(StdioServerParameters(command=sys.executable, args=args)) as (read, write):
                 async with ClientSession(read, write) as session:
                     initialized = await session.initialize()
-                    self.assertEqual(initialized.serverInfo.version, '2026.09.29.2')
+                    self.assertEqual(initialized.serverInfo.version, '2026.10.03.1')
                     verify_contract((await session.list_tools()).tools)
                     async def call(name, args):
                         response = await session.call_tool(name, args)
@@ -361,7 +361,7 @@ class IncrementalTests(unittest.TestCase):
                         return json.loads(response.content[0].text)
                     diag = await call('server_diagnostics', {})
                     self.assertTrue(diag['consistent'])
-                    self.assertEqual(len(diag['registered_tools']), 16)
+                    self.assertEqual(len(diag['registered_tools']), 21)
                     hashed = await call('hash_files', {'paths': ['a.txt']})
                     self.assertEqual(hashed['files'][0]['sha256'], hashlib.sha256(b'old').hexdigest())
                     compared = await call('compare_paths', {'left': 'a.txt', 'right': 'same.txt'})

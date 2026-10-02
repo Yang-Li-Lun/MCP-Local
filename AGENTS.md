@@ -7,7 +7,10 @@
 可辨識模組與責任：
 
 - `local_files_mcp.py`：MCP 伺服器進入點、路徑驗證、掃描限制、工具註冊與原生圖片回應（含 STDIO 介面）
-- `image_reader.py`：PNG/JPEG/WebP 安全解碼、記憶體縮圖與原生 ImageContent；來源完全唯讀
+- `image_reader.py`：PNG/JPEG/WebP/GIF/BMP/TIFF/ICO/PNM 與可用 AVIF 靜態安全解碼、記憶體縮圖與原生 ImageContent；來源完全唯讀
+- `format_reader.py` / `format_worker.py`：通用 metadata／raw、固定解析程序與資源限制
+- `format_parsers.py` / `media_parser.py`：有界文件、壓縮檔與影音 metadata；僅接收記憶體快照
+- `structured_parser.py` / `document_extras.py`：有界結構化資料、SQLite 記憶體快照、OpenDocument、EPUB、郵件與外掛字幕；共用固定隔離 worker，不接受 SQL／路徑／外部資源
 - `workspace_reader.py`：最多八個具名根的唯讀讀取工具；GUI 自動管理識別碼與第一筆預設根
 - `connection_settings.py`：連線設定、遷移、備份、啟動指令管理
 - `connection_cli.py` / `start-local-files-tunnel.ps1`：CLI 與 Tunnel 啟動流程（共用 `Connection` 管理）
@@ -91,5 +94,5 @@ py -3 -m venv .venv
 - `power_policy.py` / `power_windows.py` / `power_restore_guard.py` 管理雙模式電源、原生事件與 crash 回復；預設 OFF。
 - 一般測試必須 mock Power Scheme、Process QoS、Power Request 與 Windows 使用者電源模式；不得切換正式系統電源方案。
 - 真實整合測試需 `MCP_LOCAL_ALLOW_POWER_INTEGRATION_TEST=1` 與明確使用者授權；benchmark_power.py 另要求 `--allow-system-power-changes`。
-- 設定版本 5，MCP 契約為 6（服務 2026.09.29.2；16 工具）；舊個別排除不可因 GUI 簡化而刪除。
+- 設定版本 5，MCP 契約為 8（服務 2026.10.03.1；21 工具）；舊個別排除不可因 GUI 簡化而刪除。
 - Restore guard 不接收金鑰、不加入 Connection Job；回復失敗需保留日誌，不能宣稱已還原。

@@ -1,0 +1,91 @@
+test_aiff_au_metadata_bounds (test_format_expansion.ExpansionTests.test_aiff_au_metadata_bounds) ... G:\M1536018\MCP-Local\local_files_mcp.py:91: DeprecationWarning: pathlib.PurePath.is_reserved() is deprecated and scheduled for removal in Python 3.15. Use os.path.isreserved() to detect reserved paths on Windows.
+  if part.endswith((' ', '.')) or PureWindowsPath(part).is_reserved() or any(ord(c) < 32 or c in '*?"<>|' for c in part):
+ok
+test_archive_bomb_entries_and_response_budget (test_format_expansion.ExpansionTests.test_archive_bomb_entries_and_response_budget) ... ok
+test_archive_corrupt_payload_length_and_descriptor (test_format_expansion.ExpansionTests.test_archive_corrupt_payload_length_and_descriptor) ... ok
+test_archive_deflate_and_nested_opaque (test_format_expansion.ExpansionTests.test_archive_deflate_and_nested_opaque) ... ok
+test_archive_forged_matching_lengths_and_changed_snapshot (test_format_expansion.ExpansionTests.test_archive_forged_matching_lengths_and_changed_snapshot) ... ok
+test_archive_hidden_excluded_and_missing_members (test_format_expansion.ExpansionTests.test_archive_hidden_excluded_and_missing_members) ... ok
+test_archive_ranges_full_hash_crc_and_no_extract (test_format_expansion.ExpansionTests.test_archive_ranges_full_hash_crc_and_no_extract) ... ok
+test_archive_tar_special_and_truncated_gzip (test_format_expansion.ExpansionTests.test_archive_tar_special_and_truncated_gzip) ... ok
+test_archive_unicode_directory_response_pagination (test_format_expansion.ExpansionTests.test_archive_unicode_directory_response_pagination) ... ok
+test_archive_unsafe_names_collisions_links (test_format_expansion.ExpansionTests.test_archive_unsafe_names_collisions_links) ... C:\Users\User\AppData\Local\Programs\Python\Python313\Lib\zipfile\__init__.py:1661: UserWarning: Duplicate name: 'a'
+  return self._open_to_write(zinfo, force_zip64=force_zip64)
+ok
+test_avif_static_animated_spoofed_and_metadata (test_format_expansion.ExpansionTests.test_avif_static_animated_spoofed_and_metadata) ... ok
+test_csv_bad_tail_and_limits (test_format_expansion.ExpansionTests.test_csv_bad_tail_and_limits) ... ok
+test_csv_tsv_types_multiline_pagination (test_format_expansion.ExpansionTests.test_csv_tsv_types_multiline_pagination) ... ok
+test_email_malformed_base64_and_charset (test_format_expansion.ExpansionTests.test_email_malformed_base64_and_charset) ... ok
+test_email_mime_html_attachments_and_mbox (test_format_expansion.ExpansionTests.test_email_mime_html_attachments_and_mbox) ... ok
+test_epub_order_and_external_traversal_entities (test_format_expansion.ExpansionTests.test_epub_order_and_external_traversal_entities) ... ok
+test_file_info_new_structures_and_extension_spoofs (test_format_expansion.ExpansionTests.test_file_info_new_structures_and_extension_spoofs) ... ok
+test_images_ico_pnm_metadata_and_corrupt (test_format_expansion.ExpansionTests.test_images_ico_pnm_metadata_and_corrupt) ... ok
+test_json_corrupt_tail_duplicate_nonfinite_depth (test_format_expansion.ExpansionTests.test_json_corrupt_tail_duplicate_nonfinite_depth) ... ok
+test_json_typed_paths_and_jsonl_lines (test_format_expansion.ExpansionTests.test_json_typed_paths_and_jsonl_lines) ... ok
+test_matroska_webm_metadata_and_truncated_elements (test_format_expansion.ExpansionTests.test_matroska_webm_metadata_and_truncated_elements) ... ok
+test_new_stdio_schema_registry_and_calls (test_format_expansion.ExpansionTests.test_new_stdio_schema_registry_and_calls) ... Processing request of type ListToolsRequest
+Processing request of type CallToolRequest
+Processing request of type CallToolRequest
+Processing request of type CallToolRequest
+Processing request of type CallToolRequest
+Processing request of type CallToolRequest
+Processing request of type CallToolRequest
+ok
+test_odf_all_types_and_repeats (test_format_expansion.ExpansionTests.test_odf_all_types_and_repeats) ... ok
+test_response_budget_continuation_and_changed_snapshot (test_format_expansion.ExpansionTests.test_response_budget_continuation_and_changed_snapshot) ... ok
+test_sidecar_subtitles_timing_continuation_and_corrupt_tail (test_format_expansion.ExpansionTests.test_sidecar_subtitles_timing_continuation_and_corrupt_tail) ... ok
+test_sqlite_catalog_typed_rows_and_no_source_writes (test_format_expansion.ExpansionTests.test_sqlite_catalog_typed_rows_and_no_source_writes) ... ok
+test_sqlite_wal_corruption_sql_injection_views_generated (test_format_expansion.ExpansionTests.test_sqlite_wal_corruption_sql_injection_views_generated) ... ok
+test_toml_ini_no_interpolation_and_binary_spoof (test_format_expansion.ExpansionTests.test_toml_ini_no_interpolation_and_binary_spoof) ... ok
+test_worker_audit_denies_file_network_process_sqlite_file_extension (test_format_expansion.ExpansionTests.test_worker_audit_denies_file_network_process_sqlite_file_extension) ... ok
+test_worker_real_memory_ceiling (test_format_expansion.ExpansionTests.test_worker_real_memory_ceiling) ... ok
+test_xml_locations_and_external_entity_rejection (test_format_expansion.ExpansionTests.test_xml_locations_and_external_entity_rejection) ... ok
+test_yaml_safe_types_and_rejections (test_format_expansion.ExpansionTests.test_yaml_safe_types_and_rejections) ... ok
+test_all_new_tools_keep_path_hidden_link_and_policy_guards (test_formats.FormatTests.test_all_new_tools_keep_path_hidden_link_and_policy_guards) ... ok
+test_archive_count_member_and_response_limits (test_formats.FormatTests.test_archive_count_member_and_response_limits) ... G:\M1536018\MCP-Local\format_parsers.py:29: DeprecationWarning: pathlib.PurePath.is_reserved() is deprecated and scheduled for removal in Python 3.15. Use os.path.isreserved() to detect reserved paths on Windows.
+  or any(p in ('', '.', '..') or p.endswith((' ', '.')) or PureWindowsPath(p).is_reserved()
+ok
+test_archive_pagination_nested_opaque_and_exclusions (test_formats.FormatTests.test_archive_pagination_nested_opaque_and_exclusions) ... ok
+test_archive_slip_link_duplicate_bomb_and_bad_headers (test_formats.FormatTests.test_archive_slip_link_duplicate_bomb_and_bad_headers) ... ok
+test_audio_and_video_metadata (test_formats.FormatTests.test_audio_and_video_metadata) ... ok
+test_binary_hash_ranges_compare_status (test_formats.FormatTests.test_binary_hash_ranges_compare_status) ... G:\M1536018\MCP-Local\local_files_mcp.py:166: DeprecationWarning: pathlib.PurePath.is_reserved() is deprecated and scheduled for removal in Python 3.15. Use os.path.isreserved() to detect reserved paths on Windows.
+  or name.endswith((' ', '.')) or PureWindowsPath(name).is_reserved()
+ok
+test_discovery_is_not_text_filter_and_stays_lightweight (test_formats.FormatTests.test_discovery_is_not_text_filter_and_stays_lightweight) ... ok
+test_document_corrupt_spoof_encrypted_and_xml_entities (test_formats.FormatTests.test_document_corrupt_spoof_encrypted_and_xml_entities) ... ok
+test_docx_segments_resume_and_source_unchanged (test_formats.FormatTests.test_docx_segments_resume_and_source_unchanged) ... ok
+test_flac_opus_tags_and_avi_metadata (test_formats.FormatTests.test_flac_opus_tags_and_avi_metadata) ... ok
+test_giant_pdf_and_decompression_limit (test_formats.FormatTests.test_giant_pdf_and_decompression_limit) ... G:\M1536018\MCP-Local\tests\test_formats.py:60: DeprecationWarning: add_js is deprecated and will be removed in pypdf 7.0.0. Use add_open_action instead.
+  writer.add_js("app.launchURL('https://invalid.example/');")
+ok
+test_media_spoof_and_corrupt_container (test_formats.FormatTests.test_media_spoof_and_corrupt_container) ... ok
+test_metadata_signature_times_attributes_and_large_file (test_formats.FormatTests.test_metadata_signature_times_attributes_and_large_file) ... ok
+test_new_static_images_and_multiframe_rejected (test_formats.FormatTests.test_new_static_images_and_multiframe_rejected) ... ok
+test_new_tools_reject_symlink (test_formats.FormatTests.test_new_tools_reject_symlink) ... skipped 'Symlink privilege unavailable'
+test_parser_launch_is_fixed_and_credentials_not_inherited (test_formats.FormatTests.test_parser_launch_is_fixed_and_credentials_not_inherited) ... ok
+test_pdf_text_and_active_content_ignored (test_formats.FormatTests.test_pdf_text_and_active_content_ignored) ... ok
+test_pptx_preserves_presentation_order (test_formats.FormatTests.test_pptx_preserves_presentation_order) ... ok
+test_real_worker_timeout_and_cancel (test_formats.FormatTests.test_real_worker_timeout_and_cancel) ... ok
+test_stdio_contract_new_tools_and_strict_inputs (test_formats.FormatTests.test_stdio_contract_new_tools_and_strict_inputs) ... Processing request of type ListToolsRequest
+Processing request of type CallToolRequest
+Processing request of type CallToolRequest
+Processing request of type CallToolRequest
+Processing request of type CallToolRequest
+Processing request of type CallToolRequest
+Processing request of type CallToolRequest
+Processing request of type CallToolRequest
+Processing request of type CallToolRequest
+Processing request of type CallToolRequest
+Processing request of type CallToolRequest
+ok
+test_tar_and_targz_and_link_rejected (test_formats.FormatTests.test_tar_and_targz_and_link_rejected) ... ok
+test_toctou_during_new_reads (test_formats.FormatTests.test_toctou_during_new_reads) ... ok
+test_windows_hidden_and_reparse (test_formats.FormatTests.test_windows_hidden_and_reparse) ... ok
+test_worker_resource_limit_and_external_access_enforced (test_formats.FormatTests.test_worker_resource_limit_and_external_access_enforced) ... ok
+test_xlsx_values_formulas_and_external_reference_not_followed (test_formats.FormatTests.test_xlsx_values_formulas_and_external_reference_not_followed) ... ok
+test_xml_depth_nodes_and_document_capacity (test_formats.FormatTests.test_xml_depth_nodes_and_document_capacity) ... ok
+
+----------------------------------------------------------------------
+Ran 58 tests in 171.500s
+
+OK (skipped=1)

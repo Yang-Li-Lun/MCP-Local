@@ -1,0 +1,151 @@
+{
+  "date": "2026-10-03",
+  "service_version": "2026.10.03.1",
+  "contract_version": 8,
+  "tool_count": 21,
+  "settings_version": 5,
+  "git": {
+    "branch": "main",
+    "head": "77592b1",
+    "initial_worktree": "dirty; prior changes retained and extended",
+    "commit_or_push": false
+  },
+  "validation": {
+    "py_compile": "PASS",
+    "python_310_syntax": "PASS; runtime not tested",
+    "specialized": {
+      "tests": 58,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 1,
+      "elapsed_seconds": 171.5,
+      "final_full_suite_reruns_all_specialized_cases": true
+    },
+    "full_unittest": {
+      "tests": 315,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 5,
+      "passed": 310,
+      "elapsed_seconds": 226.141
+    },
+    "isolated": {
+      "python": "3.13.15",
+      "mcp": "1.30.0",
+      "pydantic": "2.13.5",
+      "syntax_files": 69,
+      "pip_check": 0,
+      "tests": 315,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 5,
+      "elapsed_seconds": 223.116,
+      "remote_acceptance": "NOT_RUN",
+      "production_scheduler": "NOT_RUN",
+      "system_power_changes": "BLOCKED_BY_AUDIT_GUARD",
+      "isolation": "audit guard for main test process; subprocess fixtures separately reviewed"
+    },
+    "pip_check": "PASS",
+    "stdio": {
+      "mcp": "1.30.0",
+      "tools_list_contract": "PASS",
+      "tools_call": "PASS",
+      "strict_arguments": "PASS",
+      "registry_diagnostics": "PASS"
+    }
+  },
+  "skips": {
+    "reason": "Windows symlink creation privilege unavailable (WinError 1314)",
+    "tests": [
+      "test_snapshot_link_outside_repository_is_rejected",
+      "test_new_tools_reject_symlink",
+      "test_symlink_rejected",
+      "test_symbolic_link",
+      "test_symlink_entry"
+    ]
+  },
+  "dependency_change": {
+    "added": "PyYAML==6.0.3",
+    "license": "MIT",
+    "loader": "pure Python SafeLoader with additional bounds; no aliases/tags/constructors",
+    "existing_avif_library": "libavif 1.4.2 via existing Pillow 12.3.0"
+  },
+  "restart": {
+    "entry": "autostart.py (existing configured tray/autoconnect entry)",
+    "authorized_by_user": true,
+    "tunnel_count": 1,
+    "server_process_trees": 1,
+    "settings_and_encrypted_credentials_hash_unchanged": true,
+    "power_mode": "off",
+    "schedule_changed": false
+  },
+  "remote": {
+    "connector": "NCUE",
+    "service_version": "2026.10.03.1",
+    "contract_version": 8,
+    "registered_tools": 21,
+    "consistent": true,
+    "root_ids_match_local": true,
+    "actual_contract_sha256": "37de43a7e513f0ea2ee9532e26715012b453b07e1dd4513b8ae0c73052779922",
+    "expected_contract_sha256": "37de43a7e513f0ea2ee9532e26715012b453b07e1dd4513b8ae0c73052779922",
+    "calls": [
+      {
+        "tool": "read_file",
+        "isError": false,
+        "content_types": [
+          "text"
+        ],
+        "text_smoke_match": true
+      },
+      {
+        "tool": "file_info",
+        "isError": false,
+        "content_types": [
+          "text"
+        ],
+        "format": "JSON"
+      },
+      {
+        "tool": "read_document",
+        "isError": false,
+        "content_types": [
+          "text"
+        ],
+        "format": "JSON",
+        "returned_count": 2,
+        "has_more": true
+      },
+      {
+        "tool": "read_image",
+        "isError": false,
+        "content_types": [
+          "text",
+          "image"
+        ],
+        "source_format": "PNG"
+      }
+    ],
+    "resume": {
+      "tool": "read_document_resume",
+      "isError": false,
+      "first_next_start": 2,
+      "next_first_index": 2,
+      "source_sha256_matches": true
+    },
+    "status": "PASS for version, registry, original read tools, auto-detected JSON and continuation; new optional argument calls await connector schema refresh",
+    "not_run": [
+      "remote archive member_path/offset/length call",
+      "remote format_hint/table/expected_sha256 call",
+      "all-format remote fixture matrix",
+      "remote full tools/list transport capture"
+    ],
+    "other_connector": "An initial unrelated connector returned an older service and different root IDs; it was not modified"
+  },
+  "limits_and_security": "Original root/path/Hidden/link/TOCTOU guards retained; fixed memory-only parser worker; 10s wall/CPU, 512MiB; no source writes/extraction/SQL commands/network/model download; not a full native-code OS sandbox",
+  "unsupported": [
+    "OCR / audio transcription / video frames / embedded subtitle payload: no audited fixed offline model or codec workflow",
+    "Legacy DOC/XLS/PPT, XLSB, MSG: no audited bounded parser in current dependency set",
+    "HEIC/HEIF/EPS rendering, animated images, RAR/7Z/ZIP64/encryption, arbitrary SQL/WAL, recursive extraction"
+  ],
+  "source_manifest": "formats-expanded-source-manifest-20261003.json"
+}

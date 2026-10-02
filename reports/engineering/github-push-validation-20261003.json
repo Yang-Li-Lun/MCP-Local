@@ -1,0 +1,50 @@
+{
+  "date": "2026-10-03",
+  "service_version": "2026.10.03.1",
+  "contract_version": 8,
+  "tool_count": 21,
+  "starting_commit": "77592b1",
+  "py_compile": "PASS",
+  "source_manifest": "formats-expanded-source-manifest-20261003.json",
+  "source_manifest_mismatches": [],
+  "diff_check": "PASS",
+  "isolated_command": ".venv/Scripts/python.exe -B verify_isolated.py",
+  "isolated": {
+    "python": "3.13.15",
+    "mcp": "1.30.0",
+    "syntax_files": 69,
+    "pip_check": 0,
+    "tests": 315,
+    "passed": 308,
+    "failures": 1,
+    "errors": 1,
+    "skipped": 5,
+    "elapsed_seconds": 224.052,
+    "exit_code": 1
+  },
+  "failed_tests": [
+    "test_real_tray_notifications_open_menu_then_settings",
+    "test_tray_hide_restore_and_exit"
+  ],
+  "failure_details": "Both encounter PermissionError: WinError 5 (Access denied) in tray_windows.py:205 during native menu creation. The tray implementation, popup method and affected tests are unchanged in this patch. This run does not establish a passing GUI regression result.",
+  "targeted_retry": {
+    "command": ".venv/Scripts/python.exe -B -m unittest discover -s tests -p test_windows_gui.py -v",
+    "tests": 5,
+    "passed": 3,
+    "failures": 1,
+    "errors": 1,
+    "elapsed_seconds": 4.403,
+    "exit_code": 1,
+    "result": "Same two WinError 5 results reproduced"
+  },
+  "skip_reason": "Five real symlink cases require a Windows privilege unavailable in this session (WinError 1314).",
+  "historical_acceptance": "Earlier full and isolated PASS records remain historical evidence; current source manifest hashes match, but this push-time run has the GUI failures recorded above.",
+  "icons": {
+    "assets/icons/mcp-local-v2-upload.png": "Pillow verify/load PASS; PNG 256x256; metadata contains transparency only",
+    "assets/icons/mcp-local-v2.compressed.ico": "Pillow verify/load PASS; seven sizes from 16x16 to 256x256; metadata contains sizes only"
+  },
+  "credential_screening": "Changed text files screened for common credential patterns; no candidate credential values found. Formal settings, DPAPI storage and virtual environment excluded from Git.",
+  "remote_acceptance": "NOT_RUN_IN_THIS_PUSH_SESSION",
+  "production_scheduler": "NOT_RUN",
+  "system_power_changes": "BLOCKED_BY_ISOLATED_TEST_AUDIT_GUARD"
+}

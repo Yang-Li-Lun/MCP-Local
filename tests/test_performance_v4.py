@@ -175,7 +175,7 @@ class PerformanceV4Tests(unittest.TestCase):
     def test_new_tools_schema_and_strict_range(self):
         server = create_server(self.workspace)
         tools = asyncio.run(server.list_tools())
-        self.assertEqual(len(tools), 16)
+        self.assertEqual(len(tools), 21)
         tool = server._tool_manager.get_tool('read_file_ranges')
         with self.assertRaises(ValueError):
             tool.fn_metadata.arg_model.model_validate({'path': 'a.txt', 'ranges': [{'start_line': True, 'line_count': 1}]})

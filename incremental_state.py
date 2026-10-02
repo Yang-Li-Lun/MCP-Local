@@ -1,5 +1,4 @@
 """Bounded SHA-256 inventories and process-local incremental baselines."""
-import codecs
 import hashlib
 import json
 import os
@@ -113,13 +112,12 @@ def scope_key(reader, directory):
 
 def hash_record(reader, path, stats, previous=None, force=False):
     """Checked-open even on reuse; cached hashes never authorize text reads."""
-    with reader.open_checked(path) as handle:
+    with reader.open_checked(path, binary=True) as handle:
         before = handle_signature(handle)
         if not force and previous and previous.get('signature') == before:
             stats['reused_hashes'] += 1
             result = dict(previous)
         else:
-            decoder = codecs.getincrementaldecoder('utf-8-sig')()
             digest = hashlib.sha256()
             used = 0
             while True:
@@ -134,17 +132,7 @@ def hash_record(reader, path, stats, previous=None, force=False):
                 if (used > reader.settings['max_file_bytes'] or
                         stats['bytes_read'] > reader.settings['max_scan_bytes']):
                     raise ValueError('HASH_BYTES_LIMIT：已達讀取容量上限，請縮小範圍。')
-                if b'\x00' in chunk:
-                    raise ValueError('HASH_FORMAT：只支援 UTF-8 文字與程式碼。')
-                try:
-                    decoder.decode(chunk)
-                except UnicodeError:
-                    raise ValueError('HASH_FORMAT：只支援 UTF-8 文字與程式碼。') from None
                 digest.update(chunk)
-            try:
-                decoder.decode(b'', final=True)
-            except UnicodeError:
-                raise ValueError('HASH_FORMAT：只支援 UTF-8 文字與程式碼。') from None
             if handle_signature(handle) != before:
                 raise ValueError('SCAN_CHANGED：檔案在讀取期間變更，請重試。')
             stats['hashed_files'] += 1

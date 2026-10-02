@@ -1,0 +1,20 @@
+{
+  "format_reader.py": "cb019a1e1392ea68db056541b320903aad38e74388b9d9ccbbac02eda81ad197",
+  "format_parsers.py": "66a72e897d61baa820b6bc4286aef9d701a50abab5ec428606953cdd2388d82e",
+  "format_worker.py": "c2a76e8b1191fbda03156f1eba204a75ce4ae49ddc6d1ad51cea45be8eb94d27",
+  "structured_parser.py": "f995de6cc3d237cdaf02db6a2609b90dbe5c5bbe0eb560f268551a233ad8accf",
+  "document_extras.py": "026f96da5e3bed1c136c7f630c5f3d957ebb40d32910437bca6dcd9a9ab0cf9c",
+  "media_parser.py": "a6bfaefce77a114b5502a371db14df4a3d11d539c1ff53f7d483c229909f0584",
+  "image_reader.py": "3fd40d17c9c109e152e6b9da115b30e20d5259bdd09949151174a65376ca1b3a",
+  "workspace_reader.py": "7d72e2e78453339462916329c8e4ed3fed673baca487a23ce76411cdf6e4c4ba",
+  "capability_diagnostics.py": "a9d2a1bbc976d1ef1f66f76bc3a0af89e4045cc2ba8cfa0132fd5148003aa8d9",
+  "tool_contract.py": "e857b35635b2aab756458a6b5b111eb37bd3a500ec89b4fb8594dcf955bd743c",
+  "local_files_mcp.py": "c33a07e4ca640443b9424d902c1134a79b6eac7179eed981282fce19562a478f",
+  "tool-contract.json": "2d7337d74a59af9fb64fc849f9694076e812a2095a647e24a30dd02e09779e32",
+  "requirements.txt": "401697dcb36b3212c465aa0214d3bddbb64b91c927ab84422874ccb66b2311af",
+  "requirements-lock.txt": "efac904c12765ad1a9072db8cb31df8e385879126c878be67f31c689f2f22d95",
+  "tests/test_format_expansion.py": "b05eacdd4d07bf0c461cedbcb253a726b89e35244df43cefa34ca907f1261599",
+  "tests/test_formats.py": "45f448a6f98ee4e15dd7872402990af10a3af41da464b90c8d170df2b7353315",
+  "tests/test_engineering.py": "bfcba42765e718d17caeb61d0204427f3bb7ffa1534c02872daa4702a376a0da",
+  "tests/test_incremental_state.py": "8096e8bf4846cc114abbc9420c0de400bc701ebde3e786c164bccb2df6218ad0"
+}
