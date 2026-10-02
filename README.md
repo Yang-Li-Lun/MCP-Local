@@ -14,6 +14,19 @@ MCP-Local 是 Windows 上的本機檔案唯讀 MCP 服務，在使用者明確�
 
 MCP 工具不提供來源檔案寫入、刪除或指令執行能力。
 
+## 圖示選擇
+
+開啟 GUI 的「外觀」頁籤，可預覽並選擇「原版圖示」或「資料夾連結」。按「儲存設定」後立即套用至視窗與系統匣，不需重新連線；下次啟動沿用已保存的選擇。舊設定未指定 `icon_style` 時維持原版，設定版本仍為 5。
+
+兩款圖示共存，原始 `mcp-local.ico` 保留。ChatGPT 端需另外選用 PNG，本機外觀設定不會同步至 ChatGPT：
+
+| 樣式 | Windows ICO | MCP 圖標 PNG |
+| --- | --- | --- |
+| 原版圖示 | [mcp-local.ico](mcp-local.ico) | [mcp-local-classic.png](assets/icons/mcp-local-classic.png) |
+| 資料夾連結 | [mcp-local-v2.ico](assets/icons/mcp-local-v2.ico) | [mcp-local-v2.png](assets/icons/mcp-local-v2.png) |
+
+散布專案時請一併保留 `assets/icons/`。PNG 為 512×512；兩款 ICO 均含 16、24、32、48、64、128、256 像素尺寸。
+
 ## 快速開始
 
 環境需求：Windows、Python 3.10+。既有驗證環境為 Python 3.10.11、MCP 1.30.0；相依套件版本見 [requirements-lock.txt](requirements-lock.txt)。

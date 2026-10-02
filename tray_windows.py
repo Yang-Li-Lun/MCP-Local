@@ -2,7 +2,7 @@
 import ctypes as c
 from ctypes import wintypes as w
 from collections import deque
-from pathlib import Path
+from icon_assets import icon_path
 
 user = c.WinDLL('user32', use_last_error=True)
 kernel = c.WinDLL('kernel32', use_last_error=True)
@@ -119,7 +119,7 @@ class Job:
 
 class Tray:
     """左鍵開啟設定，右鍵開啟操作選單；Explorer 重啟時恢復圖示。"""
-    def __init__(self, show, menu, notify=None):
+    def __init__(self, show, menu, notify=None, *, icon_style='classic'):
         self.notify = notify
         self.show = show
         self.menu = menu
@@ -128,7 +128,8 @@ class Tray:
         self.callback = WNDPROC(self._message)
         instance = kernel.GetModuleHandleW(None)
         self.class_name = 'MCP_Local_Tray_Window'
-        self.icon = user.LoadImageW(None, str(Path(__file__).resolve().parent / 'mcp-local.ico'),
+        self.icon_style = icon_style
+        self.icon = user.LoadImageW(None, str(icon_path(icon_style)),
                                     1, 0, 0, 0x10 | 0x40)
         if not self.icon:
             raise c.WinError(c.get_last_error())
@@ -149,6 +150,24 @@ class Tray:
             user.DestroyWindow(self.window)
             user.DestroyIcon(self.icon)
             raise OSError('無法建立系統匣圖示，請重新啟動程式。')
+
+    def set_icon(self, style: str) -> None:
+        """成功通知 Explorer 後才釋放舊圖示；失敗保留原圖示。"""
+        path = icon_path(style)
+        if style == self.icon_style:
+            return
+        replacement = user.LoadImageW(None, str(path), 1, 0, 0, 0x10 | 0x40)
+        if not replacement:
+            raise c.WinError(c.get_last_error())
+        previous = self.icon
+        self.data.icon = replacement
+        if not shell.Shell_NotifyIconW(1, c.byref(self.data)):
+            self.data.icon = previous
+            user.DestroyIcon(replacement)
+            raise OSError('無法更新系統匣圖示，原圖示已保留。')
+        self.icon = replacement
+        self.icon_style = style
+        user.DestroyIcon(previous)
 
     def _message(self, hwnd, message, wp, lp):
         if message == self.restart and hasattr(self, 'data'):

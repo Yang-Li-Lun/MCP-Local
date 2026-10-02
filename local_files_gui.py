@@ -9,6 +9,7 @@ import re
 import threading
 import time
 from gui_tasks import GuiTasks
+from icon_assets import ICON_STYLES, icon_path
 from power_policy import PowerPolicyManager, PowerMode, normalize_power, tick_interval
 from workspace_settings import create_workspace_root
 from connection_settings import load_for_edit, read_settings_data
@@ -69,7 +70,8 @@ class App:
         self.quitting = False
         self.restart_pending = False
         window.title('MCP-Local｜連線與快捷設定')
-        window.iconbitmap(str(PROJECT / 'mcp-local.ico'))
+        self.icon_style = tk.StringVar(value=settings.get('icon_style', 'classic'))
+        window.iconbitmap(str(icon_path(self.icon_style.get())))
         window.geometry('800x820')
         window.minsize(780, 800)
         window.option_add('*Font', ('Microsoft JhengHei UI', 10))
@@ -82,6 +84,9 @@ class App:
         advanced = ttk.Frame(self.tabs, padding=16)
         self.tabs.add(advanced, text='進階讀取設定')
         self.create_advanced(advanced)
+        appearance = ttk.Frame(self.tabs, padding=16)
+        self.tabs.add(appearance, text='外觀')
+        self.create_appearance(appearance)
         frame.columnconfigure(0, weight=1)
         ttk.Label(frame, text='本機檔案唯讀連線', font=('Microsoft JhengHei UI', 16, 'bold')).grid(
             row=0, column=0, sticky='w', pady=(0, 14))
@@ -129,7 +134,7 @@ class App:
         ttk.Label(outer, textvariable=self.power_status, wraplength=710).pack(fill='x')
         self.status = tk.StringVar(value='尚未啟動；請確認資料夾並輸入金鑰。')
         self.suppress_dirty = False
-        for variable in (self.tunnel, self.hidden, self.auto_start, *self.reader_numbers.values()):
+        for variable in (self.tunnel, self.hidden, self.auto_start, self.icon_style, *self.reader_numbers.values()):
             variable.trace_add('write', self.mark_dirty)
         for editor in self.reader_lists.values():
             editor.edit_modified(False)
@@ -137,7 +142,8 @@ class App:
         self.refresh_controls()
         self.key.trace_add('write', self.schedule_key_save)
         ttk.Label(outer, textvariable=self.status, wraplength=710).pack(fill='x', pady=(10, 0))
-        self.tray = Tray(lambda: window.after(0, self.show), lambda: window.after(0, self.popup), self.wake_event.set)
+        self.tray = Tray(lambda: window.after(0, self.show), lambda: window.after(0, self.popup),
+                         self.wake_event.set, icon_style=self.icon_style.get())
         window.protocol('WM_DELETE_WINDOW', self.hide)
         window.bind('<<MCPWake>>', lambda event: self.wake_tick())
         self.start_event_bridge()
@@ -150,6 +156,24 @@ class App:
             window.after(0, self.start)
         if self.key_load_error:
             window.after(0, lambda: messagebox.showerror('金鑰讀取失敗', self.key_load_error, parent=window))
+
+    def create_appearance(self, frame) -> None:
+        """預覽兩款內建圖示；沿用一般設定的明確儲存流程。"""
+        ttk.Label(frame, text='圖示樣式', font=('Microsoft JhengHei UI', 16, 'bold')).pack(anchor='w')
+        self.icon_previews = []
+        for style in ICON_STYLES:
+            preview = tk.PhotoImage(file=str(icon_path(style, preview=True))).subsample(4)
+            self.icon_previews.append(preview)
+            ttk.Radiobutton(frame, image=preview,
+                            variable=self.icon_style, value=style).pack(anchor='w', pady=12)
+
+    def apply_icon(self, style: str) -> None:
+        try:
+            self.tray.set_icon(style)
+            self.window.iconbitmap(str(icon_path(style)))
+        except (OSError, tk.TclError):
+            messagebox.showwarning('圖示套用失敗', '設定已載入，但圖示無法完整套用。請確認圖示檔案存在後重新啟動程式。',
+                                   parent=self.window)
 
     def create_advanced(self, frame) -> None:
         """集中編輯容量、掃描限制、格式及名稱排除規則。"""
@@ -473,6 +497,8 @@ class App:
             self.tunnel.set(value['tunnel'])
             self.hidden.set(value['start_hidden'])
             self.auto_start.set(value.get('auto_start', False))
+            self.icon_style.set(value.get('icon_style', 'classic'))
+            self.apply_icon(self.icon_style.get())
             self.workspace_rows = [dict(row) for row in value['roots']]
             self.invalid_root_ids = {row['root_id'] for row in editable.errors}
             self.refresh_folder_list()
@@ -498,6 +524,7 @@ class App:
             settings['start_hidden'] = self.hidden.get()
             settings['auto_start'] = self.auto_start.get()
             settings['auto_connect'] = self.auto_start.get()
+            settings['icon_style'] = self.icon_style.get()
             if settings['auto_start'] and (not self.key_store or not self.key.get().strip()):
                 raise ValueError('自動啟動需要已保存的 DPAPI 金鑰。')
             settings['reader'] = self.collect_advanced()
@@ -557,6 +584,7 @@ class App:
                     messagebox.showerror('無法儲存設定', str(error), parent=self.window)
                     return
                 self.settings = value
+                self.apply_icon(value['icon_style'])
                 self.settings_revision = hashlib.sha256(json.dumps(value, ensure_ascii=False, indent=2).encode('utf-8')).hexdigest()
                 self.repair_required = False
                 self.state = 'RUNNING' if self.running else 'IDLE'
