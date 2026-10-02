@@ -104,7 +104,8 @@ class FolderPowerGuiTests(unittest.TestCase):
         self.assertEqual(app.folder_list.get(0), str(self.folders[0]))
         for field in ('root', 'roots', 'workspace_fields', 'workspace_default', 'workspace_choice'):
             self.assertFalse(hasattr(app, field))
-        self.assertEqual(len(app.tabs.tabs()), 2)
+        self.assertEqual([app.tabs.tab(tab, 'text') for tab in app.tabs.tabs()],
+                         ['連線設定', '進階讀取設定', '外觀'])
         app.folder_list.selection_set(0)
         app.remove_selected_folders()
         self.assertEqual(app.workspace_rows, [])

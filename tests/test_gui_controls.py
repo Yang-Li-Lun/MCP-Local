@@ -62,6 +62,32 @@ class GuiControlTests(unittest.TestCase):
                     self.assertEqual(str(getattr(a, name + '_button')['state']), 'normal' if enabled else 'disabled')
         a.quitting = False
 
+    def test_icon_selection_applies_after_save_and_survives_reload(self):
+        a = self.app
+        a.icon_style.set('folder_link')
+        self.assertTrue(a.dirty)
+        a.tray.set_icon.assert_not_called()
+        with patch('local_files_gui.save_settings', side_effect=lambda value, **kw: save_settings(value, self.target, **kw)):
+            self.assertTrue(a.save())
+            self.poll()
+        self.assertEqual(load_for_edit(self.target).settings['icon_style'], 'folder_link')
+        a.tray.set_icon.assert_called_with('folder_link')
+        a.icon_style.set('classic')
+        with patch('local_files_gui.load_for_edit', lambda: load_for_edit(self.target)):
+            a.reload_settings()
+        self.assertEqual(a.icon_style.get(), 'folder_link')
+        self.assertFalse(a.dirty)
+
+    def test_failed_icon_save_does_not_apply(self):
+        a = self.app
+        a.icon_style.set('folder_link')
+        with patch('local_files_gui.save_settings', side_effect=OSError('fixture')), patch(
+                'local_files_gui.messagebox.showerror'):
+            self.assertTrue(a.save())
+            self.poll()
+        a.tray.set_icon.assert_not_called()
+        self.assertEqual(load_for_edit(self.target).settings['icon_style'], 'classic')
+
     def test_refresh_preserves_hover_and_press_until_release(self):
         a = self.app
         button = a.start_button

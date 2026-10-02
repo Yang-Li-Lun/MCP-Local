@@ -16,6 +16,7 @@ from reader_settings import normalize_reader_settings, encode_reader_settings
 from backup_rotation import rotate_backups
 from power_policy import normalize_power, POWER_DEFAULTS
 from integrity import verify_client
+from icon_assets import normalize_icon_style
 
 PROJECT = Path(__file__).resolve().parent
 CONFIG_DIR = Path(os.environ.get('LOCALAPPDATA', str(Path.home()))) / 'MCP-Local'
@@ -64,6 +65,7 @@ def normalize_connection(settings: dict, *, validate_paths: bool = True) -> dict
             'recent': recent[:8], 'start_hidden': settings.get('start_hidden') is True,
             'auto_start': settings.get('auto_start', False),
             'auto_connect': settings.get('auto_connect', False),
+            'icon_style': normalize_icon_style(settings.get('icon_style', 'classic')),
             'power': normalize_power(migrate_power_v4_to_v5(settings.get('power', {})) if version == 4
                                      else settings.get('power') if version == 5 else None),
             'settings_version': 5 if version in (1, 2, 3, 4, 5) else 0}
@@ -102,7 +104,7 @@ def _write_settings(safe: dict, path: Path, previous: dict | None) -> None:
     if previous is not None:
         backup = path.with_name(path.name + '.' + uuid.uuid4().hex + '.bak')
         # 備份只保留一般設定欄位，排除任何意外混入的金鑰。
-        allowed = {'root', 'roots', 'default_root', 'tunnel', 'recent', 'start_hidden', 'reader', 'settings_version', 'auto_start', 'auto_connect', 'power'}
+        allowed = {'root', 'roots', 'default_root', 'tunnel', 'recent', 'start_hidden', 'reader', 'settings_version', 'auto_start', 'auto_connect', 'power', 'icon_style'}
         clean = {key: value for key, value in previous.items() if key in allowed}
         if 'roots' in clean:
             clean['roots'] = [{key: value for key, value in item.items()
