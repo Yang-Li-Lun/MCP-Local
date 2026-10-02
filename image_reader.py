@@ -3,11 +3,15 @@ import base64
 import io
 import json
 
-from PIL import Image, ImageOps, UnidentifiedImageError
+from PIL import Image, ImageOps, UnidentifiedImageError, features
 from mcp.types import CallToolResult, ImageContent, TextContent
 from operation_budget import checkpoint
 
-IMAGE_EXTENSIONS = {'.png': 'PNG', '.jpg': 'JPEG', '.jpeg': 'JPEG', '.webp': 'WEBP'}
+IMAGE_EXTENSIONS = {'.png': 'PNG', '.jpg': 'JPEG', '.jpeg': 'JPEG', '.webp': 'WEBP',
+                    '.gif': 'GIF', '.bmp': 'BMP', '.tif': 'TIFF', '.tiff': 'TIFF',
+                    '.ico': 'ICO', '.pbm': 'PPM', '.pgm': 'PPM', '.ppm': 'PPM', '.pnm': 'PPM'}
+if features.check('avif'):
+    IMAGE_EXTENSIONS['.avif'] = 'AVIF'
 MAX_SOURCE_BYTES = 16 * 1024 * 1024
 MAX_SOURCE_SIDE = 16384
 MAX_SOURCE_PIXELS = 25_000_000
@@ -18,12 +22,15 @@ MAX_IMAGE_RESPONSE_BYTES = MAX_BASE64_BYTES + 64 * 1024
 
 
 def image_limits() -> dict:
-    return dict(formats=['PNG', 'JPEG', 'WebP'], output_mime_type='image/png',
-                max_source_bytes=MAX_SOURCE_BYTES, source_bytes_policy='min(max_source_bytes, root.max_file_bytes)',
+    return dict(formats=['PNG', 'JPEG', 'WebP', 'GIF', 'BMP', 'TIFF', 'ICO', 'PNM (P1-P6)'] +
+                       (['AVIF'] if 'AVIF' in IMAGE_EXTENSIONS.values() else []), output_mime_type='image/png',
+                avif_available='AVIF' in IMAGE_EXTENSIONS.values(),
+                max_source_bytes=MAX_SOURCE_BYTES, source_bytes_policy='min(max_source_bytes, root.max_file_bytes, root.max_scan_bytes)',
                 max_source_side=MAX_SOURCE_SIDE, max_source_pixels=MAX_SOURCE_PIXELS,
                 max_output_side=MAX_OUTPUT_SIDE, max_image_bytes=MAX_IMAGE_BYTES,
                 max_base64_bytes=MAX_BASE64_BYTES, max_response_bytes=MAX_IMAGE_RESPONSE_BYTES,
-                animation='rejected', metadata='stripped', resize='aspect ratio preserved; never upscale')
+                animation='rejected', metadata='stripped', resize='aspect ratio preserved; never upscale',
+                parser_timeout_seconds=10, parser_memory_bytes=512*1024*1024)
 
 
 class _EncodedLimit(ValueError):
@@ -41,13 +48,19 @@ def read_image(reader, relative: str) -> CallToolResult:
     path = reader.checked(relative)
     expected = IMAGE_EXTENSIONS.get(path.suffix.casefold())
     if expected is None:
-        raise ValueError('圖片只支援 PNG、JPEG、WebP 副檔名。')
-    maximum = min(MAX_SOURCE_BYTES, reader.settings['max_file_bytes'])
+        raise ValueError('圖片僅支援 image_limits 公開且符合實際內容的副檔名。')
+    maximum = min(MAX_SOURCE_BYTES, reader.settings['max_file_bytes'], reader.settings['max_scan_bytes'])
     with reader.open_checked(path, image=True) as handle:
         source = handle.read(maximum + 1)
         checkpoint(bytes_read=len(source))
         if len(source) > maximum:
             raise ValueError('圖片超過來源容量上限。')
+    from format_reader import parse_snapshot
+    return CallToolResult.model_validate(parse_snapshot('image', source, expected=expected))
+
+
+def decode_image(source: bytes, expected: str) -> CallToolResult:
+    """Only called inside the resource-limited parser worker."""
     try:
         # Limit plugin dispatch as well as validating the decoded format.
         with Image.open(io.BytesIO(source), formats=[expected]) as probe:

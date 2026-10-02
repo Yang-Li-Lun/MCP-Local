@@ -1,2 +1,5 @@
 mcp==1.30.0
 Pillow==12.3.0
+pypdf==6.19.0
+mutagen==1.48.1
+PyYAML==6.0.3

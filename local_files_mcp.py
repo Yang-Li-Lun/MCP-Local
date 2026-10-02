@@ -111,11 +111,12 @@ class FileReader:
                 or path.name.casefold() in self.settings['text_names'])
 
     @contextmanager
-    def open_checked(self, path: Path, *, image: bool = False):
+    def open_checked(self, path: Path, *, image: bool = False, binary: bool = False,
+                     metadata: bool = False):
         """查驗已開啟的同一物件；可信本機寫入者模型仍是部署前提。"""
         path = self.checked(self.relative(path))
         from image_reader import IMAGE_EXTENSIONS, MAX_SOURCE_BYTES
-        allowed = path.suffix.casefold() in IMAGE_EXTENSIONS if image else self.is_text(path)
+        allowed = binary or (path.suffix.casefold() in IMAGE_EXTENSIONS if image else self.is_text(path))
         if not path.is_file() or not allowed:
             raise ValueError('只支援允許的純文字與程式碼格式。')
         before = path.stat()
@@ -129,7 +130,8 @@ class FileReader:
             if (current.st_dev, current.st_ino) != (info.st_dev, info.st_ino):
                 raise ValueError('檔案身分已變更。')
             maximum = min(self.settings['max_file_bytes'], MAX_SOURCE_BYTES) if image else self.settings['max_file_bytes']
-            if info.st_size > maximum:
+            # Metadata callers read only a bounded header, even for oversized files.
+            if not metadata and info.st_size > maximum:
                 raise ValueError('檔案超過設定容量上限。')
             yield handle
             after = os.fstat(handle.fileno())
@@ -149,7 +151,8 @@ class FileReader:
             raise ValueError(f'檔案超過設定的 {maximum:,} bytes 上限。')
         with self.open_checked(path) as handle:
             data = handle.read(maximum + 1)
-        if len(data) > maximum or b'\x00' in data:
+        from format_reader import known_binary
+        if len(data) > maximum or b'\x00' in data or known_binary(data):
             raise ValueError('檔案過大或不是支援的文字格式。')
         try:
             return data.decode('utf-8-sig')
@@ -230,7 +233,7 @@ class FileReader:
                                         return
                                     pending_bytes += cost
                                     pending.append(path)
-                            elif stat.S_ISREG(info.st_mode) and self.is_text(path):
+                            elif stat.S_ISREG(info.st_mode):
                                 yielded += 1
                                 if yielded > self.settings['max_scan_files']:
                                     status['truncated'] = True
@@ -332,11 +335,11 @@ class FileReader:
         }
 
     def list_files(self, directory: str = '.', limit: int = 200, cursor: str | None = None) -> dict[str, Any]:
-        """遞迴列出文字檔；完整清冊才追蹤 next_cursor。快照閒置 60 秒或最長 5 分鐘後失效；重啟後游標失效。"""
+        """遞迴列出安全規則允許的一般檔案；內容 reader 資格另行驗證。"""
         return self._list_page(directory, limit, cursor, False)
 
     def list_directory(self, directory: str = '.', limit: int = 200, cursor: str | None = None) -> dict[str, Any]:
-        """先查看直接子目錄及文字檔，再縮小範圍列舉、搜尋及分段讀取。使用短期記憶體快照，讀取時仍重新驗證路徑。"""
+        """先查看直接子目錄及一般檔案；不解析內容，讀取時仍重新驗證路徑。"""
         return self._list_page(directory, limit, cursor, True)
 
     @bounded
@@ -361,7 +364,7 @@ class FileReader:
     @bounded
     def find_files(self, queries: list[str], directory: str = '.',
                    limit_per_query: int = 20) -> dict[str, Any]:
-        """字面定位允許的文字檔路徑；達上限即停，不保證完整清冊。"""
+        """字面定位安全規則允許的一般檔案；達上限即停，不保證完整清冊。"""
         if (type(queries) is not list or not 1 <= len(queries) <= 10
                 or any(type(q) is not str or not q.strip() or len(q) > 200
                        or any(ord(c) < 32 for c in q) for q in queries)):
@@ -414,6 +417,9 @@ class FileReader:
         needle = query.casefold()
         for path in self.walk(directory, status):
             try:
+                if not self.is_text(path):
+                    status['skipped_entries'] += 1
+                    continue
                 remaining = self.settings['max_scan_bytes'] - total_bytes
                 if remaining <= 0:
                     status['truncated'] = True
@@ -463,6 +469,9 @@ class FileReader:
         status = {'truncated': False, 'skipped_entries': 0}
         total_bytes = scanned_files = output_bytes = count = 0
         for path in self.walk(directory, status):
+            if not self.is_text(path):
+                status['skipped_entries'] += 1
+                continue
             remaining = self.settings['max_scan_bytes'] - total_bytes
             if remaining <= 0:
                 status['truncated'] = True
@@ -529,7 +538,8 @@ def create_server(reader):
                  reader.workspace_info, reader.list_projects, reader.project_context, reader.read_files,
                  reader.search_texts, reader.read_file_ranges, reader.find_files,
                  reader.hash_files, reader.compare_paths, reader.project_status, reader.server_diagnostics,
-                 reader.read_image):
+                 reader.read_image, reader.file_info, reader.read_document, reader.inspect_media,
+                 reader.inspect_archive, reader.read_binary):
         from operation_budget import asynchronous
         server.add_tool(asynchronous(tool), annotations=(
             annotation.model_copy(update={'idempotentHint': False})

@@ -57,7 +57,7 @@ class McpSmokeTests(unittest.TestCase):
                     listing = await session.call_tool('list_files', {})
                     self.assertIn('allow.custom', str(listing.content))
                     self.assertNotIn('deny.custom', str(listing.content))
-                    self.assertNotIn('original.txt', str(listing.content))
+                    self.assertIn('original.txt', str(listing.content))
                     readback = await session.call_tool('read_file', {'path': 'allow.custom'})
                     self.assertFalse(readback.isError)
                     search = await session.call_tool('search_text', {'query': 'marker'})
@@ -83,7 +83,7 @@ class McpSmokeTests(unittest.TestCase):
                     listing = await session.list_tools()
                     self.assertEqual({tool.name for tool in listing.tools},
                                      {'list_directory', 'list_files', 'read_file', 'search_text',
-                                      'workspace_info', 'list_projects', 'project_context', 'read_files', 'search_texts', 'read_file_ranges', 'find_files', 'hash_files', 'compare_paths', 'project_status', 'server_diagnostics', 'read_image'})
+                                      'workspace_info', 'list_projects', 'project_context', 'read_files', 'search_texts', 'read_file_ranges', 'find_files', 'hash_files', 'compare_paths', 'project_status', 'server_diagnostics', 'read_image', 'file_info', 'read_document', 'inspect_media', 'inspect_archive', 'read_binary'})
                     for name, args in [('list_directory', {}), ('list_files', {}), ('read_file', {'path': 'README.md'}),
                                        ('search_text', {'query': 'MCP_GUI_SMOKE'}),
                                        ('search_texts', {'queries': ['MCP_GUI_SMOKE', 'absent']}),

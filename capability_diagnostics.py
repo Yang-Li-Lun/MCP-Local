@@ -7,6 +7,7 @@ from pathlib import Path
 import incremental_state as state
 import operation_budget
 from image_reader import image_limits
+from format_reader import format_limits
 from reader_settings import DEFAULT_EXCLUSIONS
 from tool_contract import SERVICE_VERSION, CONTRACT_VERSION, contract
 
@@ -64,7 +65,8 @@ def diagnose(workspace, declared):
         unexpected_contract_count=len(contract_names - declared_names),
         actual_contract_sha256=canonical_digest(actual),
         expected_contract_sha256=canonical_digest(expected) if contract_state == 'ok' else None,
-        image_limits=image_limits(),
+        image_limits=image_limits(), format_limits=format_limits(),
+        parser_versions=dict(pypdf=version('pypdf'), mutagen=version('mutagen'), pillow=version('Pillow'), pyyaml=version('PyYAML')),
         roots=roots, text_tool_limits=effective_tool_limits(), limits=dict(max_workers=operation_budget.MAX_WORKERS,
             operation_timeout_seconds=operation_budget.TIMEOUT_SECONDS,
             max_operation_bytes=1024 * 1024 * 1024, max_operation_entries=300000,
@@ -74,7 +76,7 @@ def diagnose(workspace, declared):
             max_baselines=state.MAX_BASELINES, max_owner_baselines=state.MAX_OWNER_BASELINES,
             baseline_ttl_seconds=state.BASELINE_TTL_SECONDS, max_change_items=state.MAX_CHANGE_ITEMS),
         capabilities=dict(sha256='sha256' in hashlib.algorithms_available,
-            formats='UTF-8 text/code without NUL; read_image: verified PNG/JPEG/WebP to native image/png',
+            formats='all normal files: metadata/hash/raw; UTF-8 text; static PNG/JPEG/WebP/GIF/BMP/TIFF/ICO/PNM and AVIF when available; PDF/DOCX/XLSX/PPTX/ODT/ODS/ODP/EPUB/EML/MBOX; CSV/TSV/JSON/JSONL/XML/YAML/INI/SRT/VTT; TOML/SQLite runtime-gated; MP3/FLAC/Ogg/WAV/MP4/AVI/AIFF/AU/Matroska/WebM; ZIP/TAR/TAR.GZ directory and bounded member bytes',
             raw_bytes_hash=True, metadata_reuse=True, force_hash=True,
             metadata_identity='device/inode/size/mtime/ctime/links/attributes; Windows handle ChangeTime',
             snapshots='bounded process memory only; expire on restart, TTL or eviction',

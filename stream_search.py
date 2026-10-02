@@ -77,6 +77,10 @@ def scan_file_many(handle, maximum: int, budget: int, needles: list[str],
             break
         used += len(chunk)
         checkpoint(bytes_read=len(chunk))
+        if used == len(chunk):
+            from format_reader import known_binary
+            if known_binary(chunk):
+                valid = False
         if b'\x00' in chunk:
             valid = False
         try:

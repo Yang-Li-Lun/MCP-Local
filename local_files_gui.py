@@ -190,8 +190,8 @@ class App:
                         increment=1, width=14).grid(row=row, column=1, sticky='w', padx=10)
             ttk.Label(frame, text=f'最高 {maximum // unit:,}').grid(row=row, column=2, sticky='w')
         labels = {
-            'extensions': '允許副檔名，例如 .txt、.md、.py',
-            'text_names': '允許完整檔名，例如 README、Dockerfile',
+            'extensions': '文字 reader 副檔名，例如 .txt、.md、.py',
+            'text_names': '文字 reader 完整檔名，例如 README、Dockerfile',
             'excluded_names': '額外排除資料夾／檔名（固定安全與產物排除不可取消）',
         }
         for index, key in enumerate(LIST_FIELDS):
@@ -201,7 +201,8 @@ class App:
             editor.grid(row=row + 1, column=0, columnspan=3, sticky='ew')
             self.reader_lists[key] = editor
         ttk.Label(frame, text='清單以逗號、分號或換行分隔；不使用路徑或萬用字元。\n'
-                  '仍限 UTF-8 文字；隱藏路徑、連結、路徑跳脫與寫入功能維持封鎖。',
+                  '文字清單只限制 UTF-8 reader；一般檔案探索及專用格式工具另行驗證。\n'
+                  '隱藏路徑、連結、路徑跳脫與寫入功能維持封鎖。',
                   wraplength=680).grid(row=10, column=0, columnspan=3, sticky='w', pady=10)
         actions = ttk.Frame(frame)
         actions.grid(row=11, column=0, columnspan=3, sticky='w')
