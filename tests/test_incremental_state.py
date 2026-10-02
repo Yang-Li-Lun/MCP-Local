@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import sys
 import tempfile
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
@@ -34,6 +35,16 @@ class IncrementalTests(unittest.TestCase):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(value, encoding='utf-8')
         return path
+
+    def test_windows_signature_uses_birth_time_for_stable_identity(self):
+        info = SimpleNamespace(st_dev=1, st_ino=2, st_size=3, st_mtime_ns=4,
+                               st_ctime_ns=5, st_birthtime_ns=6, st_nlink=1,
+                               st_file_attributes=32)
+        with patch.object(state.os, 'name', 'nt'):
+            self.assertEqual(state.signature(info)[4], 6)
+        with patch.object(state.os, 'name', 'nt'):
+            del info.st_birthtime_ns
+            self.assertEqual(state.signature(info)[4], 5)
 
     def test_raw_bytes_hash_batch_and_bom(self):
         raw = b'\xef\xbb\xbfhello\r\n'

@@ -24,8 +24,14 @@ MAX_CHANGE_ITEMS = 500
 
 
 def signature(info):
+    # Python 3.12+ deprecates Windows st_ctime in favor of st_birthtime; path
+    # and handle stat calls can report metadata-change times with different
+    # precision. Keep creation time in the shared identity signature and use
+    # the handle's ChangeTime below for mutation detection.
+    ctime = (getattr(info, 'st_birthtime_ns', info.st_ctime_ns)
+             if os.name == 'nt' else info.st_ctime_ns)
     return (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns,
-            info.st_ctime_ns, info.st_nlink, getattr(info, 'st_file_attributes', 0))
+            ctime, info.st_nlink, getattr(info, 'st_file_attributes', 0))
 
 
 def handle_signature(handle):
