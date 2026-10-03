@@ -6,6 +6,7 @@ import unittest
 
 from local_files_gui import build_commands, load_settings, save_settings
 from local_files_mcp import FileReader
+from command_fixture import command_project
 from reader_settings import normalize_reader_settings, encode_reader_settings, decode_reader_settings
 
 
@@ -28,7 +29,8 @@ class ReaderSettingsTests(unittest.TestCase):
     def test_command_carries_validated_snapshot(self):
         settings = {'root': str(Path('.').resolve()), 'tunnel': 'tunnel_test',
                     'reader': {'max_scan_files': 123, 'extensions': ['.ABC'], 'excluded_names': ['私用資料']}}
-        commands = build_commands(settings)
+        with command_project():
+            commands = build_commands(settings)
         command = commands[0][commands[0].index('--mcp-command') + 1]
         snapshot = command.split(' --reader-settings ')[1]
         settings['reader']['max_scan_files'] = 1

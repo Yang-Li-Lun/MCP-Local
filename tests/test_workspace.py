@@ -11,6 +11,7 @@ from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 from connection_settings import load_settings, save_settings, normalize_connection, build_commands
 from workspace_settings import normalize_workspace, encode_workspace
+from command_fixture import command_project
 from workspace_reader import WorkspaceReader, TOOLS, BATCH_BYTES, CONTEXT_BYTES, encoded_size
 
 
@@ -290,7 +291,8 @@ class WorkspaceTests(unittest.TestCase):
         from workspace_settings import decode_workspace
         settings = normalize_connection({'roots': self.roots, 'default_root': 'main',
                                          'tunnel': 'tunnel_test', 'settings_version': 2})
-        commands = build_commands(settings)
+        with command_project():
+            commands = build_commands(settings)
         command = commands[0][commands[0].index('--mcp-command') + 1]
         decoded = decode_workspace(command.split(' --workspace-settings ')[1].split(' ')[0])
         self.assertEqual(len(decoded['roots']), 2)

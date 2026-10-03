@@ -29,15 +29,22 @@ MCP 工具不提供來源檔案寫入、刪除或指令執行能力。
 
 ## 快速開始
 
-環境需求：Windows、Python 3.10+。既有驗證環境為 Python 3.10.11、MCP 1.30.0；相依套件版本見 [requirements-lock.txt](requirements-lock.txt)。
+環境需求：Windows。完整 TOML／SQLite 解析需 Python 3.11+，且 `sqlite3.Connection` 必須提供 `deserialize` 與 `setlimit`；建議使用完整的 Python 3.13 安裝（含 GUI 所需 Tcl/Tk）。Python 3.10 保留相容性，但不具這兩項解析能力。相依套件版本見 [requirements-lock.txt](requirements-lock.txt)。
 
 在專案根目錄執行：
 
 ```powershell
-py -3 -m venv .venv
+py -3.13 -m venv .venv
+.\.venv\Scripts\python.exe -B -c "import sys,tomllib,sqlite3; assert hasattr(sqlite3.Connection,'deserialize') and hasattr(sqlite3.Connection,'setlimit'), 'SQLite runtime 缺少完整解析 API'; print(sys.version, sqlite3.sqlite_version)"
 .\.venv\Scripts\python.exe -m pip install -r requirements-lock.txt
+.\.venv\Scripts\python.exe -m pip check
 .\.venv\Scripts\python.exe -B verify_isolated.py
+.\.venv\Scripts\python.exe -B verify_release_stdio.py
 ```
+
+若未安裝 `py` launcher，可用完整 Python 路徑執行 `-m venv .venv`。升級 Python 不會自動升級既有 `.venv`；重建前先停止 MCP，將舊 `.venv` 移至備份，保留新環境驗證失敗時的回復路徑。不要修改 `%LOCALAPPDATA%\MCP-Local` 的設定、金鑰或共享根。正式 GUI、CLI 與 MCP 子程序均使用專案 `.venv`，應以此環境的能力檢查及實際 `read_document` 呼叫驗收。
+
+完整 clean-clone、Tcl/Tk 檢查與本機 ZIP／SHA-256 封裝步驟見 [Windows 部署與封版](RELEASE.md)。`requirements.txt` 是直接依賴；可重現部署使用完整 lock。精簡部署 ZIP 不含測試套件，完整 regression 請在 Git 原始碼 checkout 執行。
 
 啟動本機 STDIO 服務：
 

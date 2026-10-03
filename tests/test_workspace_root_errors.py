@@ -22,7 +22,8 @@ class WorkspaceRootErrorTests(unittest.TestCase):
         import tempfile
         from local_files_mcp import FileReader
         from workspace_settings import encode_workspace, decode_workspace
-        with tempfile.TemporaryDirectory(dir=Path.cwd()) as directory:
+        # A hidden checkout directory must not make this public-file fixture hidden.
+        with tempfile.TemporaryDirectory() as directory:
             folder = Path(directory).resolve()
             public = folder / 'public.txt'
             public.write_text('test', encoding='utf-8')
