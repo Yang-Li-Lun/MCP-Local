@@ -32,8 +32,10 @@
 請在專案根目錄（PowerShell）依序執行：
 
 ```powershell
-py -3 -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+py -3.13 -m venv .venv
+.\.venv\Scripts\python.exe -B -c "import tomllib,sqlite3; assert hasattr(sqlite3.Connection,'deserialize') and hasattr(sqlite3.Connection,'setlimit'), 'SQLite runtime 缺少完整解析 API'"
+.\.venv\Scripts\python.exe -m pip install -r requirements-lock.txt
+.\.venv\Scripts\python.exe -m pip check
 .\.venv\Scripts\python.exe -m py_compile local_files_mcp.py
 .\.venv\Scripts\python.exe -B verify_isolated.py
 ```
@@ -46,13 +48,15 @@ py -3 -m venv .venv
 
 ## 版本與測試門檻
 
-目標為 Python 3.10+。
+Python 3.10+ 保留相容性；完整 TOML／SQLite 解析需要 Python 3.11+、可用的 `tomllib` 與 SQLite `deserialize`／`setlimit`。新環境建議完整 Python 3.13（含 Tcl/Tk），不得只以版本字串代替 API 能力檢查。升級 runtime 時先備份舊 `.venv`，保留正式設定與金鑰；正式程序與驗證都使用專案 `.venv`。
 
 建議交付前至少完成：
 
 - `.\.venv\Scripts\python.exe -m py_compile local_files_mcp.py`
 - `.\.venv\Scripts\python.exe -B -m unittest discover -s tests -v`
 - `.\.venv\Scripts\python.exe -B verify_isolated.py`
+- `.\.venv\Scripts\python.exe -B verify_release_stdio.py`：隔離 fixture、真實 STDIO 21 工具與重要拒絕路徑。
+- 本機封裝與 clean-clone 步驟見 `RELEASE.md`；`build_release.py` 僅依固定白名單封裝，不自動發布。
 - 變更 MCP schema 時：同步更新 `tool-contract.json`，並以 MCP 1.30.0 介面條件進行檢核。
 
 環境不支援時可記錄 skip 原因；不得將「本機成功」當作遠端驗收完成。

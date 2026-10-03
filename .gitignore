@@ -1,4 +1,10 @@
 .venv/
+/.venv-*/
+/.release-work/
+/release/
+/.test-tmp/
+/engineering-unittest-*.txt
+/performance-*.log
 __pycache__/
 *.py[cod]
 *$py.class

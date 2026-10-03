@@ -8,6 +8,7 @@ from unittest.mock import patch
 
 from local_files_gui import build_commands, load_settings, save_settings, validate_settings
 from local_files_mcp import FileReader
+from command_fixture import command_project
 
 
 class SettingsTests(unittest.TestCase):
@@ -42,10 +43,18 @@ class SettingsTests(unittest.TestCase):
     def test_command_preserves_spaces_and_shell_characters(self):
         folder = self.root / '中文 空格 & example'
         folder.mkdir()
-        commands = build_commands(validate_settings(str(folder), 'tunnel_test'))
+        with command_project():
+            commands = build_commands(validate_settings(str(folder), 'tunnel_test'))
         command = commands[0][commands[0].index('--mcp-command') + 1]
         self.assertIn('--root "' + str(folder.resolve()).replace('\\', '/') + '"', command)
         self.assertNotIn('CONTROL_PLANE_API_KEY', ' '.join(commands[0]))
+
+    def test_command_rejects_changed_vendor_before_returning_commands(self):
+        from integrity import IntegrityError
+        with command_project() as project:
+            (project / 'tunnel-client.exe').write_bytes(b'changed')
+            with self.assertRaises(IntegrityError):
+                build_commands(validate_settings(str(self.root), 'tunnel_test'))
 
     def test_all_three_tools_and_text_boundaries(self):
         (self.root / 'sample.md').write_text('測試\nHello marker\n', encoding='utf-8')

@@ -1,0 +1,537 @@
+{
+  "status": "FINAL",
+  "date": "2026-10-03",
+  "service_version": "2026.10.03.1",
+  "contract_version": 8,
+  "settings_version": 5,
+  "mcp_version": "1.30.0",
+  "starting_head": "a871e32b810704da420975e40da579bf010470c4",
+  "environment_method": "User-approved isolated clean-source/.venv; original active project .venv and production processes left running",
+  "runtime": {
+    "python": "3.13.15 (tags/v3.13.15:4061bc4, Aug  5 2026, 13:05:39) [MSC v.1944 64 bit (AMD64)]",
+    "base_prefix": "D:\\codee\\MCP-Local\\.venv-runtime\\Python313",
+    "venv": "D:\\codee\\MCP-Local\\.release-work\\clean-source\\.venv",
+    "sqlite": "3.50.4",
+    "tcl": "8.6.15",
+    "toml": true,
+    "deserialize": true,
+    "setlimit": true,
+    "locked_packages": 35,
+    "dependency_versions": {
+      "annotated-types": "0.8.0",
+      "anyio": "4.15.1",
+      "attrs": "26.1.0",
+      "certifi": "2026.7.22",
+      "cffi": "2.1.1",
+      "click": "8.5.0",
+      "cryptography": "50.0.1",
+      "exceptiongroup": "1.3.1",
+      "h11": "0.16.0",
+      "httpcore": "1.0.9",
+      "httpx": "0.28.1",
+      "httpx-sse": "0.4.3",
+      "idna": "3.19",
+      "jsonschema": "4.26.0",
+      "jsonschema-specifications": "2025.9.1",
+      "mcp": "1.30.0",
+      "Pillow": "12.3.0",
+      "pypdf": "6.19.0",
+      "mutagen": "1.48.1",
+      "pycparser": "3.0",
+      "pydantic": "2.13.5",
+      "pydantic-settings": "2.15.0",
+      "pydantic_core": "2.46.5",
+      "PyJWT": "2.14.0",
+      "PyYAML": "6.0.3",
+      "python-dotenv": "1.2.3",
+      "python-multipart": "0.0.32",
+      "pywin32": "312",
+      "referencing": "0.37.0",
+      "rpds-py": "0.30.0",
+      "sse-starlette": "3.4.11",
+      "starlette": "1.6.0",
+      "typing-inspection": "0.4.4",
+      "typing_extensions": "4.16.0",
+      "uvicorn": "0.52.4"
+    },
+    "extra_packages": {
+      "pip": "26.2.1"
+    },
+    "pip_check": "No broken requirements found.",
+    "compile_files": 72
+  },
+  "installed_record_integrity": {
+    "checked_record_hashes": 2355,
+    "unhashed_records": 1811,
+    "problems": []
+  },
+  "unit": {
+    "tests": 316,
+    "passed": 316,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "elapsed_seconds": 171.675
+  },
+  "isolated": {
+    "python": "3.13.15",
+    "mcp": "1.30.0",
+    "pydantic": "2.13.5",
+    "syntax_files": 72,
+    "pip_check": 0,
+    "tests": 316,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "elapsed_seconds": 171.073,
+    "remote_acceptance": "NOT_RUN",
+    "production_scheduler": "NOT_RUN",
+    "system_power_changes": "BLOCKED_BY_AUDIT_GUARD",
+    "isolation": "audit guard for main test process; subprocess fixtures separately reviewed",
+    "passed": 316
+  },
+  "gui": {
+    "tests": 42,
+    "passed": 42,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "elapsed_seconds": 6.076
+  },
+  "tray": {
+    "tests": 5,
+    "passed": 5,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "elapsed_seconds": 1.509
+  },
+  "command_fixture_followup": {
+    "tests": 6,
+    "passed": 6,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "elapsed_seconds": 0.25
+  },
+  "package_tray": {
+    "tests": 5,
+    "passed": 5,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "elapsed_seconds": 1.671
+  },
+  "package_icons": {
+    "tests": 3,
+    "passed": 3,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "elapsed_seconds": 0.069
+  },
+  "stdio": {
+    "tools": {
+      "list_directory": "PASS",
+      "list_files": "PASS",
+      "read_file": "PASS",
+      "search_text": "PASS",
+      "workspace_info": "PASS",
+      "list_projects": "PASS",
+      "project_context": "PASS",
+      "read_files": "PASS",
+      "search_texts": "PASS",
+      "read_file_ranges": "PASS",
+      "find_files": "PASS",
+      "hash_files": "PASS",
+      "compare_paths": "PASS",
+      "project_status": "PASS",
+      "server_diagnostics": "PASS",
+      "read_image": "PASS",
+      "file_info": "PASS",
+      "read_document": "PASS",
+      "inspect_media": "PASS",
+      "inspect_archive": "PASS",
+      "read_binary": "PASS"
+    },
+    "calls": [
+      {
+        "tool": "list_directory",
+        "arguments": {},
+        "outcome": "PASS"
+      },
+      {
+        "tool": "list_files",
+        "arguments": {},
+        "outcome": "PASS"
+      },
+      {
+        "tool": "read_file",
+        "arguments": {
+          "path": "README.md"
+        },
+        "outcome": "PASS"
+      },
+      {
+        "tool": "search_text",
+        "arguments": {
+          "query": "marker"
+        },
+        "outcome": "PASS"
+      },
+      {
+        "tool": "list_projects",
+        "arguments": {},
+        "outcome": "PASS"
+      },
+      {
+        "tool": "project_context",
+        "arguments": {},
+        "outcome": "PASS"
+      },
+      {
+        "tool": "read_files",
+        "arguments": {
+          "files": [
+            {
+              "path": "README.md"
+            }
+          ]
+        },
+        "outcome": "PASS"
+      },
+      {
+        "tool": "search_texts",
+        "arguments": {
+          "queries": [
+            "marker",
+            "第二行"
+          ]
+        },
+        "outcome": "PASS"
+      },
+      {
+        "tool": "read_file_ranges",
+        "arguments": {
+          "path": "README.md",
+          "ranges": [
+            {
+              "start_line": 2,
+              "line_count": 1
+            }
+          ]
+        },
+        "outcome": "PASS"
+      },
+      {
+        "tool": "find_files",
+        "arguments": {
+          "queries": [
+            "README"
+          ]
+        },
+        "outcome": "PASS"
+      },
+      {
+        "tool": "workspace_info",
+        "arguments": {},
+        "outcome": "PASS"
+      },
+      {
+        "tool": "server_diagnostics",
+        "arguments": {},
+        "outcome": "PASS"
+      },
+      {
+        "tool": "read_image",
+        "arguments": {
+          "path": "image.png"
+        },
+        "outcome": "PASS"
+      },
+      {
+        "tool": "file_info",
+        "arguments": {
+          "path": "complete.sqlite"
+        },
+        "outcome": "PASS"
+      },
+      {
+        "tool": "read_document",
+        "arguments": {
+          "path": "pyproject.toml",
+          "format_hint": "TOML"
+        },
+        "outcome": "PASS"
+      },
+      {
+        "tool": "read_document",
+        "arguments": {
+          "path": "complete.sqlite",
+          "table": "sample",
+          "limit": 1
+        },
+        "outcome": "PASS"
+      },
+      {
+        "tool": "read_document",
+        "arguments": {
+          "path": "complete.sqlite",
+          "table": "sample",
+          "start": 1,
+          "expected_sha256": "fc205206b1fae78d887588da5f8a5f512d3205166e1b0254dfa9adaf8d3592be"
+        },
+        "outcome": "PASS"
+      },
+      {
+        "tool": "inspect_media",
+        "arguments": {
+          "path": "audio.wav"
+        },
+        "outcome": "PASS"
+      },
+      {
+        "tool": "inspect_archive",
+        "arguments": {
+          "path": "safe.zip"
+        },
+        "outcome": "PASS"
+      },
+      {
+        "tool": "inspect_archive",
+        "arguments": {
+          "path": "safe.zip",
+          "member_path": "hello.txt",
+          "length": 7
+        },
+        "outcome": "PASS"
+      },
+      {
+        "tool": "read_binary",
+        "arguments": {
+          "path": "data.bin",
+          "offset": 200,
+          "length": 40
+        },
+        "outcome": "PASS"
+      },
+      {
+        "tool": "hash_files",
+        "arguments": {
+          "paths": [
+            "data.bin"
+          ]
+        },
+        "outcome": "PASS"
+      },
+      {
+        "tool": "compare_paths",
+        "arguments": {
+          "left": "data.bin",
+          "right": "same.bin"
+        },
+        "outcome": "PASS"
+      },
+      {
+        "tool": "project_status",
+        "arguments": {
+          "directory": "state"
+        },
+        "outcome": "PASS"
+      },
+      {
+        "tool": "project_status",
+        "arguments": {
+          "directory": "state",
+          "baseline_id": "6e8ce58e9f6d46c48db5993d19e3f077",
+          "force_hash": true
+        },
+        "outcome": "PASS"
+      },
+      {
+        "tool": "read_document",
+        "arguments": {
+          "path": "wal.sqlite"
+        },
+        "outcome": "EXPECTED_REJECTION"
+      },
+      {
+        "tool": "inspect_archive",
+        "arguments": {
+          "path": "traversal.zip",
+          "member_path": "../escape.txt"
+        },
+        "outcome": "EXPECTED_REJECTION"
+      },
+      {
+        "tool": "inspect_archive",
+        "arguments": {
+          "path": "bomb.zip",
+          "member_path": "large.txt"
+        },
+        "outcome": "EXPECTED_REJECTION"
+      },
+      {
+        "tool": "read_document",
+        "arguments": {
+          "path": "complete.sqlite",
+          "table": "sample; ATTACH DATABASE x"
+        },
+        "outcome": "EXPECTED_REJECTION"
+      },
+      {
+        "tool": "read_document",
+        "arguments": {
+          "path": "complete.sqlite",
+          "expected_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "outcome": "EXPECTED_REJECTION"
+      },
+      {
+        "tool": "read_binary",
+        "arguments": {
+          "path": "data.bin",
+          "length": 16385
+        },
+        "outcome": "EXPECTED_REJECTION"
+      },
+      {
+        "tool": "read_binary",
+        "arguments": {
+          "path": "data.bin",
+          "length": "10"
+        },
+        "outcome": "EXPECTED_REJECTION"
+      },
+      {
+        "tool": "read_file",
+        "arguments": {
+          "path": "../outside.txt"
+        },
+        "outcome": "EXPECTED_REJECTION"
+      }
+    ],
+    "contract_sha256": "37de43a7e513f0ea2ee9532e26715012b453b07e1dd4513b8ae0c73052779922",
+    "consistent": true,
+    "source_unchanged": true,
+    "format_capability": {
+      "toml": true,
+      "sqlite": true
+    }
+  },
+  "package_stdio": {
+    "status": "PASS",
+    "tools": 21,
+    "calls": 33,
+    "consistent": true,
+    "contract_sha256": "37de43a7e513f0ea2ee9532e26715012b453b07e1dd4513b8ae0c73052779922"
+  },
+  "windows_session": {
+    "session_id": 1,
+    "window_station": "WinSta0",
+    "desktop": "Default",
+    "elevated_admin": false,
+    "historical_tray_winerror5": "not reproduced; original denying security layer not established",
+    "tray_source_changed": false
+  },
+  "package": {
+    "verification": {
+      "files": 66,
+      "sha256": "d90648e2f184edc90677d3c307b5ea5cec735897ab79669da20f8acad117e1ea",
+      "unpack_verified": true
+    },
+    "tamper_rejected": true,
+    "source_and_import_closure": "PASS",
+    "path": "release/MCP-Local-2026.10.03.1-windows-amd64.zip",
+    "bytes": 28549027,
+    "vendor": "official v0.0.14 bytes verified against pinned tunnel digest and six SPDX SHA-256 entries; no vendor execution"
+  },
+  "git_audit": {
+    "tracked_files": 191,
+    "forbidden_tracked": [],
+    "credential_pattern_screen": "no matches in changed/new text",
+    "contract_unchanged_from_HEAD": true,
+    "contract_file_sha256": "2d7337d74a59af9fb64fc849f9694076e812a2095a647e24a30dd02e09779e32",
+    "historical_archives_retained": "required by benchmark snapshot regression and reproducibility",
+    "local_outputs_untracked": [
+      "engineering-unittest-v5.txt",
+      "performance-stdio-interleaved.log"
+    ]
+  },
+  "source_copy": {
+    "source_files_compared": 168,
+    "clean_copy_mismatches": [],
+    "python310_syntax_files": 72,
+    "python310_runtime": "NOT_RUN",
+    "formal_process_ids_unchanged": [
+      44028,
+      2724,
+      28664,
+      39112,
+      39224,
+      43796
+    ]
+  },
+  "initial_regression": {
+    "python": "3.13.15",
+    "mcp": "1.30.0",
+    "pydantic": "2.13.5",
+    "syntax_files": 70,
+    "pip_check": 0,
+    "tests": 315,
+    "failures": 0,
+    "errors": 5,
+    "skipped": 0,
+    "elapsed_seconds": 169.913,
+    "remote_acceptance": "NOT_RUN",
+    "production_scheduler": "NOT_RUN",
+    "system_power_changes": "BLOCKED_BY_AUDIT_GUARD",
+    "isolation": "audit guard for main test process; subprocess fixtures separately reviewed",
+    "passed": 310,
+    "resolution": "Restored omitted tracked benchmark snapshot in test copy; isolated command fixtures retain real integrity verification; drive-root fixture moved out of hidden checkout ancestry."
+  },
+  "not_run": [
+    "Git commit/push/tag/GitHub Release",
+    "NCUE clean clone and remote full 21-tool schema/calls acceptance",
+    "Python 3.10 runtime",
+    "real system power integration",
+    "production tunnel/scheduler changes"
+  ],
+  "blockers": [],
+  "local_evidence": {
+    "clean-command-fixtures.txt": "951f2654022e32e43ad730f719cddb70e46aaca92a620fe5e15f9568d9c0fa75",
+    "clean-gui.txt": "dde02c14cf6ea8dbf9620d84d8b75e1ef26a55f8da4eaed613430203243f127e",
+    "clean-isolated-console.txt": "e2ea8f9deaebf05228b45f70ad9eb1c850ccc3591c55bbcbe9ab8a981973cf94",
+    "clean-isolated-tests.txt": "8064c9051f771d7ed00a828308b551d649677f4fcae9c68ae727692a62fc771f",
+    "clean-isolated.json": "511fce99fd250bbf0492571c560f4f81a33f0892bb9bc8b1d631b4465312a7f9",
+    "clean-runtime.json": "982fef85d2cede51f0da5078ea651b0188b4c7c79a6e13774607d68edb8893e6",
+    "clean-stdio.json": "8949177bfae4fbb4955a8b06fae161a7d4a0fcdef1ef6cef1451135493219ce5",
+    "clean-stdio.log": "3ba2efc573d1f1c346b63b8e998951a79174c888f41286ae052ae963b6db19bc",
+    "clean-tray.txt": "ec7f7bb7b0beb841bbbad7faecc6cd0b4322a486d4389c9d5ef91cdb0019fd55",
+    "clean-unit.txt": "08fadd0b17b965e369ad9420a9435591f7510812bdb77e9beda2ff1db4e770ed",
+    "exit-codes.json": "c64b151f86d4f5184c339efa890dd6b5ed5f3cb3feccf67285898f60c4d6d0d6",
+    "followup-exit-codes.json": "0dfbc770e3caecada468000e85a580b0cd4d0fe70c91ebc3a6cf7c8f8367ce0a",
+    "git-audit.json": "3e436679cc8918e440df335190fa3229aa75b4e2cb2a496ceff9290d16b717fa",
+    "initial-clean-isolated-console.txt": "9b1307c2d658bc4ea37c3767568bb1be2468f07cb862d9ba6190032ac311ff9c",
+    "initial-clean-isolated-tests.txt": "55129d6f4001d00b175347e771634b8dbdfca74af95ed750f95eddfe914e67a3",
+    "initial-clean-isolated.json": "d5d16229dbcef71c7858b3ad01e00e06916bdf5d444a49cbe2f6bb16029c32ac",
+    "initial-clean-unit.txt": "231e0c507b9a516331cf25795f81767ecb4abb4e6b53c670ef8779eb540abeef",
+    "initial-exit-codes.json": "34976e5b0ed611161e1a083153d1e8c334656cdcae866e4d4d4cf8791a590c67",
+    "installed-record-integrity.json": "0d5b295cb91d68bacaf806bb0bb6ded9ae1536ff2f3e72e4c744389191ee95d6",
+    "package-exit-codes.json": "9cf0e54f2f4a830b367a43e55537e233a4e098ea779f5f7fbf31849549c4fb26",
+    "package-icons.txt": "4d8833ba8abbf22e9efe34d8ff32c4a977b4c2342c63c27bab949f83ec8acac8",
+    "package-integrity.json": "a05ddc71feb3a66de9aeb41aba4064f48ba463c4e3867bcf2999c1e0d3115999",
+    "package-pip-check.txt": "672aec65a45bed50e70229c70934a7eebf0462595c459b83023027645d57cccf",
+    "package-pip.txt": "75b7e748a5b2a6469a258d70d6f2ee00fd4f93ebfa79850532e0b90b15f09719",
+    "package-stdio.json": "22628327324cc8473d3506b013c70be1edad195795cd9431aac313cafb38db48",
+    "package-stdio.log": "3ba2efc573d1f1c346b63b8e998951a79174c888f41286ae052ae963b6db19bc",
+    "package-tray.txt": "56fd2eaf77b127e4e61a5475c1124d661b5305e5e6d3616903b9684fa240c905",
+    "pip-install.txt": "0864f4efd64d70aecc1cadea0a3fb254e224e1f184a04a6610f4fc7743abddb8",
+    "prior-isolated-results.json": "0f5665c774ae8e91f1873e6a580087e679a59a0ec5d1013070469a979e3d986c",
+    "runtime-console.txt": "ce92f03139c17dbf24c2d259e40afc63faf50f01420b199b2ec8dc8e9f3ad95e",
+    "source-copy.json": "33f64c48da36b8500a6b9db72b297e267ece77c0aa8567479a2dfa48ca64fce1",
+    "stdio-development.json": "9811bbc1144ff216b9b8e1f11cb78e52e3301fbe62c1a705ef944f619f256d25",
+    "stdio-development.log": "3ba2efc573d1f1c346b63b8e998951a79174c888f41286ae052ae963b6db19bc",
+    "windows-session.json": "33f2ead8aca1a8e546afbb5a3aafd1390af850de191e7706ead402a9d789296e"
+  }
+}
