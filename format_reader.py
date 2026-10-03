@@ -8,6 +8,7 @@ import sys
 import time
 import hashlib
 import sqlite3
+from typing import Any, BinaryIO
 
 from operation_budget import checkpoint
 
@@ -158,11 +159,44 @@ def parse_snapshot(kind: str, data: bytes, **options) -> dict:
             process.wait()
 
 
+def basic_metadata(reader: Any, path: Path, info: os.stat_result,
+                   handle: BinaryIO | None = None) -> dict:
+    """共用列表與 file_info 的 metadata；ctime 永遠不當作 creation time。"""
+    birth = getattr(info, 'st_birthtime', None)
+    birth_ns = getattr(info, 'st_birthtime_ns', None)
+    if birth is None and os.name == 'nt':
+        # Python 3.10/3.11 沒有 st_birthtime，直接查詢 Windows FILETIME。
+        if handle is None:
+            with reader.open_checked(path, binary=True, metadata=True) as opened:
+                return basic_metadata(reader, path, os.fstat(opened.fileno()), opened)
+        import ctypes
+        from ctypes import wintypes
+        import msvcrt
+        query = ctypes.WinDLL('kernel32', use_last_error=True).GetFileTime
+        query.argtypes = [wintypes.HANDLE, ctypes.POINTER(wintypes.FILETIME),
+                          ctypes.POINTER(wintypes.FILETIME), ctypes.POINTER(wintypes.FILETIME)]
+        query.restype = wintypes.BOOL
+        created = wintypes.FILETIME()
+        if not query(msvcrt.get_osfhandle(handle.fileno()), ctypes.byref(created), None, None):
+            raise ValueError('METADATA_UNAVAILABLE：無法取得 Windows creation time。')
+        ticks = (created.dwHighDateTime << 32) | created.dwLowDateTime
+        birth_ns = (ticks - 116444736000000000) * 100
+        birth = birth_ns / 1000000000
+    return dict(path=reader.relative(path), name=path.name, extension=path.suffix.lower(),
+                size=info.st_size, created_time=birth, modified_time=info.st_mtime,
+                accessed_time=info.st_atime, time_unit='Unix seconds UTC',
+                created_time_ns=birth_ns, modified_time_ns=info.st_mtime_ns,
+                accessed_time_ns=info.st_atime_ns,
+                attributes=dict(mode=info.st_mode, windows=getattr(info, 'st_file_attributes', None),
+                                links=info.st_nlink), links=info.st_nlink)
+
+
 def file_info(reader, relative: str) -> dict:
     path = reader.checked(relative)
     source = None
     with reader.open_checked(path, binary=True, metadata=True) as handle:
         info = os.fstat(handle.fileno())
+        metadata = basic_metadata(reader, path, info, handle)
         header = handle.read(min(HEADER_BYTES, reader.settings['max_file_bytes'], reader.settings['max_scan_bytes']))
         checkpoint(bytes_read=len(header))
         fmt, mime = sniff(header)
@@ -227,13 +261,9 @@ def file_info(reader, relative: str) -> dict:
         if (fmt in IMAGE_EXTENSIONS.values() and IMAGE_EXTENSIONS.get(path.suffix.casefold()) == fmt
                 and info.st_size <= min(MAX_SOURCE_BYTES, reader.settings['max_scan_bytes'])):
             capabilities.append('read_image (static decode required)')
-    birth = getattr(info, 'st_birthtime', info.st_ctime if os.name == 'nt' else None)
-    return dict(path=reader.relative(path), name=path.name, size=info.st_size,
+    return dict(**metadata,
                 format=fmt, mime_type=mime, detection=detection, container_error=container_error,
-                extension=path.suffix.lower(), created_time=birth, modified_time=info.st_mtime,
-                accessed_time=info.st_atime, time_unit='Unix seconds UTC',
-                attributes=dict(mode=info.st_mode, windows=getattr(info, 'st_file_attributes', None),
-                                links=info.st_nlink), capabilities=capabilities,
+                capabilities=capabilities,
                 content_within_root_limit=within, limits=format_limits())
 
 

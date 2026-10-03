@@ -55,7 +55,7 @@ Python 3.10+ 保留相容性；完整 TOML／SQLite 解析需要 Python 3.11+、
 - `.\.venv\Scripts\python.exe -m py_compile local_files_mcp.py`
 - `.\.venv\Scripts\python.exe -B -m unittest discover -s tests -v`
 - `.\.venv\Scripts\python.exe -B verify_isolated.py`
-- `.\.venv\Scripts\python.exe -B verify_release_stdio.py`：隔離 fixture、真實 STDIO 21 工具與重要拒絕路徑。
+- `.\.venv\Scripts\python.exe -B verify_release_stdio.py`：隔離 fixture、真實 STDIO 22 工具與重要拒絕路徑。
 - 本機封裝與 clean-clone 步驟見 `RELEASE.md`；`build_release.py` 僅依固定白名單封裝，不自動發布。
 - 變更 MCP schema 時：同步更新 `tool-contract.json`，並以 MCP 1.30.0 介面條件進行檢核。
 
@@ -98,5 +98,5 @@ Python 3.10+ 保留相容性；完整 TOML／SQLite 解析需要 Python 3.11+、
 - `power_policy.py` / `power_windows.py` / `power_restore_guard.py` 管理雙模式電源、原生事件與 crash 回復；預設 OFF。
 - 一般測試必須 mock Power Scheme、Process QoS、Power Request 與 Windows 使用者電源模式；不得切換正式系統電源方案。
 - 真實整合測試需 `MCP_LOCAL_ALLOW_POWER_INTEGRATION_TEST=1` 與明確使用者授權；benchmark_power.py 另要求 `--allow-system-power-changes`。
-- 設定版本 5，MCP 契約為 8（服務 2026.10.03.1；21 工具）；舊個別排除不可因 GUI 簡化而刪除。
+- 設定版本 5，MCP 契約為 9（服務 2026.10.03.2；22 工具）；舊個別排除不可因 GUI 簡化而刪除。
 - Restore guard 不接收金鑰、不加入 Connection Job；回復失敗需保留日誌，不能宣稱已還原。

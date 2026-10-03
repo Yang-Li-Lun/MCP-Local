@@ -4,8 +4,8 @@ import json
 from pathlib import Path
 from mcp.server.fastmcp.utilities.func_metadata import FuncMetadata
 
-SERVICE_VERSION = '2026.10.03.1'
-CONTRACT_VERSION = 8
+SERVICE_VERSION = '2026.10.03.2'
+CONTRACT_VERSION = 9
 
 
 class StrictArguments(FuncMetadata):

@@ -492,7 +492,7 @@ for action in (lambda: open('never-opened', 'w'), lambda: socket.socket(),
                     self.assertEqual(init.serverInfo.version, SERVICE_VERSION)
                     tools = (await session.list_tools()).tools
                     verify_contract(tools)
-                    self.assertEqual(len(tools), 21)
+                    self.assertEqual(len(tools), 22)
                     for name, args in [('file_info', {'path': 'binary.bin'}), ('read_binary', {'path': 'binary.bin'}),
                                        ('read_document', {'path': 'report.pdf'}), ('inspect_media', {'path': 'audio.wav'}),
                                        ('inspect_archive', {'path': 'archive.zip'}), ('hash_files', {'paths': ['binary.bin']})]:

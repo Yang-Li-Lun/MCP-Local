@@ -5,6 +5,7 @@ import base64
 import hashlib
 import io
 import json
+import os
 from pathlib import Path
 import sqlite3
 import sys
@@ -35,6 +36,25 @@ def fixtures(root: Path) -> None:
     (root / 'same.bin').write_bytes(bytes(range(256)))
     (root / 'state').mkdir()
     (root / 'state' / 'one.txt').write_text('one', encoding='utf-8')
+    (root / 'query').mkdir()
+    # The earliest creation is deliberately after the first 500 names.
+    import ctypes
+    from ctypes import wintypes
+    import msvcrt
+    setter = ctypes.WinDLL('kernel32', use_last_error=True).SetFileTime
+    setter.argtypes = [wintypes.HANDLE, ctypes.POINTER(wintypes.FILETIME),
+                      ctypes.POINTER(wintypes.FILETIME), ctypes.POINTER(wintypes.FILETIME)]
+    setter.restype = wintypes.BOOL
+    for number in range(605):
+        path = root / 'query' / f'f{number:04}.bin'
+        path.write_bytes(bytes([number % 256]) * (number + 1))
+        seconds = 946684800 if number == 604 else 1200000000 + number
+        ticks = (seconds + 11644473600) * 10000000
+        created = wintypes.FILETIME(ticks & 0xffffffff, ticks >> 32)
+        with path.open('r+b') as handle:
+            if not setter(msvcrt.get_osfhandle(handle.fileno()), ctypes.byref(created), None, None):
+                raise ctypes.WinError(ctypes.get_last_error())
+        os.utime(path, (1100000000 + number, 1100000000 + number))
     Image.new('RGB', (32, 24), (10, 80, 160)).save(root / 'image.png')
     with wave.open(str(root / 'audio.wav'), 'wb') as output:
         output.setnchannels(1)
@@ -70,7 +90,7 @@ async def verify(root: Path, report: dict) -> None:
             assert initialized.serverInfo.version == SERVICE_VERSION
             tools = (await session.list_tools()).tools
             verify_contract(tools)
-            assert len(tools) == 21
+            assert len(tools) == 22
             report['tools'] = {tool.name: 'NOT_CALLED' for tool in tools}
             report['contract_sha256'] = canonical_digest(contract(tools))
 
@@ -94,7 +114,7 @@ async def verify(root: Path, report: dict) -> None:
 
             for name, arguments, marker in [
                 ('list_directory', {}, 'README.md'),
-                ('list_files', {}, 'README.md'),
+                ('list_files', {}, 'audio.wav'),
                 ('read_file', {'path': 'README.md'}, '封版 UTF-8 marker'),
                 ('search_text', {'query': 'marker'}, 'README.md'),
                 ('list_projects', {}, 'pyproject.toml'),
@@ -114,6 +134,29 @@ async def verify(root: Path, report: dict) -> None:
             assert info['format_limits'] == diag['format_limits']
             assert diag['format_limits']['toml_available'] and diag['format_limits']['sqlite_available']
             report['diagnostics'] = diag
+            oldest = await call('query_files', dict(directory='query', sort_by='created_time', limit=1))
+            assert oldest['files'][0]['path'] == 'query/f0604.bin'
+            assert oldest['matched_count'] == 605 and oldest['scan_complete']
+            assert 'format' not in oldest['files'][0] and 'sha256' not in oldest['files'][0]
+            first = await call('query_files', dict(directory='query', sort_by='size', order='desc', limit=500))
+            second_query = dict(directory='query', sort_by='size', order='desc', limit=500, cursor=first['next_cursor'])
+            second_page = await call('query_files', second_query)
+            combined = first['files'] + second_page['files']
+            assert [r['size'] for r in combined] == list(range(605, 0, -1))
+            assert len({r['path'] for r in combined}) == 605 and not second_page['has_more']
+            selected = await call('query_files', dict(directory='query', name='f0604', extensions=['BIN'],
+                min_size=605, max_size=605, created_before=1000000000, include_format=True,
+                include_capabilities=True, include_sha256=True))
+            direct = await call('file_info', dict(path='query/f0604.bin'))
+            for key, value in oldest['files'][0].items():
+                # NTFS may update access time after opt-in reads; compare the
+                # snapshot time to the original fixture, not a later read.
+                if key not in ('accessed_time', 'accessed_time_ns'):
+                    assert direct[key] == value, key
+            current_metadata = await call('query_files', dict(directory='query', name='f0604'))
+            assert current_metadata['files'][0]['accessed_time'] == (root / 'query/f0604.bin').stat().st_atime
+            assert selected['files'][0]['sha256'] == hashlib.sha256((root / 'query/f0604.bin').read_bytes()).hexdigest()
+            assert selected['files'][0]['capabilities'] == direct['capabilities']
             await call('read_image', {'path': 'image.png'})
             file_info = await call('file_info', {'path': 'complete.sqlite'})
             assert file_info['format'] == 'SQLITE'
@@ -149,6 +192,14 @@ async def verify(root: Path, report: dict) -> None:
                 ('read_binary', {'path': 'data.bin', 'length': 16385}),
                 ('read_binary', {'path': 'data.bin', 'length': '10'}),
                 ('read_file', {'path': '../outside.txt'}),
+                ('query_files', {'directory': '../outside'}),
+                ('query_files', {'limit': '1'}),
+                ('query_files', {'limit': True}),
+                ('query_files', {'include_sha256': 'true'}),
+                ('query_files', {'sort_by': 'ctime'}),
+                ('query_files', {'min_size': 10, 'max_size': 1}),
+                ('query_files', {'cursor': first['next_cursor'], 'directory': 'query', 'order': 'asc'}),
+                ('query_files', {'unknown': True}),
             ]:
                 await call(name, arguments, reject=True)
             assert snapshot(root) == before

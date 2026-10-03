@@ -11,7 +11,7 @@ import zipfile
 ROOT = Path(__file__).resolve().parent
 PAYLOAD = '''autostart.py autostart_windows.py backup_rotation.py
 capability_diagnostics.py connection_cli.py connection_runtime.py connection_settings.py
-document_extras.py format_parsers.py format_reader.py format_worker.py gui_tasks.py
+document_extras.py file_query.py format_parsers.py format_reader.py format_worker.py gui_tasks.py
 icon_assets.py image_reader.py incremental_state.py integrity.py key_store.py
 local_files_gui.py local_files_mcp.py media_parser.py operation_budget.py power_policy.py
 power_restore_guard.py power_windows.py reader_settings.py safe_logging.py security_policy.py

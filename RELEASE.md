@@ -1,7 +1,7 @@
 # Windows 部署與封版
 
-服務 `2026.10.03.1`、契約 8、設定版本 5、21 個唯讀工具、MCP 1.30.0。
-核心工具行為及安全上限未因封版變更。
+服務 `2026.10.03.2`、契約 9、設定版本 5、22 個唯讀工具、MCP 1.30.0。
+新增 query_files；原有 21 工具輸入契約及安全上限保留。
 
 ## 新電腦 clean clone
 
@@ -64,6 +64,8 @@ SPDX 雜湊是完整性核對，不能代替來源信任；請使用既有受信
 ## 驗收範圍
 
 本次正式程序持續使用原 `.venv`；依使用者同意，clean install 與完整回歸在
-`.release-work/clean-source/.venv` 執行。不更動正式共享根、設定、DPAPI、排程、通道或系統電源。
-最終結果見 Git 原始碼內 `reports/engineering/release-final-20261003.md`；舊驗收報告保留為歷史證據。
+`.release-work/query-clean/.venv` 執行。不更動正式共享根、設定、DPAPI、排程、通道或系統電源。
+最終結果見 Git 原始碼內 `reports/engineering/query-files-final-20261003.json`；舊驗收報告保留為歷史證據。
 本機成功不代表 GitHub push/tag/Release 或 NCUE clean-clone／遠端用戶端驗收完成。
+
+query_files 在精簡封包中包含 file_query.py；22-tool STDIO 會建立 605 檔 fixture，核對全域 creation time top-1、完整分頁、metadata 一致性及拒絕路徑。封包部署與 clean-source 驗證各自建立新的 .venv 並從 requirements-lock.txt 安裝，無需複製開發電腦的環境或私有設定。正式遠端通道及另一台實體 Windows 的實跑結果需分開記錄。
