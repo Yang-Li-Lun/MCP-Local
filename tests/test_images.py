@@ -262,7 +262,7 @@ class ImageTests(unittest.TestCase):
                     self.assertEqual(initialized.serverInfo.version, SERVICE_VERSION)
                     tools = (await session.list_tools()).tools
                     verify_contract(tools)
-                    self.assertEqual(len(tools), 21)
+                    self.assertEqual(len(tools), 22)
                     result = await session.call_tool('read_image', {'path': 'image.png'})
                     self.assertFalse(result.isError)
                     self.assertGreater(len(result.content[1].data), 2*1024*1024)

@@ -1036,5 +1036,230 @@
       "idempotentHint": true,
       "openWorldHint": false
     }
+  },
+  "query_files": {
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "directory": {
+          "default": ".",
+          "maxLength": 4096,
+          "minLength": 1,
+          "title": "Directory",
+          "type": "string"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Name"
+        },
+        "extensions": {
+          "anyOf": [
+            {
+              "items": {
+                "maxLength": 80,
+                "type": "string"
+              },
+              "maxItems": 32,
+              "minItems": 1,
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Extensions"
+        },
+        "min_size": {
+          "anyOf": [
+            {
+              "maximum": 9007199254740991,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Min Size"
+        },
+        "max_size": {
+          "anyOf": [
+            {
+              "maximum": 9007199254740991,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Max Size"
+        },
+        "created_after": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Created After"
+        },
+        "created_before": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Created Before"
+        },
+        "modified_after": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Modified After"
+        },
+        "modified_before": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Modified Before"
+        },
+        "accessed_after": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Accessed After"
+        },
+        "accessed_before": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Accessed Before"
+        },
+        "sort_by": {
+          "default": "path",
+          "enum": [
+            "name",
+            "path",
+            "size",
+            "created_time",
+            "modified_time",
+            "accessed_time"
+          ],
+          "title": "Sort By",
+          "type": "string"
+        },
+        "order": {
+          "default": "asc",
+          "enum": [
+            "asc",
+            "desc"
+          ],
+          "title": "Order",
+          "type": "string"
+        },
+        "limit": {
+          "default": 200,
+          "maximum": 500,
+          "minimum": 1,
+          "title": "Limit",
+          "type": "integer"
+        },
+        "cursor": {
+          "anyOf": [
+            {
+              "maxLength": 16000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cursor"
+        },
+        "include_format": {
+          "default": false,
+          "title": "Include Format",
+          "type": "boolean"
+        },
+        "include_capabilities": {
+          "default": false,
+          "title": "Include Capabilities",
+          "type": "boolean"
+        },
+        "include_sha256": {
+          "default": false,
+          "title": "Include Sha256",
+          "type": "boolean"
+        },
+        "root_id": {
+          "anyOf": [
+            {
+              "maxLength": 32,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Root Id"
+        }
+      },
+      "title": "query_filesArguments",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
   }
 }

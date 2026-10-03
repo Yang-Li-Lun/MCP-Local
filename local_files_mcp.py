@@ -539,7 +539,7 @@ def create_server(reader):
                  reader.search_texts, reader.read_file_ranges, reader.find_files,
                  reader.hash_files, reader.compare_paths, reader.project_status, reader.server_diagnostics,
                  reader.read_image, reader.file_info, reader.read_document, reader.inspect_media,
-                 reader.inspect_archive, reader.read_binary):
+                 reader.inspect_archive, reader.read_binary, reader.query_files):
         from operation_budget import asynchronous
         server.add_tool(asynchronous(tool), annotations=(
             annotation.model_copy(update={'idempotentHint': False})

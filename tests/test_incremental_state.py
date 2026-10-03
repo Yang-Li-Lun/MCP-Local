@@ -353,7 +353,7 @@ class IncrementalTests(unittest.TestCase):
             async with stdio_client(StdioServerParameters(command=sys.executable, args=args)) as (read, write):
                 async with ClientSession(read, write) as session:
                     initialized = await session.initialize()
-                    self.assertEqual(initialized.serverInfo.version, '2026.10.03.1')
+                    self.assertEqual(initialized.serverInfo.version, '2026.10.03.2')
                     verify_contract((await session.list_tools()).tools)
                     async def call(name, args):
                         response = await session.call_tool(name, args)
@@ -361,7 +361,7 @@ class IncrementalTests(unittest.TestCase):
                         return json.loads(response.content[0].text)
                     diag = await call('server_diagnostics', {})
                     self.assertTrue(diag['consistent'])
-                    self.assertEqual(len(diag['registered_tools']), 21)
+                    self.assertEqual(len(diag['registered_tools']), 22)
                     hashed = await call('hash_files', {'paths': ['a.txt']})
                     self.assertEqual(hashed['files'][0]['sha256'], hashlib.sha256(b'old').hexdigest())
                     compared = await call('compare_paths', {'left': 'a.txt', 'right': 'same.txt'})

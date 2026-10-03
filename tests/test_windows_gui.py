@@ -74,14 +74,14 @@ w.mainloop()
 assert observed == ['native-menu-visible', 'withdrawn', True, 'normal'], observed
 print('REAL_TRAY_EVENTS_OK')
 '''
-        result = subprocess.run([sys._base_executable, '-B', '-c', program],
+        result = subprocess.run([sys.executable, '-B', '-c', program],
                                 capture_output=True, text=True, timeout=10,
                                 creationflags=subprocess.CREATE_NO_WINDOW)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn('REAL_TRAY_EVENTS_OK', result.stdout)
 
     def test_connection_sequence_and_failure(self):
-        python = str(Path('.venv/Scripts/python.exe').resolve())
+        python = sys.executable
         connection = Connection()
         commands = [[python, '-c', 'import os,ctypes; assert os.environ["CONTROL_PLANE_API_KEY"] == "fake-key"; assert not ctypes.windll.kernel32.GetConsoleWindow()'],
                     [python, '-c', 'raise SystemExit(7)'],
@@ -97,7 +97,7 @@ print('REAL_TRAY_EVENTS_OK')
         self.assertIsNone(connection.job)
 
     def test_connection_stop_and_duplicate_guard(self):
-        python = str(Path('.venv/Scripts/python.exe').resolve())
+        python = sys.executable
         connection = Connection()
         with patch('connection_runtime.existing_tunnel', return_value=True):
             connection.start({'settings_version': 1}, 'fake-key')
@@ -172,7 +172,7 @@ print('REAL_TRAY_EVENTS_OK')
     def test_job_closes_entire_owned_process_tree(self):
         signature(kernel, 'OpenProcess', wintypes.HANDLE, wintypes.DWORD, wintypes.BOOL, wintypes.DWORD)
         signature(kernel, 'WaitForSingleObject', wintypes.DWORD, wintypes.HANDLE, wintypes.DWORD)
-        python = str(Path('.venv/Scripts/python.exe').resolve())
+        python = sys.executable
         with tempfile.TemporaryDirectory() as directory:
             pid_file = Path(directory) / 'child.pid'
             program = (
@@ -181,7 +181,7 @@ print('REAL_TRAY_EVENTS_OK')
                 'p=subprocess.Popen([sys.executable,"-c","import time; time.sleep(60)"]); '
                 'Path(sys.argv[1]).write_text(str(p.pid)); time.sleep(60)')
             job = Job()
-            process = subprocess.Popen([sys._base_executable, '-c', program, str(pid_file)],
+            process = subprocess.Popen([sys.executable, '-c', program, str(pid_file)],
                                        stdin=subprocess.PIPE, creationflags=subprocess.CREATE_NO_WINDOW)
             handle = None
             try:

@@ -496,7 +496,7 @@ else:
                     self.assertEqual(init.serverInfo.version, SERVICE_VERSION)
                     tools = (await session.list_tools()).tools
                     verify_contract(tools)
-                    self.assertEqual(len(tools), 21)
+                    self.assertEqual(len(tools), 22)
                     for tool, arguments in [('read_document', {'path': 'rows.json', 'format_hint': 'JSON', 'limit': 1}),
                                             ('inspect_archive', {'path': 'archive.zip', 'member_path': 'a', 'length': 2})]:
                         result = await session.call_tool(tool, arguments)

@@ -26,7 +26,7 @@ CONTEXT_BYTES = 64 * 1024
 TOOLS = ('list_directory', 'list_files', 'read_file', 'search_text',
          'workspace_info', 'list_projects', 'project_context', 'read_files', 'search_texts', 'read_file_ranges', 'find_files',
          'hash_files', 'compare_paths', 'project_status', 'server_diagnostics', 'read_image',
-         'file_info', 'read_document', 'inspect_media', 'inspect_archive', 'read_binary')
+         'file_info', 'read_document', 'inspect_media', 'inspect_archive', 'read_binary', 'query_files')
 
 
 class ReadRange(TypedDict):
@@ -41,6 +41,8 @@ def encoded_size(value: Any) -> int:
 
 def effective_tool_limits() -> dict:
     return {'max_roots': 8, 'max_projects': 100, 'max_batch_files': MAX_BATCH_FILES,
+            'max_query_page': 500, 'query_snapshot_bytes': 16 * 1024 * 1024,
+            'query_snapshot_idle_seconds': 60, 'query_snapshot_ttl_seconds': 300,
             'max_read_ranges': MAX_READ_RANGES, 'max_read_ranges_bytes': RANGES_BYTES,
             'max_find_queries': 10, 'max_find_matches': 200,
             'max_find_bytes': 100 * 1024,
@@ -91,6 +93,37 @@ class WorkspaceReader:
                    cursor: str | None = None, root_id: str | None = None) -> dict:
         """僅在需要完整遞迴清冊時使用；一般探索優先 list_directory，指定最小目錄。"""
         return self.call(root_id, 'list_files', directory, limit, cursor)
+
+    @bounded
+    def query_files(self,
+                    directory: Annotated[str, Field(strict=True, min_length=1, max_length=4096)] = '.',
+                    name: Annotated[str, Field(strict=True, min_length=1, max_length=200)] | None = None,
+                    extensions: Annotated[list[Annotated[str, Field(strict=True, max_length=80)]], Field(min_length=1, max_length=32)] | None = None,
+                    min_size: Annotated[int, Field(strict=True, ge=0, le=9007199254740991)] | None = None,
+                    max_size: Annotated[int, Field(strict=True, ge=0, le=9007199254740991)] | None = None,
+                    created_after: Annotated[float, Field(strict=True, allow_inf_nan=False)] | None = None,
+                    created_before: Annotated[float, Field(strict=True, allow_inf_nan=False)] | None = None,
+                    modified_after: Annotated[float, Field(strict=True, allow_inf_nan=False)] | None = None,
+                    modified_before: Annotated[float, Field(strict=True, allow_inf_nan=False)] | None = None,
+                    accessed_after: Annotated[float, Field(strict=True, allow_inf_nan=False)] | None = None,
+                    accessed_before: Annotated[float, Field(strict=True, allow_inf_nan=False)] | None = None,
+                    sort_by: Literal['name', 'path', 'size', 'created_time', 'modified_time', 'accessed_time'] = 'path',
+                    order: Literal['asc', 'desc'] = 'asc',
+                    limit: Annotated[int, Field(strict=True, ge=1, le=500)] = 200,
+                    cursor: Annotated[str, Field(strict=True, max_length=16000)] | None = None,
+                    include_format: Annotated[bool, Field(strict=True)] = False,
+                    include_capabilities: Annotated[bool, Field(strict=True)] = False,
+                    include_sha256: Annotated[bool, Field(strict=True)] = False,
+                    root_id: Annotated[str, Field(strict=True, min_length=1, max_length=32)] | None = None) -> dict:
+        """完整掃描 metadata 後篩選排序分頁；name 字面包含、extensions 不分大小寫、時間為 UTC Unix 秒且含端點。內容解析與 SHA-256 僅 opt-in、本頁執行；掃描未完整時拒絕全域排序。"""
+        options = dict(locals())
+        del options['self']
+        del options['root_id']
+        from file_query import query_files
+        try:
+            return query_files(self.reader(root_id), **options)
+        except OSError:
+            raise ValueError('QUERY_UNAVAILABLE：範圍無法完整安全查詢，請縮小範圍。') from None
 
     def read_file(self, path: Annotated[str, Field(strict=True, min_length=1, max_length=4096)], start_line: Annotated[int, Field(strict=True, ge=1)] = 1, line_count: Annotated[int, Field(strict=True, ge=1, le=400)] = 200,
                   root_id: str | None = None) -> dict:

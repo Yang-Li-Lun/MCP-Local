@@ -1,6 +1,6 @@
 # MCP-Local 本機檔案唯讀工具
 
-限定使用者明確授權的資料夾或磁碟範圍內的一般檔案探索，以及文字、文件、圖片、媒體與封存讀取；提供二十一個唯讀工具：`list_directory`、`list_files`、`read_file`、`search_text`、`workspace_info`、`list_projects`、`project_context`、`read_files`、`search_texts`、`find_files`、`read_file_ranges`、`hash_files`、`compare_paths`、`project_status`、`server_diagnostics`、`read_image`、`file_info`、`read_document`、`inspect_media`、`inspect_archive`、`read_binary`。不提供寫入、刪除或指令執行能力。
+限定使用者明確授權的資料夾或磁碟範圍內的一般檔案探索，以及文字、文件、圖片、媒體與封存讀取；提供二十二個唯讀工具：`list_directory`、`list_files`、`read_file`、`search_text`、`workspace_info`、`list_projects`、`project_context`、`read_files`、`search_texts`、`find_files`、`read_file_ranges`、`hash_files`、`compare_paths`、`project_status`、`server_diagnostics`、`read_image`、`file_info`、`read_document`、`inspect_media`、`inspect_archive`、`read_binary`。不提供寫入、刪除或指令執行能力。
 
 ## 環境與啟動
 
@@ -69,7 +69,7 @@ read_file 每次最多 400 行，content（含行號、冒號、空白及換行�
 ## 模組與驗證
 
 - local_files_mcp.py：STDIO 伺服器、單資料夾讀取器、游標、掃描及路徑防護。
-- workspace_settings.py / workspace_reader.py：具名資料夾驗證與二十一個 MCP 工具。
+- workspace_settings.py / workspace_reader.py：具名資料夾驗證與二十二個 MCP 工具。
 - reader_settings.py：讀取限制與白名單驗證。
 - connection_settings.py：共用設定、備份、遷移與指令建立。
 - connection_cli.py / start-local-files-tunnel.ps1：命令列入口。
@@ -77,7 +77,7 @@ read_file 每次最多 400 行，content（含行號、冒號、空白及換行�
 - key_store.py：Windows 使用者 DPAPI。
 - tests/：unittest、實際 STDIO 與 Windows 行為驗證。
 
-本機工程與隔離驗證記錄於 [2026-09-13 工程修正交付報告](reports/engineering/MCP-Local_工程修正交付報告_2026-09-13.txt)；遠端驗收須實際列工具、列 shared、讀取 README.md 的「唯讀連線測試成功」、搜尋其行號，並驗證停止失效及重啟恢復。更新後請在用戶端重新整理工具清單，確認二十一個工具及 `root_id`、`queries`、`context_lines` 等 schema 已載入。
+本機工程與隔離驗證記錄於 [2026-09-13 工程修正交付報告](reports/engineering/MCP-Local_工程修正交付報告_2026-09-13.txt)；遠端驗收須實際列工具、列 shared、讀取 README.md 的「唯讀連線測試成功」、搜尋其行號，並驗證停止失效及重啟恢復。更新後請在用戶端重新整理工具清單，確認二十二個工具及 `root_id`、`queries`、`context_lines` 等 schema 已載入。
 
 ## 具名多資料夾與專案入口
 
@@ -104,7 +104,7 @@ GUI 與 PowerShell/CLI 共用 v5 設定。已確認的 v1/v2/v3 設定載入時�
 
 ## 2026-09-13 工程修正與批次搜尋
 
-目前服務版本為 `2026.10.03.1`、契約版本 8，共提供二十一個唯讀工具。新增的 `search_texts` 可一次搜尋 1 至 10 個字面查詢，共用目錄掃描與每檔讀取，並沿用完整 UTF-8／NUL 驗證及搜尋容量限制。省略 `root_id` 時仍只使用明確設定的預設根；完整輸入結構及唯讀標記保存在 `tool-contract.json`。MCP 1.30.0 的同步方法使用最多四個工作執行緒、無等待佇列，合作式期限為 30 秒；每個操作另有 1 GiB 累計讀取與 300,000 項目硬上限，各工具較低設定仍優先。忙碌、取消及期限分別回報 RESOURCE_BUSY、OPERATION_CANCELLED、OPERATION_TIMEOUT。網路磁碟不承諾有界底層 I/O；部署以可信使用者的本機專用資料夾為前提。
+目前服務版本為 `2026.10.03.2`、契約版本 9，共提供二十二個唯讀工具。新增的 `search_texts` 可一次搜尋 1 至 10 個字面查詢，共用目錄掃描與每檔讀取，並沿用完整 UTF-8／NUL 驗證及搜尋容量限制。省略 `root_id` 時仍只使用明確設定的預設根；完整輸入結構及唯讀標記保存在 `tool-contract.json`。MCP 1.30.0 的同步方法使用最多四個工作執行緒、無等待佇列，合作式期限為 30 秒；每個操作另有 1 GiB 累計讀取與 300,000 項目硬上限，各工具較低設定仍優先。忙碌、取消及期限分別回報 RESOURCE_BUSY、OPERATION_CANCELLED、OPERATION_TIMEOUT。網路磁碟不承諾有界底層 I/O；部署以可信使用者的本機專用資料夾為前提。
 
 所有工具返回資料 JSON（ensure_ascii=False、indent=2 的 UTF-8 編碼，不含 MCP 文字／結構化重複封套）最高 2 MiB；超限拒絕。批次仍最高 512 KiB、專案入口 64 KiB。搜尋命中物件累計 100,000 字元；空白或含換行的查詢不支援。長行增加 `match_snippet`，格式為 casefolded_text，沒有宣稱原文字元偏移。已達命中上限即保守截斷，不再為尋找額外命中讀完整工作區。
 
@@ -144,9 +144,9 @@ Windows 原生電源能力不足時顯示固定錯誤碼或降級警告。實機
 
 Windows 11 支援時，極致節能會設定 AC/DC「最佳電源效率」；API 不可用或失敗時顯示警告，其餘策略繼續。此功能不強制開啟 Windows 節能器。退出時僅在目前值仍為本程式套用值時還原；使用者中途改選其他模式會被保留。設定 v4 的 low 遷移為 off，extreme 保留；v5 拒絕 low。manage_windows_power_mode 預設 true，可在一般設定停用。舊 journal v1 僅用於復原，不能進入 low 執行狀態。
 
-## 目前工具版本（契約 8；含 2026-09-17 性能工具）
+## 目前工具版本（契約 9；含 2026-09-17 性能工具）
 
-服務版本 `2026.10.03.1`，共 21 個唯讀工具；設定版本維持 5。
+服務版本 `2026.10.03.2`，共 22 個唯讀工具；設定版本維持 5。
 
 - 已知專案先用 `project_context`；定位檔名用 `find_files`。它以相對路徑做不分大小寫字面包含比對，最多 10 詞、每詞 50 筆、合計 200 筆與 100 KiB；達上限即停，不保證完整清冊。
 - 多個已知檔案使用 `read_files`，每次最多 32 檔、總回傳仍為 512 KiB。
@@ -159,16 +159,20 @@ Windows 11 支援時，極致節能會設定 AC/DC「最佳電源效率」；API
 
 ## 2026-09-29 雜湊、差異與增量診斷
 
-新增 `hash_files`、`compare_paths`、`project_status`、`server_diagnostics`。服務版本 `2026.10.03.1`、契約 8、共 21 工具，設定版本仍為 5。
+新增 `hash_files`、`compare_paths`、`project_status`、`server_diagnostics`。服務版本 `2026.10.03.2`、契約 9、共 22 工具，設定版本仍為 5。
 
 雜湊涵蓋一般檔案的原始位元組，保留 Hidden、link、排除名稱、共享根及容量限制。增量基準僅存在 MCP 程序記憶體，最長 24 小時，每個 workspace 最多 8 份；重啟或淘汰後須重新建立。只快取 metadata 與雜湊，文字讀取仍完整驗證。
 
 更新服務後，用 `server_diagnostics` 核對實際註冊，再從用戶端 `tools/list` 確認工具可見；server 無法自行證明 ChatGPT 已取得工具。完整參數、界線與示例見 [增量與診斷工具說明](增量與診斷工具說明.md)。
 
-## 原生圖片讀取（契約 8）
+## 原生圖片讀取（契約 9）
 
-新增 `read_image(path, root_id?)`，以原生 MCP `ImageContent` 傳回 PNG 圖片，既有工具皆保留，目前共 21 個唯讀工具。支援靜態 PNG、JPEG、WebP、GIF、BMP、TIFF、ICO、PNM 與可用 build 的 AVIF；僅使用既有授權根，檔案須通過路徑、Hidden、link、排除名稱、狀態目錄及檔案身分檢查。詳見 [圖片讀取說明](圖片讀取說明.md)。
+新增 `read_image(path, root_id?)`，以原生 MCP `ImageContent` 傳回 PNG 圖片，既有工具皆保留，目前共 22 個唯讀工具。支援靜態 PNG、JPEG、WebP、GIF、BMP、TIFF、ICO、PNM 與可用 build 的 AVIF；僅使用既有授權根，檔案須通過路徑、Hidden、link、排除名稱、狀態目錄及檔案身分檢查。詳見 [圖片讀取說明](圖片讀取說明.md)。
 
-## 契約 8 格式擴充
+## 契約 9 格式擴充
 
-保留 21 工具，在 read_document 加入 format_hint/table/expected_sha256，在 inspect_archive 加入 member_path/offset/length/expected_sha256。支援結構化資料、OpenDocument、EPUB、郵件、外掛字幕與更多圖片／媒體 metadata；來源唯讀與原有安全上限保留。詳見 [格式讀取說明](格式讀取說明.md)。
+保留 22 工具，在 read_document 加入 format_hint/table/expected_sha256，在 inspect_archive 加入 member_path/offset/length/expected_sha256。支援結構化資料、OpenDocument、EPUB、郵件、外掛字幕與更多圖片／媒體 metadata；來源唯讀與原有安全上限保留。詳見 [格式讀取說明](格式讀取說明.md)。
+
+## 批次 metadata 查詢（契約 9）
+
+新增單一 `query_files`，保留原有 21 個工具輸入契約。先完整掃描再篩選、排序與分頁；預設只查 metadata，不讀取檔案內容。`sort_by="created_time", order="asc", limit=1` 查詢整個安全範圍最早建立的檔案。Windows 使用真正 creation time。格式、能力與 SHA-256 僅 opt-in，且只處理本頁。參數、游標及資源限制見 [格式讀取說明](格式讀取說明.md#query_files-批次-metadata-查詢)。
