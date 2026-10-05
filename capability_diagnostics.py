@@ -9,7 +9,7 @@ import operation_budget
 from image_reader import image_limits
 from format_reader import format_limits
 from reader_settings import DEFAULT_EXCLUSIONS
-from tool_contract import SERVICE_VERSION, CONTRACT_VERSION, contract
+from tool_contract import SERVICE_VERSION, CONTRACT_VERSION, contract, contract_filename
 
 
 def canonical_digest(value):
@@ -19,12 +19,17 @@ def canonical_digest(value):
 
 def diagnose(workspace, declared):
     from workspace_reader import effective_tool_limits
+    from access_mode import DEVELOPER_CONTROL, HOST_CONTROL, FULL_CONTROL
+    developer_status = None
+    if workspace._access_mode == DEVELOPER_CONTROL:
+        from developer_control import backend_status
+        developer_status = backend_status(getattr(workspace, '_developer_toolchains', []))
     provider = workspace._registered_tools_provider
     actual = contract(provider()) if provider is not None else {}
     expected = {}
     contract_state = 'ok'
     try:
-        path = Path(__file__).with_name('tool-contract.json')
+        path = Path(__file__).with_name(contract_filename(workspace._access_mode))
         with path.open('rb') as handle:
             data = handle.read(2 * 1024 * 1024 + 1)
         if len(data) > 2 * 1024 * 1024:
@@ -54,6 +59,9 @@ def diagnose(workspace, declared):
         limits['excluded_names'] = sorted(set(limits['excluded_names']) | DEFAULT_EXCLUSIONS)
         roots.append(dict(id=identifier, accessible=accessible, effective_settings=limits))
     return dict(service_version=SERVICE_VERSION, contract_version=CONTRACT_VERSION,
+        access_mode=workspace._access_mode,
+        mode_ready=developer_status['ready'] if developer_status else True,
+        developer_backend=developer_status,
         mcp_version=version('mcp'), declared_tools=list(declared),
         registered_tools=sorted(actual_names & declared_names),
         unexpected_registered_count=len(actual_names - declared_names),
@@ -80,6 +88,10 @@ def diagnose(workspace, declared):
             raw_bytes_hash=True, metadata_reuse=True, force_hash=True,
             metadata_identity='device/inode/size/mtime/ctime/links/attributes; Windows handle ChangeTime',
             snapshots='bounded process memory only; expire on restart, TTL or eviction',
-            source_read_only=True, atomic_filesystem_snapshot=False,
+            source_read_only=workspace._access_mode == 'read_only', atomic_filesystem_snapshot=False,
+            terminal={FULL_CONTROL: 'windows_appcontainer', HOST_CONTROL: 'host_process_trusted',
+                      DEVELOPER_CONTROL: 'windows_sandbox_vm'}.get(workspace._access_mode, 'disabled'),
+            command_execution=workspace._access_mode in (FULL_CONTROL, HOST_CONTROL) or bool(developer_status and developer_status['ready']),
+            host_commands_sandboxed=False if workspace._access_mode == HOST_CONTROL else None,
             client_tool_discovery='not_observable_by_server',
             client_verification='Compare client tools/list with registered_tools and contract digest; then call tools.'))

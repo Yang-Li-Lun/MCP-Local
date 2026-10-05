@@ -71,6 +71,9 @@ class App:
         self.restart_pending = False
         window.title('MCP-Local｜連線與快捷設定')
         self.icon_style = tk.StringVar(value=settings.get('icon_style', 'classic'))
+        self.access_mode = tk.StringVar(value=settings.get('access_mode', 'read_only'))
+        self.developer_toolchains = list(settings.get('developer_toolchains', []))
+        self.active_access_mode = None
         window.iconbitmap(str(icon_path(self.icon_style.get())))
         window.geometry('800x820')
         window.minsize(780, 800)
@@ -87,32 +90,35 @@ class App:
         appearance = ttk.Frame(self.tabs, padding=16)
         self.tabs.add(appearance, text='外觀')
         self.create_appearance(appearance)
+        permissions = ttk.Frame(self.tabs, padding=16)
+        self.tabs.add(permissions, text='權限模式')
+        self.create_access_mode(permissions)
         frame.columnconfigure(0, weight=1)
-        ttk.Label(frame, text='本機檔案唯讀連線', font=('Microsoft JhengHei UI', 16, 'bold')).grid(
+        ttk.Label(frame, text='本機檔案連線', font=('Microsoft JhengHei UI', 16, 'bold')).grid(
             row=0, column=0, sticky='w', pady=(0, 14))
         self.create_folder_selector(frame)
         ttk.Label(frame, text='通道識別碼').grid(row=3, column=0, sticky='w')
         self.tunnel = tk.StringVar(value=settings['tunnel'])
         ttk.Entry(frame, textvariable=self.tunnel).grid(row=4, column=0, columnspan=2, sticky='ew', pady=(4, 10))
-        ttk.Label(frame, text='API 金鑰（按儲存設定後加密保存；清空輸入不會刪除舊金鑰）').grid(row=5, column=0, sticky='w')
+        ttk.Label(frame, text='API 金鑰').grid(row=5, column=0, sticky='w')
         self.key = tk.StringVar(value=self.saved_key)
-        ttk.Entry(frame, textvariable=self.key, show='●').grid(row=6, column=0, columnspan=2, sticky='ew', pady=(4, 10))
+        ttk.Entry(frame, textvariable=self.key, show='●').grid(row=6, column=0, columnspan=2, sticky='ew', pady=(4, 4))
+        ttk.Label(frame, text='儲存設定後以 DPAPI 加密保存；清空欄位不會刪除已保存金鑰。',
+                  foreground='#555555').grid(row=7, column=0, columnspan=2, sticky='w', pady=(0, 10))
         self.hidden = tk.BooleanVar(value=settings['start_hidden'])
-        ttk.Checkbutton(frame, text='下次開啟時直接縮到系統匣', variable=self.hidden).grid(row=7, column=0, sticky='w')
-        ttk.Label(frame, text='僅分享你確認可公開給此連線的專用資料夾。',
-                  foreground='#555555').grid(row=8, column=0, columnspan=2, sticky='w', pady=12)
+        ttk.Checkbutton(frame, text='下次開啟時直接縮到系統匣', variable=self.hidden).grid(row=8, column=0, sticky='w')
+        ttk.Label(frame, text='僅加入你願意提供給此 MCP 連線存取的資料夾。',
+                  foreground='#555555').grid(row=9, column=0, columnspan=2, sticky='w', pady=12)
         self.auto_start = tk.BooleanVar(value=settings.get('auto_start', False))
-        ttk.Label(frame, text='Windows 登入自啟動').grid(row=9, column=0, sticky='w')
+        ttk.Label(frame, text='Windows 登入自啟動').grid(row=10, column=0, sticky='w')
         ttk.Checkbutton(frame, text='Windows 登入後啟動到系統匣並自動連線', variable=self.auto_start).grid(
-            row=10, column=0, columnspan=2, sticky='w')
-        ttk.Label(frame, text='勾選或取消後，按「儲存設定」才會生效。\n'
-                  '登入時只顯示系統匣圖示；左鍵開啟設定，右鍵管理連線或退出。\n'
-                  '取消自啟動只影響下次登入，不會停止目前的系統匣連線。').grid(
-                      row=11, column=0, columnspan=2, sticky='w')
+            row=11, column=0, columnspan=2, sticky='w')
+        ttk.Label(frame, text='儲存後生效；登入時縮至系統匣並自動連線。取消只影響下次登入。').grid(
+            row=12, column=0, columnspan=2, sticky='w')
         self.auto_start_status = tk.StringVar(value='登入自啟動：尚未檢查')
-        ttk.Label(frame, textvariable=self.auto_start_status).grid(row=12, column=0, sticky='w')
+        ttk.Label(frame, textvariable=self.auto_start_status).grid(row=13, column=0, sticky='w')
         self.background_check_button = ttk.Button(frame, text='更新自啟動狀態', command=self.check_background)
-        self.background_check_button.grid(row=13, column=0, sticky='w', pady=(6, 0))
+        self.background_check_button.grid(row=14, column=0, sticky='w', pady=(6, 0))
         buttons = ttk.Frame(outer)
         buttons.pack(fill='x', pady=(12, 0))
         self.save_button = ttk.Button(buttons, text='儲存設定', command=self.save)
@@ -132,9 +138,9 @@ class App:
             button.pack(side='left', padx=5)
             self.power_buttons.append(button)
         ttk.Label(outer, textvariable=self.power_status, wraplength=710).pack(fill='x')
-        self.status = tk.StringVar(value='尚未啟動；請確認資料夾並輸入金鑰。')
+        self.status = tk.StringVar(value='尚未連線；請確認設定後啟動連線。')
         self.suppress_dirty = False
-        for variable in (self.tunnel, self.hidden, self.auto_start, self.icon_style, *self.reader_numbers.values()):
+        for variable in (self.tunnel, self.hidden, self.auto_start, self.icon_style, self.access_mode, *self.reader_numbers.values()):
             variable.trace_add('write', self.mark_dirty)
         for editor in self.reader_lists.values():
             editor.edit_modified(False)
@@ -202,7 +208,8 @@ class App:
             self.reader_lists[key] = editor
         ttk.Label(frame, text='清單以逗號、分號或換行分隔；不使用路徑或萬用字元。\n'
                   '文字清單只限制 UTF-8 reader；一般檔案探索及專用格式工具另行驗證。\n'
-                  '隱藏路徑、連結、路徑跳脫與寫入功能維持封鎖。',
+                  '此分頁只調整讀取規則；寫入／命令能力由「權限模式」決定。\n'
+                  '隱藏路徑、連結與路徑跳脫防護固定保留。',
                   wraplength=680).grid(row=10, column=0, columnspan=3, sticky='w', pady=10)
         actions = ttk.Frame(frame)
         actions.grid(row=11, column=0, columnspan=3, sticky='w')
@@ -284,7 +291,7 @@ class App:
         ])
 
     def create_folder_selector(self, parent) -> None:
-        frame = ttk.LabelFrame(parent, text='允許讀取的資料夾', padding=6)
+        frame = ttk.LabelFrame(parent, text='授權資料夾', padding=6)
         frame.grid(row=1, column=0, columnspan=2, sticky='ew', pady=(0, 10))
         self.workspace_rows = [dict(row) for row in self.settings.get('roots', [
             {'id': 'main', 'name': 'main', 'path': self.settings['root'], 'excluded_names': []}])]
@@ -311,13 +318,13 @@ class App:
         for row in self.workspace_rows:
             self.folder_list.insert('end', row['path'] + (' （無法使用）' if row['id'] in self.invalid_root_ids else ''))
         count = len(self.workspace_rows)
-        self.folder_status.set(f'已加入 {count} 個資料夾（最多 8 個）；清單皆為唯讀授權範圍。' if count
+        self.folder_status.set(f'已加入 {count} 個資料夾（最多 8 個）；清單皆為授權範圍。' if count
                                else '至少需要加入一個允許讀取的資料夾。')
 
     def edit_folder(self, index=None) -> None:
         if self.tasks.busy or self.quitting:
             return
-        folder = filedialog.askdirectory(parent=self.window, title='選擇允許讀取的專用資料夾', mustexist=True)
+        folder = filedialog.askdirectory(parent=self.window, title='選擇授權資料夾', mustexist=True)
         if not folder:
             return
         try:
@@ -430,6 +437,7 @@ class App:
         return {
             'save': stable and bool(self.workspace_rows) and (self.dirty or self.key_dirty or self.repair_required),
             'start': stable and bool(self.workspace_rows) and not self.running and not self.repair_required
+                     and not self.connection.cleanup_failed
                      and not (bg and bg.running),
             'apply': stable and bool(self.workspace_rows) and self.running and not self.repair_required,
             'stop': available and self.state in ('IDLE', 'STARTING', 'RUNNING', 'REPAIR')
@@ -450,6 +458,13 @@ class App:
             state = 'normal' if enabled else 'disabled'
             if str(button.cget('state')) != state:
                 button.configure(state=state)
+        toolchain_enabled = enabled and self.access_mode.get() == 'developer_control'
+        toolchain_state = 'normal' if toolchain_enabled else 'disabled'
+        if str(self.toolchain_list.cget('state')) != toolchain_state:
+            self.toolchain_list.configure(state=toolchain_state)
+        for button in self.toolchain_buttons:
+            if str(button.cget('state')) != toolchain_state:
+                button.configure(state=toolchain_state)
         bg = self.background_status
         if self.dirty or self.key_dirty:
             auto = '有未儲存變更；請先儲存'
@@ -487,6 +502,59 @@ class App:
         self.tasks.submit(action, complete)
         self.refresh_controls()
 
+    def create_access_mode(self, frame) -> None:
+        from access_mode import MODE_LABELS
+        ttk.Label(frame, text='連線權限', font=('Microsoft JhengHei UI', 16, 'bold')).pack(anchor='w', pady=(0, 16))
+        for value, label in MODE_LABELS.items():
+            ttk.Radiobutton(frame, text=label, variable=self.access_mode, value=value).pack(anchor='w', pady=6)
+        ttk.Label(frame, text='唯讀：22 工具，只允許讀取。\n'
+                  '完整控制：34 工具，可修改授權 root；命令在無網路 AppContainer 副本工作區執行。\n'
+                  '開發控制：34 工具，Windows Sandbox VM 直接修改授權 root；工具鏈唯讀。\n'
+                  '主機控制：36 工具，直接以目前 Windows 使用者執行受信任命令；非沙箱。\n\n'
+                  '切換模式需儲存並重連；遠端無法切換權限模式。啟用控制模式時會再次確認風險。',
+                  wraplength=670).pack(anchor='w', pady=12)
+        tools = ttk.LabelFrame(frame, text='開發 VM 工具鏈（本機授權、唯讀）', padding=6)
+        tools.pack(fill='x')
+        self.toolchain_list = tk.Listbox(tools, height=2, exportselection=False)
+        self.toolchain_list.pack(side='left', fill='x', expand=True)
+        buttons = ttk.Frame(tools)
+        buttons.pack(side='right', padx=(6, 0))
+        self.toolchain_buttons = []
+        for label, callback in [('新增目錄', self.add_toolchain), ('移除選取', self.remove_toolchain)]:
+            button = ttk.Button(buttons, text=label, command=callback)
+            button.pack()
+            self.toolchain_buttons.append(button)
+        self.refresh_toolchains()
+        self.access_mode_status = tk.StringVar(value='目前尚未連線')
+        ttk.Label(frame, textvariable=self.access_mode_status, wraplength=670).pack(anchor='w', pady=12)
+
+    def refresh_toolchains(self) -> None:
+        self.toolchain_list.delete(0, 'end')
+        for directory in self.developer_toolchains:
+            self.toolchain_list.insert('end', directory)
+
+    def add_toolchain(self) -> None:
+        if self.access_mode.get() != 'developer_control':
+            return
+        directory = filedialog.askdirectory(title='選擇僅含工具鏈的目錄，例如 Python、Git 或 Node 安裝目錄', parent=self.window)
+        if not directory:
+            return
+        try:
+            from developer_control import normalize_toolchains
+            self.developer_toolchains = normalize_toolchains([*self.developer_toolchains, directory])
+            self.refresh_toolchains()
+            self.mark_dirty()
+        except ValueError as exc:
+            messagebox.showerror('工具鏈目錄無效', str(exc), parent=self.window)
+
+    def remove_toolchain(self) -> None:
+        if self.access_mode.get() != 'developer_control':
+            return
+        for index in reversed(self.toolchain_list.curselection()):
+            del self.developer_toolchains[index]
+        self.refresh_toolchains()
+        self.mark_dirty()
+
     def reload_settings(self) -> None:
         editable = load_for_edit()
         self.suppress_dirty = True
@@ -499,6 +567,9 @@ class App:
             self.hidden.set(value['start_hidden'])
             self.auto_start.set(value.get('auto_start', False))
             self.icon_style.set(value.get('icon_style', 'classic'))
+            self.access_mode.set(value.get('access_mode', 'read_only'))
+            self.developer_toolchains = list(value.get('developer_toolchains', []))
+            self.refresh_toolchains()
             self.apply_icon(self.icon_style.get())
             self.workspace_rows = [dict(row) for row in value['roots']]
             self.invalid_root_ids = {row['root_id'] for row in editable.errors}
@@ -526,18 +597,45 @@ class App:
             settings['auto_start'] = self.auto_start.get()
             settings['auto_connect'] = self.auto_start.get()
             settings['icon_style'] = self.icon_style.get()
+            settings['access_mode'] = self.access_mode.get()
+            settings['developer_toolchains'] = list(self.developer_toolchains)
+            mode_changed = settings['access_mode'] != self.settings.get('access_mode', 'read_only')
+            toolchains_changed = settings['developer_toolchains'] != self.settings.get('developer_toolchains', [])
+            mode_changed |= toolchains_changed and 'developer_control' in (settings['access_mode'], self.settings.get('access_mode'))
+            if mode_changed and settings['access_mode'] == 'full_control':
+                if not messagebox.askyesno('啟用完整控制模式',
+                        '允許此連線修改以下共享資料夾內的檔案，並執行沙箱 PowerShell：\n'
+                        + '\n'.join(row['path'] for row in self.workspace_rows)
+                        + '\n\n修改來源檔案無法自動復原。命令仍受 Windows AppContainer 隔離。\n'
+                        '模式會保存；連線中切換將停止所有舊 sessions 並重新連線。', parent=self.window):
+                    return False
+            if mode_changed and settings['access_mode'] in ('developer_control', 'host_control'):
+                from access_mode import MODE_LABELS
+                description = ('允許以目前使用者權限讀寫主機檔案與執行受信任命令，可跨原共享 root。\n'
+                               '命令不是沙箱，也可讀寫設定與使用者憑證；檔案 API 防護不會限制命令。\n'
+                               '不自動提升 Administrator／SYSTEM。'
+                               if settings['access_mode'] == 'host_control' else
+                               '允許 VM 直接修改下列授權 root：\n'
+                               + '\n'.join(row['path'] for row in self.workspace_rows)
+                               + '\n\n並唯讀使用下列主機工具鏈：\n'
+                               + ('\n'.join(settings['developer_toolchains']) or '（未設定；命令會被拒絕）')
+                               + '\nroot 為完整映射，包含其中的 .git、隱藏及檔案 API 排除項目。'
+                               + '\nVM 不繼承主機憑證，網路及剪貼簿關閉；禁止映射向外硬連結與重新解析點。')
+                if not messagebox.askyesno('啟用' + MODE_LABELS[settings['access_mode']],
+                        description + '\n\n模式會保存。切換會停止舊連線及 sessions 後重新連線。', parent=self.window):
+                    return False
             if settings['auto_start'] and (not self.key_store or not self.key.get().strip()):
                 raise ValueError('自動啟動需要已保存的 DPAPI 金鑰。')
             settings['reader'] = self.collect_advanced()
             settings['default_root'] = self.workspace_rows[0]['id']
             settings['roots'] = [dict(row) for row in self.workspace_rows]
-            if self.settings.get('settings_version') not in (1, 2, 3, 4, 5):
+            if self.settings.get('settings_version') not in (1, 2, 3, 4, 5, 6, 7):
                 if not messagebox.askyesno('首次共用設定遷移',
                         '舊 PowerShell 分享範圍為 D:\\codee；GUI 使用獨立設定。\n'
                         f'確認兩個入口今後都使用：\n{settings["root"]}\n{settings["tunnel"]}\n'
                         '確認後會備份並保存一般設定；加密金鑰保留。', parent=self.window):
                     return False
-            settings['settings_version'] = 5
+            settings['settings_version'] = 7
             previous = self.settings.copy()
             key = self.key.get().strip()
             saved_key = self.saved_key
@@ -547,16 +645,30 @@ class App:
             was_dirty = self.dirty
             save_backend = save_settings
             key_state = {'saved': False}
+            settings_commit = {'revision': None}
+            connection_state = {'external_stopped': False}
+            owned_running = self.running
             def work():
                 normalized = normalize_connection(settings)
+                if mode_changed and not owned_running:
+                    background = get_background_status()
+                    if background.error_code:
+                        raise ValueError('MODE_SWITCH_UNVERIFIED：無法確認背景連線，模式未儲存。')
+                    if background.running:
+                        if not background.task_valid:
+                            raise ValueError('MODE_SWITCH_UNVERIFIED：背景工作不符，請先停止原連線。')
+                        stop_background()
+                        connection_state['external_stopped'] = True
                 if self.key_store and key and key != saved_key:
                     self.key_store.save(key)
                     key_state['saved'] = True
                 def save(value):
                     if revision is None:
-                        save_backend(value)
+                        saved_revision = save_backend(value)
                     else:
-                        save_backend(value, expected_revision=revision)
+                        saved_revision = save_backend(value, expected_revision=revision)
+                    if isinstance(saved_revision, str) and re.fullmatch(r'[0-9a-f]{64}', saved_revision):
+                        settings_commit['revision'] = saved_revision
                 apply_settings_transaction(normalized, previous, save)
                 return normalized
             def complete(value, error):
@@ -586,7 +698,8 @@ class App:
                     return
                 self.settings = value
                 self.apply_icon(value['icon_style'])
-                self.settings_revision = hashlib.sha256(json.dumps(value, ensure_ascii=False, indent=2).encode('utf-8')).hexdigest()
+                self.settings_revision = settings_commit['revision'] or hashlib.sha256(
+                    json.dumps(value, ensure_ascii=False, indent=2).encode('utf-8')).hexdigest()
                 self.repair_required = False
                 self.state = 'RUNNING' if self.running else 'IDLE'
                 if generation == self.edit_generation:
@@ -600,7 +713,15 @@ class App:
                 self.background_status = None
                 self.refresh_controls()
                 self.status.set('設定已儲存；新的資料夾範圍會在下次連線時使用。')
-                if after and intent == self.intent and generation == self.edit_generation and not self.key_dirty:
+                if mode_changed and self.running:
+                    self.restart_pending = (intent == self.intent and generation == self.edit_generation and not self.key_dirty)
+                    self.connection.cancel.set()
+                    self.state = 'RESTARTING'
+                    self.status.set('權限模式已保存；正在停止舊連線及 sessions，完成後重連。')
+                    self.refresh_controls()
+                elif connection_state['external_stopped'] and intent == self.intent and generation == self.edit_generation:
+                    self.launch()
+                elif after and intent == self.intent and generation == self.edit_generation and not self.key_dirty:
                     after()
                 elif not after:
                     self.check_background()
@@ -644,6 +765,9 @@ class App:
     def launch(self) -> None:
         if self.quitting or self.running or self.repair_required:
             return
+        if self.connection.cleanup_failed:
+            self.status.set('舊連線停止未確認；請檢查並停止殘留程序後重新開啟 APP。')
+            return
         if self.connection.thread and self.connection.thread.is_alive():
             self.window.after(50, self.launch)
             return
@@ -651,6 +775,9 @@ class App:
         self.connection = Connection(power=self.power, notify=self.wake_event.set)
         try:
             self.connection.start(self.settings.copy(), self.key.get().strip())
+            from access_mode import MODE_LABELS
+            self.active_access_mode = self.settings.get('access_mode', 'read_only')
+            self.access_mode_status.set('本次連線啟動模式：' + MODE_LABELS[self.active_access_mode])
             self.running = True
             self.state = 'STARTING'
             self.refresh_controls()
@@ -764,6 +891,21 @@ class App:
                     self.connection.events.put((kind, text))
                     break
                 self.running = False
+                if self.connection.cleanup_failed:
+                    self.restart_pending = False
+                    self.retry_enabled = False
+                    if self.retry_timer is not None:
+                        self.window.after_cancel(self.retry_timer)
+                        self.retry_timer = None
+                    self.access_mode_status.set('舊連線停止未確認；尚未套用新模式')
+                    self.status.set('舊連線清理失敗；請檢查並停止殘留程序後重新開啟 APP。')
+                    self.state = 'IDLE'
+                    if self.quitting:
+                        self.finish()
+                        return
+                    break
+                self.active_access_mode = None
+                self.access_mode_status.set('目前尚未連線')
                 if self.state != 'SAVING':
                     self.state = 'REPAIR' if self.repair_required else 'IDLE'
                 if self.quitting:

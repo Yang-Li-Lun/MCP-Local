@@ -60,6 +60,7 @@ class WorkspaceReader:
         self._baseline_owner = uuid.uuid4().hex
         self._registered_tools_provider = None
         self._registered_service_version_provider = None
+        self._access_mode = 'read_only'
         for item in self.workspace['roots']:
             effective = normalize_reader_settings(settings)
             effective['excluded_names'] = sorted(set(effective['excluded_names']) |
@@ -175,7 +176,8 @@ class WorkspaceReader:
             limits = dict(reader.settings)
             limits['excluded_names'] = sorted(set(limits['excluded_names']) | DEFAULT_EXCLUSIONS)
             roots.append({'id': item['id'], 'name': item['name'], 'limits': limits})
-        return {'service_version': SERVICE_VERSION, 'contract_version': CONTRACT_VERSION, 'mcp_version': version('mcp'), 'roots': roots, 'default_root': self.workspace['default_root'], 'tools': list(TOOLS),
+        return {'service_version': SERVICE_VERSION, 'contract_version': CONTRACT_VERSION, 'mcp_version': version('mcp'), 'roots': roots, 'default_root': self.workspace['default_root'], 'tools': list(self.active_tools()),
+                'access_mode': self._access_mode,
                 'limits': effective_tool_limits(), 'image_limits': image_limits(),
                 'format_limits': format_reader.format_limits()}
 
@@ -305,7 +307,11 @@ class WorkspaceReader:
     def server_diagnostics(self) -> dict:
         """核對程式宣告、實際 server 註冊與契約，回報版本、生效限制與格式；不代表用戶端已取得工具。"""
         from capability_diagnostics import diagnose
-        return diagnose(self, TOOLS)
+        return diagnose(self, self.active_tools())
+
+    def active_tools(self) -> tuple:
+        from access_mode import control_tools
+        return TOOLS + control_tools(self._access_mode)
 
     @bounded
     def file_info(self, path: Annotated[str, Field(strict=True, min_length=1, max_length=4096)],

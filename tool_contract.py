@@ -4,8 +4,8 @@ import json
 from pathlib import Path
 from mcp.server.fastmcp.utilities.func_metadata import FuncMetadata
 
-SERVICE_VERSION = '2026.10.03.2'
-CONTRACT_VERSION = 9
+SERVICE_VERSION = '2026.10.05.2'
+CONTRACT_VERSION = 12
 
 
 class StrictArguments(FuncMetadata):
@@ -20,7 +20,13 @@ def contract(tools):
             'annotations': tool.annotations.model_dump(exclude_none=True) if tool.annotations else None} for tool in tools}
 
 
-def verify_contract(tools):
-    expected = json.loads(Path(__file__).with_name('tool-contract.json').read_text(encoding='utf-8'))
+def contract_filename(access_mode='read_only'):
+    from access_mode import normalize_access_mode, READ_ONLY
+    mode = normalize_access_mode(access_mode)
+    return 'tool-contract.json' if mode == READ_ONLY else 'tool-contract-' + mode.replace('_', '-') + '.json'
+
+
+def verify_contract(tools, access_mode='read_only'):
+    expected = json.loads(Path(__file__).with_name(contract_filename(access_mode)).read_text(encoding='utf-8'))
     if contract(tools) != expected:
         raise ValueError('TOOL_CONTRACT_MISMATCH：工具輸入結構或唯讀標記與本版快照不同。')

@@ -168,7 +168,7 @@ class UserModeTests(unittest.TestCase):
         for old, new in (('off', 'off'), ('low', 'off'), ('extreme', 'extreme')):
             target.write_text(json.dumps({**base, 'settings_version': 4, 'power': {'mode': old}}))
             result = load_settings(target)
-            self.assertEqual(result['settings_version'], 5)
+            self.assertEqual(result['settings_version'], 7)
             self.assertEqual(result['power']['mode'], new)
             self.assertEqual(result['roots'], base['roots'])
         value = normalize_connection({**base, 'settings_version': 5,

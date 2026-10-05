@@ -61,7 +61,7 @@ class FolderPowerGuiTests(unittest.TestCase):
             old = dict(self.settings, settings_version=version, power={'mode': 'extreme'})
             target.write_text(json.dumps(old), encoding='utf-8')
             value = load_settings(target)
-            self.assertEqual(value['settings_version'], 5)
+            self.assertEqual(value['settings_version'], 7)
             self.assertEqual(value['power']['mode'], 'off')
             self.assertEqual(value['roots'], self.rows)
             before = target.read_bytes()
@@ -105,7 +105,7 @@ class FolderPowerGuiTests(unittest.TestCase):
         for field in ('root', 'roots', 'workspace_fields', 'workspace_default', 'workspace_choice'):
             self.assertFalse(hasattr(app, field))
         self.assertEqual([app.tabs.tab(tab, 'text') for tab in app.tabs.tabs()],
-                         ['連線設定', '進階讀取設定', '外觀'])
+                             ['連線設定', '進階讀取設定', '外觀', '權限模式'])
         app.folder_list.selection_set(0)
         app.remove_selected_folders()
         self.assertEqual(app.workspace_rows, [])

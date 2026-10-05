@@ -1,7 +1,9 @@
 # Windows 部署與封版
 
-服務 `2026.10.03.2`、契約 9、設定版本 5、22 個唯讀工具、MCP 1.30.0。
-新增 query_files；原有 21 工具輸入契約及安全上限保留。
+服務 `2026.10.05.2`、契約 12、設定版本 7，MCP 1.30.0。
+唯讀 22／完整控制 34／開發控制 34／主機控制 36 個註冊工具；原唯讀及完整控制 contract bytes 保留。
+四模式交付須同時通過單元／隔離回歸及四個真實 STDIO 驗收腳本；僅 discovery 或缺少工具鏈時的拒絕測試不能代替 VM 驗收。
+主機模式採受信任命令模型，並非憑證沙箱。詳見 [權限模式說明](完整控制模式.md)。
 
 ## 新電腦 clean clone
 
@@ -21,11 +23,18 @@ py -3.13 -m venv .venv
 .\.venv\Scripts\python.exe -B -m unittest discover -s tests -v
 .\.venv\Scripts\python.exe -B verify_isolated.py
 .\.venv\Scripts\python.exe -B verify_release_stdio.py
+.\.venv\Scripts\python.exe -B verify_full_control_stdio.py
+.\.venv\Scripts\python.exe -B verify_access_modes_stdio.py
+.\.venv\Scripts\python.exe -B verify_developer_control_stdio.py
 ```
 
 `requirements.txt` 列直接依賴；正式部署使用固定完整版本的 `requirements-lock.txt`。
+`verify_access_modes_stdio.py` 驗證四模式 discovery、主機跨 root 檔案與命令、保護路徑與降權後拒絕；
+其 `developer_vm_acceptance=NOT_RUN_IN_THIS_SCRIPT` 必須保留。實際 VM、映射工具鏈、逃逸拒絕與斷線清理由 `verify_developer_control_stdio.py` 單獨驗證。
+VM 驗收需要已啟用的 Windows Sandbox、互動式桌面、新版 `wsb` CLI，以及本機 Python／Git／Node／Codex CLI；使用預設安裝探測或明確 `--toolchain` 目錄（Python、Git、Node、Codex 的順序）。
+資料、假憑證與唯讀拒絕測試均使用暫存 fixture；已安裝工具鏈只做唯讀映射。不得使用正式通道或憑證替代測試。
 `pip check` 之外，封版紀錄核對全部 35 個固定套件版本；pip 是環境建立工具，版本不列入服務 lock。
-TOML、SQLite 除了 API 檢查，最後一行會以真正 STDIO 呼叫解析 fixture 驗證。
+TOML、SQLite 除了 API 檢查，`verify_release_stdio.py` 會以真正 STDIO 呼叫解析 fixture 驗證。
 本機可建立實體 symlink 時應完成相關測試；若權限不足而 skip，保留原因，不能稱為全數執行。
 GUI/tray 測試需互動式桌面；不要為繞過失敗而以管理員執行服務。
 
@@ -61,7 +70,7 @@ SPDX 雜湊是完整性核對，不能代替來源信任；請使用既有受信
 金鑰與 DPAPI 不可從本機封包移植到另一台電腦。NCUE 使用者需自行建立授權共享根、
 輸入自己的通道及金鑰，再另行授權啟動遠端連線。
 
-## 驗收範圍
+## 前版驗收紀錄（2026.10.03.2）
 
 本次正式程序持續使用原 `.venv`；依使用者同意，clean install 與完整回歸在
 `.release-work/query-clean/.venv` 執行。不更動正式共享根、設定、DPAPI、排程、通道或系統電源。
@@ -69,3 +78,14 @@ SPDX 雜湊是完整性核對，不能代替來源信任；請使用既有受信
 本機成功不代表 GitHub push/tag/Release 或 NCUE clean-clone／遠端用戶端驗收完成。
 
 query_files 在精簡封包中包含 file_query.py；22-tool STDIO 會建立 605 檔 fixture，核對全域 creation time top-1、完整分頁、metadata 一致性及拒絕路徑。封包部署與 clean-source 驗證各自建立新的 .venv 並從 requirements-lock.txt 安裝，無需複製開發電腦的環境或私有設定。正式遠端通道及另一台實體 Windows 的實跑結果需分開記錄。
+
+## 原有雙模式相容性驗收
+
+新的 `.venv` 只需原有 requirements-lock.txt，不新增 Node、Docker 或 npm 相依。
+完整模式使用一般權限 Windows 內建 PowerShell 5.1 與 AppContainer API；
+若企業政策禁止建立 AppContainer，檔案功能仍可使用，Terminal 回報 SANDBOX_UNAVAILABLE，不能視為通過。
+verify_full_control_stdio.py 不使用正式設定或金鑰，依序驗證 22／34／22 工具。
+封裝白名單包含四份契約、各模式 runtime、guest PowerShell、VM guard、四個 STDIO 驗收腳本及 third_party/DesktopCommanderMCP 的 MIT 授權。
+封裝不包含 Windows Sandbox App 或工具鏈；這些是目標電腦須自行配置的本機前置條件。
+部署時需保留所有白名單檔案；省略 access-mode 永遠是唯讀。
+正式 Secure MCP Tunnel discovery 與另一台實體 Windows 的驗收需另列結果，不可由本機 STDIO 推論。

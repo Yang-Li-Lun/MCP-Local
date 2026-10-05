@@ -62,6 +62,181 @@ class GuiControlTests(unittest.TestCase):
                     self.assertEqual(str(getattr(a, name + '_button')['state']), 'normal' if enabled else 'disabled')
         a.quitting = False
 
+    def test_developer_toolchain_controls_only_enabled_in_developer_mode(self):
+        a = self.app
+        for mode, expected in [
+                ('read_only', 'disabled'),
+                ('full_control', 'disabled'),
+                ('developer_control', 'normal'),
+                ('host_control', 'disabled')]:
+            with self.subTest(mode=mode):
+                a.access_mode.set(mode)
+                a.refresh_controls()
+                self.assertEqual(str(a.toolchain_list.cget('state')), expected)
+                for button in a.toolchain_buttons:
+                    self.assertEqual(str(button.cget('state')), expected)
+
+    def test_access_mode_opt_in_persists_and_reload_uses_saved_mode(self):
+        a = self.app
+        a.access_mode.set('full_control')
+        with patch('local_files_gui.messagebox.askyesno', return_value=True), patch(
+                'local_files_gui.save_settings', side_effect=lambda value, **kw: save_settings(value, self.target, **kw)):
+            self.assertTrue(a.save())
+            self.poll()
+        self.assertEqual(load_for_edit(self.target).settings['access_mode'], 'full_control')
+        a.access_mode.set('read_only')
+        with patch('local_files_gui.load_for_edit', lambda: load_for_edit(self.target)):
+            a.reload_settings()
+        self.assertEqual(a.access_mode.get(), 'full_control')
+        self.assertFalse(a.dirty)
+        a.finish()
+        self.window = tk.Tk()
+        self.window.withdraw()
+        self.app = App(self.window, load_for_edit(self.target).settings, Mock(load=Mock(return_value='fake-key')))
+        self.assertEqual(self.app.access_mode.get(), 'full_control')
+
+    def test_access_mode_opt_in_can_be_cancelled(self):
+        a = self.app
+        a.access_mode.set('full_control')
+        with patch('local_files_gui.messagebox.askyesno', return_value=False), patch('local_files_gui.save_settings') as save:
+            self.assertFalse(a.save())
+        save.assert_not_called()
+        self.assertEqual(load_for_edit(self.target).settings['access_mode'], 'read_only')
+
+    def test_new_modes_require_local_confirmation_and_persist_after_poll(self):
+        for mode in ('host_control', 'developer_control'):
+            with self.subTest(mode=mode):
+                self.app.access_mode.set(mode)
+                with patch('local_files_gui.messagebox.askyesno', return_value=True) as confirmation, patch(
+                        'local_files_gui.save_settings', side_effect=lambda value, **kw: save_settings(value, self.target, **kw)):
+                    self.assertTrue(self.app.save())
+                    self.poll()
+                confirmation.assert_called_once()
+                self.assertEqual(load_for_edit(self.target).settings['access_mode'], mode)
+                self.assertEqual(self.app.settings_revision, load_for_edit(self.target).revision)
+                if mode == 'host_control':
+                    self.assertIn('命令不是沙箱', confirmation.call_args.args[1])
+                else:
+                    self.assertIn('命令會被拒絕', confirmation.call_args.args[1])
+
+    def test_host_confirmation_cancellation_preserves_saved_mode(self):
+        self.app.access_mode.set('host_control')
+        with patch('local_files_gui.messagebox.askyesno', return_value=False), patch('local_files_gui.save_settings') as save:
+            self.assertFalse(self.app.save())
+        save.assert_not_called()
+        self.assertEqual(load_for_edit(self.target).settings['access_mode'], 'read_only')
+
+    def test_developer_toolchain_change_requires_confirmation_and_reconnect(self):
+        with tempfile.TemporaryDirectory(prefix='mcp-toolchain-fixture-') as directory:
+            a = self.app
+            a.access_mode.set('developer_control')
+            a.settings['access_mode'] = 'developer_control'
+            a.running, a.state = True, 'RUNNING'
+            a.developer_toolchains = [directory]
+            a.refresh_toolchains()
+            a.mark_dirty()
+            with patch('local_files_gui.messagebox.askyesno', return_value=True) as confirmation, patch(
+                    'local_files_gui.save_settings', side_effect=lambda value, **kw: save_settings(value, self.target, **kw)):
+                self.assertTrue(a.save())
+                self.assertFalse(a.connection.cancel.is_set())
+                self.poll()
+            confirmation.assert_called_once()
+            self.assertIn(directory, confirmation.call_args.args[1])
+            self.assertEqual(load_for_edit(self.target).settings['developer_toolchains'], [directory])
+            self.assertTrue(a.connection.cancel.is_set())
+            self.assertTrue(a.restart_pending)
+
+    def test_host_to_readonly_stops_before_relaunch(self):
+        self.app.settings['access_mode'] = 'host_control'
+        self.app.running, self.app.state = True, 'RUNNING'
+        self.app.access_mode.set('read_only')
+        with patch('local_files_gui.messagebox.askyesno') as confirmation, patch(
+                'local_files_gui.save_settings', side_effect=lambda value, **kw: save_settings(value, self.target, **kw)):
+            self.assertTrue(self.app.save())
+            self.poll()
+        confirmation.assert_not_called()
+        self.assertTrue(self.app.connection.cancel.is_set())
+        self.assertTrue(self.app.restart_pending)
+
+    def test_mode_save_stops_old_connection_only_after_poll_and_restarts(self):
+        a = self.app
+        a.running, a.state = True, 'RUNNING'
+        a.access_mode.set('full_control')
+        with patch('local_files_gui.messagebox.askyesno', return_value=True), patch(
+                'local_files_gui.save_settings', side_effect=lambda value, **kw: save_settings(value, self.target, **kw)):
+            self.assertTrue(a.save())
+            self.assertFalse(a.connection.cancel.is_set())
+            self.poll()
+        self.assertTrue(a.connection.cancel.is_set())
+        self.assertTrue(a.restart_pending)
+        self.assertEqual(a.state, 'RESTARTING')
+        a.connection.events.put(('done', 'fixture stopped'))
+        with patch.object(a, 'reload_and_launch') as launch:
+            a.tick()
+            launch.assert_called_once()
+        self.assertFalse(a.restart_pending)
+
+    def test_return_to_readonly_restarts_full_connection(self):
+        a = self.app
+        a.settings['access_mode'] = 'full_control'
+        a.running, a.state = True, 'RUNNING'
+        a.access_mode.set('read_only')
+        with patch('local_files_gui.messagebox.askyesno') as confirmation, patch(
+                'local_files_gui.save_settings', side_effect=lambda value, **kw: save_settings(value, self.target, **kw)):
+            self.assertTrue(a.save())
+            self.poll()
+        confirmation.assert_not_called()
+        self.assertTrue(a.connection.cancel.is_set())
+        self.assertTrue(a.restart_pending)
+        self.assertEqual(load_for_edit(self.target).settings['access_mode'], 'read_only')
+
+    def test_failed_cleanup_blocks_mode_downgrade_relaunch(self):
+        from connection_runtime import ConnectionErrorKind
+        a = self.app
+        a.running, a.state = True, 'RESTARTING'
+        a.active_access_mode = 'host_control'
+        a.restart_pending = a.retry_enabled = True
+        a.retry_timer = self.window.after(10000, a.retry_connection)
+        a.connection.cleanup_failed = True
+        a.connection.error_kind = ConnectionErrorKind.RESOURCE_CLEANUP_FAILED
+        a.connection.events.put(('error', 'RESOURCE_CLEANUP_FAILED'))
+        a.connection.events.put(('done', '清理失敗，請檢查本次程序'))
+        with patch('local_files_gui.messagebox.showerror'), patch.object(a, 'reload_and_launch') as launch:
+            a.tick()
+            launch.assert_not_called()
+        self.assertFalse(a.restart_pending)
+        self.assertFalse(a.retry_enabled)
+        self.assertIsNone(a.retry_timer)
+        self.assertFalse(a.control_states()['start'])
+        self.assertIn('停止未確認', a.access_mode_status.get())
+        self.assertEqual(a.active_access_mode, 'host_control')
+        with patch('local_files_gui.Connection') as replacement:
+            a.launch()
+            replacement.assert_not_called()
+
+    def test_failed_mode_save_does_not_change_active_mode(self):
+        a = self.app
+        a.running, a.state = True, 'RUNNING'
+        a.access_mode.set('full_control')
+        with patch('local_files_gui.messagebox.askyesno', return_value=True), patch(
+                'local_files_gui.save_settings', side_effect=OSError('fixture')), patch('local_files_gui.messagebox.showerror'):
+            self.assertTrue(a.save())
+            self.poll()
+        self.assertFalse(a.connection.cancel.is_set())
+        self.assertFalse(a.restart_pending)
+        self.assertEqual(a.settings['access_mode'], 'read_only')
+
+    def test_unknown_background_mode_switch_refused_before_saving(self):
+        a = self.app
+        a.access_mode.set('full_control')
+        with patch('local_files_gui.messagebox.askyesno', return_value=True), patch(
+                'local_files_gui.get_background_status', return_value=background.BackgroundStatus(False, False, False, 'UNKNOWN')), patch(
+                'local_files_gui.save_settings') as save, patch('local_files_gui.messagebox.showerror'):
+            self.assertTrue(a.save())
+            self.poll()
+        save.assert_not_called()
+        self.assertEqual(a.settings['access_mode'], 'read_only')
+
     def test_icon_selection_applies_after_save_and_survives_reload(self):
         a = self.app
         a.icon_style.set('folder_link')

@@ -1,0 +1,21 @@
+Desktop Commander MCP
+Copyright (c) 2024-2025 Eduard Ruzga and Desktop Commander Contributors
+License: MIT (see LICENSE in this directory)
+
+Upstream: https://github.com/wonderwhy-er/DesktopCommanderMCP
+Reference commit: c774c3b505de990219637ecdc9a830c8772fae9d
+Reference package version: 0.2.52
+Retrieved: 2026-10-04
+
+control_edit.py adapts the line-ending detection/normalization functions from
+src/utils/lineEndingHandler.ts and exact-match/count/replacement logic from
+src/tools/edit.ts. The Python adaptation preserves the MIT copyright and
+permission notice. Changes: no fuzzy write, UI, tracking, or logging; bounded
+replacement count, SHA-256 preconditions in the caller, BOM preservation,
+overlapping-match rejection, and MCP-Local path/access guards.
+
+Filesystem, search, and process/session APIs were reviewed as design references.
+Those Windows/Python integration modules are original MCP-Local implementations
+because the existing read-only guards and AppContainer isolation are required.
+No Hosted Relay, account system, remote backend, telemetry, Node dependency tree,
+or upstream executable is redistributed or executed by MCP-Local.

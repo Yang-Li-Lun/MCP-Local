@@ -11,3 +11,8 @@ Distributed under the License is distributed on an “AS IS” BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 Limitations under the License.
+
+MCP-Local control_edit.py includes a Python adaptation of MIT-licensed code from
+Desktop Commander MCP, Copyright (c) 2024-2025 Eduard Ruzga and Desktop Commander
+Contributors. The full license, pinned source revision, and modification notice
+are in third_party/DesktopCommanderMCP/LICENSE and NOTICE.

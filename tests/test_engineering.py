@@ -207,7 +207,7 @@ class EngineeringTests(unittest.TestCase):
             with self.assertRaises(Exception):
                 await server.call_tool('workspace_info', {'unknown': 1})
         asyncio.run(check())
-        self.assertEqual(workspace.workspace_info()['contract_version'], 9)
+        self.assertEqual(workspace.workspace_info()['contract_version'], 12)
 
     def test_cancel_timeout_busy_and_release(self):
         budget = Budget()
@@ -353,7 +353,7 @@ class EngineeringTests(unittest.TestCase):
             app.quit()
 
     def test_cleanup_failure_still_notifies_done(self):
-        from connection_runtime import Connection
+        from connection_runtime import Connection, ConnectionErrorKind
         import uuid
         connection = Connection()
         fake_job = Mock()
@@ -366,6 +366,10 @@ class EngineeringTests(unittest.TestCase):
         self.assertEqual(events[-1][0], 'done')
         self.assertIn('RESOURCE_CLEANUP_FAILED', str(events))
         self.assertNotIn('private detail', str(events))
+        self.assertTrue(connection.cleanup_failed)
+        self.assertEqual(connection.error_kind, ConnectionErrorKind.RESOURCE_CLEANUP_FAILED)
+        with self.assertRaisesRegex(ValueError, 'RESOURCE_CLEANUP_FAILED'):
+            connection.start({'settings_version': 3}, 'fake-key')
 
     def test_job_assignment_failure_never_starts_child(self):
         from connection_runtime import Connection
