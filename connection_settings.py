@@ -17,11 +17,14 @@ from backup_rotation import rotate_backups
 from power_policy import normalize_power, POWER_DEFAULTS
 from integrity import verify_client
 from icon_assets import normalize_icon_style
+from access_mode import normalize_access_mode, READ_ONLY, FULL_CONTROL, MODES
 
 PROJECT = Path(__file__).resolve().parent
 CONFIG_DIR = Path(os.environ.get('LOCALAPPDATA', str(Path.home()))) / 'MCP-Local'
 CONFIG_FILE = CONFIG_DIR / 'settings.json'
 DEFAULT_TUNNEL = 'tunnel_example'
+SETTINGS_VERSION = 7
+SUPPORTED_SETTINGS_VERSIONS = (0, 1, 2, 3, 4, 5, 6, 7)
 
 
 def validate_settings(root: str, tunnel: str) -> dict:
@@ -42,10 +45,10 @@ def normalize_connection(settings: dict, *, validate_paths: bool = True) -> dict
     if not isinstance(settings, dict):
         raise ValueError('設定檔格式錯誤。')
     version = settings.get('settings_version', 0)
-    if type(version) is not int or version not in (0, 1, 2, 3, 4, 5):
+    if type(version) is not int or version not in SUPPORTED_SETTINGS_VERSIONS:
         raise ValueError('共用設定版本不支援，原檔已保留。')
     reader = normalize_reader_settings(settings.get('reader'))
-    if version in (2, 3, 4, 5) and ('roots' not in settings or 'default_root' not in settings):
+    if version in (2, 3, 4, 5, 6, 7) and ('roots' not in settings or 'default_root' not in settings):
         raise ValueError('多資料夾設定不完整。')
     roots = settings.get('roots', [{'id': 'main', 'name': 'main', 'path': settings.get('root')}])
     workspace = normalize_workspace(roots, settings.get('default_root', 'main'), reader, validate_paths=validate_paths)
@@ -61,14 +64,22 @@ def normalize_connection(settings: dict, *, validate_paths: bool = True) -> dict
     for field in ('auto_start', 'auto_connect', 'start_hidden'):
         if type(settings.get(field, False)) is not bool:
             raise ValueError('自動啟動設定必須為布林值。')
+    mode = normalize_access_mode(settings.get('access_mode', READ_ONLY)) if version >= 6 else READ_ONLY
+    if version == 6 and mode not in (READ_ONLY, FULL_CONTROL):
+        mode = READ_ONLY  # Legacy files cannot implicitly opt in to a newly introduced mode.
+    from developer_control import normalize_toolchains
+    toolchains = normalize_toolchains(settings.get('developer_toolchains') if version >= 7 else None,
+                                     validate_paths=validate_paths and mode == 'developer_control')
     return {**workspace, 'root': root, 'tunnel': settings['tunnel'], 'reader': reader,
             'recent': recent[:8], 'start_hidden': settings.get('start_hidden') is True,
             'auto_start': settings.get('auto_start', False),
             'auto_connect': settings.get('auto_connect', False),
             'icon_style': normalize_icon_style(settings.get('icon_style', 'classic')),
+            'access_mode': mode,
+            'developer_toolchains': toolchains,
             'power': normalize_power(migrate_power_v4_to_v5(settings.get('power', {})) if version == 4
-                                     else settings.get('power') if version == 5 else None),
-            'settings_version': 5 if version in (1, 2, 3, 4, 5) else 0}
+                                     else settings.get('power') if version in (5, 6, 7) else None),
+            'settings_version': SETTINGS_VERSION if version else 0}
 
 
 def migrate_power_v4_to_v5(power: dict | None) -> dict:
@@ -92,7 +103,7 @@ def load_settings(path: Path = CONFIG_FILE) -> dict:
     if not isinstance(saved, dict):
         raise ValueError('設定檔格式錯誤。')
     settings = normalize_connection(saved)
-    if saved.get('settings_version') in (1, 2, 3, 4):
+    if saved.get('settings_version') in (1, 2, 3, 4, 5, 6):
         save_settings(settings, path, expected_revision=revision)
     return settings
 
@@ -104,8 +115,10 @@ def _write_settings(safe: dict, path: Path, previous: dict | None) -> None:
     if previous is not None:
         backup = path.with_name(path.name + '.' + uuid.uuid4().hex + '.bak')
         # 備份只保留一般設定欄位，排除任何意外混入的金鑰。
-        allowed = {'root', 'roots', 'default_root', 'tunnel', 'recent', 'start_hidden', 'reader', 'settings_version', 'auto_start', 'auto_connect', 'power', 'icon_style'}
+        allowed = {'root', 'roots', 'default_root', 'tunnel', 'recent', 'start_hidden', 'reader', 'settings_version', 'auto_start', 'auto_connect', 'power', 'icon_style', 'access_mode', 'developer_toolchains'}
         clean = {key: value for key, value in previous.items() if key in allowed}
+        if 'access_mode' in clean:
+            clean['access_mode'] = clean['access_mode'] if clean['access_mode'] in MODES else READ_ONLY
         if 'roots' in clean:
             clean['roots'] = [{key: value for key, value in item.items()
                                if key in {'id', 'name', 'path', 'excluded_names'}} for item in clean['roots']]
@@ -146,7 +159,7 @@ def read_settings_data(path: Path) -> tuple[dict, str]:
     except (ValueError, UnicodeError):
         raise SettingsError('SETTINGS_CORRUPT', '設定損毀，原件已保留；請由已知的一般設定備份修復。') from None
     version = value.get('settings_version', 0)
-    if type(version) is not int or version not in (0, 1, 2, 3, 4, 5):
+    if type(version) is not int or version not in SUPPORTED_SETTINGS_VERSIONS:
         raise SettingsError('SETTINGS_VERSION', '未知設定版本，請使用相容版本；禁止自動覆寫。')
     return value, hashlib.sha256(data).hexdigest()
 
@@ -175,7 +188,7 @@ def load_for_edit(path: Path = CONFIG_FILE) -> EditableSettings:
     return EditableSettings(settings, state, errors, revision)
 
 
-def save_settings(settings: dict, path: Path = CONFIG_FILE, *, expected_revision: str | None = None) -> None:
+def save_settings(settings: dict, path: Path = CONFIG_FILE, *, expected_revision: str | None = None) -> str:
     """驗證新範圍，結構驗證舊件；以鎖檔及版本核對避免覆蓋另一個更新。"""
     safe = normalize_connection(settings)
     if len(json.dumps(safe, ensure_ascii=False, indent=2).encode('utf-8')) > MAX_SETTINGS_BYTES:
@@ -197,6 +210,9 @@ def save_settings(settings: dict, path: Path = CONFIG_FILE, *, expected_revision
             elif expected_revision not in (None, ''):
                 raise SettingsError('SETTINGS_CONFLICT', '原設定已變更，請重新載入。')
             _write_settings(safe, path, previous)
+            # Return the actual on-disk revision, including existing newline bytes.
+            # GUI must not reconstruct a different digest from a JSON dictionary.
+            return read_settings_data(path)[1]
         finally:
             os.close(descriptor)
             lock_path.unlink(missing_ok=True)
@@ -204,7 +220,7 @@ def save_settings(settings: dict, path: Path = CONFIG_FILE, *, expected_revision
 
 def require_migration(settings: dict) -> None:
     """未明確選定分享範圍的歷史設定不得啟動。"""
-    if settings.get('settings_version') not in (1, 2, 3, 4, 5):
+    if settings.get('settings_version') not in (1, 2, 3, 4, 5, 6, 7):
         raise ValueError('尚未完成共用設定遷移。請開啟連線設定介面，選定分享資料夾及通道後按儲存設定並確認。')
 
 
@@ -238,6 +254,10 @@ def build_commands(settings: dict, profile_dir: Path = CONFIG_DIR / 'profiles', 
     mcp_command = ' '.join('"' + str(item).replace('\\', '/') + '"'
                            for item in (python, server))
     mcp_command += ' --root "' + settings['root'].replace('\\', '/') + '"'
+    mcp_command += ' --access-mode ' + settings['access_mode']
+    if settings['access_mode'] == 'developer_control':
+        for directory in settings['developer_toolchains']:
+            mcp_command += ' --developer-toolchain "' + directory.replace('\\', '/') + '"'
     mcp_command += ' --workspace-settings ' + encode_workspace(settings)
     mcp_command += ' --reader-settings ' + encode_reader_settings(settings.get('reader'))
     if power_channel:

@@ -1,0 +1,1781 @@
+{
+  "list_directory": {
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "directory": {
+          "default": ".",
+          "maxLength": 4096,
+          "minLength": 1,
+          "title": "Directory",
+          "type": "string"
+        },
+        "limit": {
+          "default": 200,
+          "maximum": 500,
+          "minimum": 1,
+          "title": "Limit",
+          "type": "integer"
+        },
+        "cursor": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cursor"
+        },
+        "root_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Root Id"
+        }
+      },
+      "title": "list_directoryArguments",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  "list_files": {
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "directory": {
+          "default": ".",
+          "maxLength": 4096,
+          "minLength": 1,
+          "title": "Directory",
+          "type": "string"
+        },
+        "limit": {
+          "default": 200,
+          "maximum": 500,
+          "minimum": 1,
+          "title": "Limit",
+          "type": "integer"
+        },
+        "cursor": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cursor"
+        },
+        "root_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Root Id"
+        }
+      },
+      "title": "list_filesArguments",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  "read_file": {
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "title": "Path",
+          "type": "string"
+        },
+        "start_line": {
+          "default": 1,
+          "minimum": 1,
+          "title": "Start Line",
+          "type": "integer"
+        },
+        "line_count": {
+          "default": 200,
+          "maximum": 400,
+          "minimum": 1,
+          "title": "Line Count",
+          "type": "integer"
+        },
+        "root_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Root Id"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "title": "read_fileArguments",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  "search_text": {
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "query": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Query",
+          "type": "string"
+        },
+        "directory": {
+          "default": ".",
+          "maxLength": 4096,
+          "minLength": 1,
+          "title": "Directory",
+          "type": "string"
+        },
+        "limit": {
+          "default": 50,
+          "maximum": 100,
+          "minimum": 1,
+          "title": "Limit",
+          "type": "integer"
+        },
+        "context_lines": {
+          "default": 0,
+          "maximum": 3,
+          "minimum": 0,
+          "title": "Context Lines",
+          "type": "integer"
+        },
+        "root_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Root Id"
+        }
+      },
+      "required": [
+        "query"
+      ],
+      "title": "search_textArguments",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  "workspace_info": {
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {},
+      "title": "workspace_infoArguments",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  "list_projects": {
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "root_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Root Id"
+        }
+      },
+      "title": "list_projectsArguments",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  "project_context": {
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "directory": {
+          "default": ".",
+          "maxLength": 4096,
+          "minLength": 1,
+          "title": "Directory",
+          "type": "string"
+        },
+        "root_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Root Id"
+        }
+      },
+      "title": "project_contextArguments",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  "read_files": {
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "files": {
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "maxItems": 32,
+          "minItems": 1,
+          "title": "Files",
+          "type": "array"
+        },
+        "root_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Root Id"
+        }
+      },
+      "required": [
+        "files"
+      ],
+      "title": "read_filesArguments",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  "search_texts": {
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "queries": {
+          "items": {
+            "maxLength": 200,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 10,
+          "minItems": 1,
+          "title": "Queries",
+          "type": "array"
+        },
+        "directory": {
+          "default": ".",
+          "maxLength": 4096,
+          "minLength": 1,
+          "title": "Directory",
+          "type": "string"
+        },
+        "limit_per_query": {
+          "default": 20,
+          "maximum": 100,
+          "minimum": 1,
+          "title": "Limit Per Query",
+          "type": "integer"
+        },
+        "context_lines": {
+          "default": 0,
+          "maximum": 3,
+          "minimum": 0,
+          "title": "Context Lines",
+          "type": "integer"
+        },
+        "root_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Root Id"
+        }
+      },
+      "required": [
+        "queries"
+      ],
+      "title": "search_textsArguments",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  "read_file_ranges": {
+    "inputSchema": {
+      "$defs": {
+        "ReadRange": {
+          "additionalProperties": false,
+          "properties": {
+            "start_line": {
+              "minimum": 1,
+              "title": "Start Line",
+              "type": "integer"
+            },
+            "line_count": {
+              "maximum": 400,
+              "minimum": 1,
+              "title": "Line Count",
+              "type": "integer"
+            }
+          },
+          "required": [
+            "start_line",
+            "line_count"
+          ],
+          "title": "ReadRange",
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "title": "Path",
+          "type": "string"
+        },
+        "ranges": {
+          "items": {
+            "$ref": "#/$defs/ReadRange"
+          },
+          "maxItems": 16,
+          "minItems": 1,
+          "title": "Ranges",
+          "type": "array"
+        },
+        "root_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Root Id"
+        }
+      },
+      "required": [
+        "path",
+        "ranges"
+      ],
+      "title": "read_file_rangesArguments",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  "find_files": {
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "queries": {
+          "items": {
+            "maxLength": 200,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 10,
+          "minItems": 1,
+          "title": "Queries",
+          "type": "array"
+        },
+        "directory": {
+          "default": ".",
+          "maxLength": 4096,
+          "minLength": 1,
+          "title": "Directory",
+          "type": "string"
+        },
+        "limit_per_query": {
+          "default": 20,
+          "maximum": 50,
+          "minimum": 1,
+          "title": "Limit Per Query",
+          "type": "integer"
+        },
+        "root_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Root Id"
+        }
+      },
+      "required": [
+        "queries"
+      ],
+      "title": "find_filesArguments",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  "hash_files": {
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "paths": {
+          "items": {
+            "maxLength": 4096,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 32,
+          "minItems": 1,
+          "title": "Paths",
+          "type": "array"
+        },
+        "root_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Root Id"
+        }
+      },
+      "required": [
+        "paths"
+      ],
+      "title": "hash_filesArguments",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  "compare_paths": {
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "left": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "title": "Left",
+          "type": "string"
+        },
+        "right": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "title": "Right",
+          "type": "string"
+        },
+        "root_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Root Id"
+        },
+        "right_root_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Right Root Id"
+        }
+      },
+      "required": [
+        "left",
+        "right"
+      ],
+      "title": "compare_pathsArguments",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  "project_status": {
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "directory": {
+          "default": ".",
+          "maxLength": 4096,
+          "minLength": 1,
+          "title": "Directory",
+          "type": "string"
+        },
+        "baseline_id": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{32}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Baseline Id"
+        },
+        "force_hash": {
+          "default": false,
+          "title": "Force Hash",
+          "type": "boolean"
+        },
+        "root_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Root Id"
+        }
+      },
+      "title": "project_statusArguments",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  "server_diagnostics": {
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {},
+      "title": "server_diagnosticsArguments",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  "read_image": {
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "title": "Path",
+          "type": "string"
+        },
+        "root_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Root Id"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "title": "read_imageArguments",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  "file_info": {
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "title": "Path",
+          "type": "string"
+        },
+        "root_id": {
+          "anyOf": [
+            {
+              "maxLength": 32,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Root Id"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "title": "file_infoArguments",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  "read_document": {
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "title": "Path",
+          "type": "string"
+        },
+        "start": {
+          "default": 0,
+          "maximum": 100000,
+          "minimum": 0,
+          "title": "Start",
+          "type": "integer"
+        },
+        "limit": {
+          "default": 50,
+          "maximum": 100,
+          "minimum": 1,
+          "title": "Limit",
+          "type": "integer"
+        },
+        "root_id": {
+          "anyOf": [
+            {
+              "maxLength": 32,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Root Id"
+        },
+        "format_hint": {
+          "anyOf": [
+            {
+              "enum": [
+                "JSON",
+                "JSONL",
+                "CSV",
+                "TSV",
+                "XML",
+                "YAML",
+                "TOML",
+                "INI",
+                "EML",
+                "MBOX",
+                "SRT",
+                "VTT"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Format Hint"
+        },
+        "table": {
+          "anyOf": [
+            {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Table"
+        },
+        "expected_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Expected Sha256"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "title": "read_documentArguments",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  "inspect_media": {
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "title": "Path",
+          "type": "string"
+        },
+        "root_id": {
+          "anyOf": [
+            {
+              "maxLength": 32,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Root Id"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "title": "inspect_mediaArguments",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  "inspect_archive": {
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "title": "Path",
+          "type": "string"
+        },
+        "start": {
+          "default": 0,
+          "maximum": 100000,
+          "minimum": 0,
+          "title": "Start",
+          "type": "integer"
+        },
+        "limit": {
+          "default": 50,
+          "maximum": 100,
+          "minimum": 1,
+          "title": "Limit",
+          "type": "integer"
+        },
+        "root_id": {
+          "anyOf": [
+            {
+              "maxLength": 32,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Root Id"
+        },
+        "member_path": {
+          "anyOf": [
+            {
+              "maxLength": 1024,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Member Path"
+        },
+        "offset": {
+          "default": 0,
+          "maximum": 8388608,
+          "minimum": 0,
+          "title": "Offset",
+          "type": "integer"
+        },
+        "length": {
+          "default": 4096,
+          "maximum": 16384,
+          "minimum": 1,
+          "title": "Length",
+          "type": "integer"
+        },
+        "expected_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Expected Sha256"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "title": "inspect_archiveArguments",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  "read_binary": {
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "title": "Path",
+          "type": "string"
+        },
+        "offset": {
+          "default": 0,
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "title": "Offset",
+          "type": "integer"
+        },
+        "length": {
+          "default": 4096,
+          "maximum": 16384,
+          "minimum": 1,
+          "title": "Length",
+          "type": "integer"
+        },
+        "root_id": {
+          "anyOf": [
+            {
+              "maxLength": 32,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Root Id"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "title": "read_binaryArguments",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  "query_files": {
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "directory": {
+          "default": ".",
+          "maxLength": 4096,
+          "minLength": 1,
+          "title": "Directory",
+          "type": "string"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Name"
+        },
+        "extensions": {
+          "anyOf": [
+            {
+              "items": {
+                "maxLength": 80,
+                "type": "string"
+              },
+              "maxItems": 32,
+              "minItems": 1,
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Extensions"
+        },
+        "min_size": {
+          "anyOf": [
+            {
+              "maximum": 9007199254740991,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Min Size"
+        },
+        "max_size": {
+          "anyOf": [
+            {
+              "maximum": 9007199254740991,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Max Size"
+        },
+        "created_after": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Created After"
+        },
+        "created_before": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Created Before"
+        },
+        "modified_after": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Modified After"
+        },
+        "modified_before": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Modified Before"
+        },
+        "accessed_after": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Accessed After"
+        },
+        "accessed_before": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Accessed Before"
+        },
+        "sort_by": {
+          "default": "path",
+          "enum": [
+            "name",
+            "path",
+            "size",
+            "created_time",
+            "modified_time",
+            "accessed_time"
+          ],
+          "title": "Sort By",
+          "type": "string"
+        },
+        "order": {
+          "default": "asc",
+          "enum": [
+            "asc",
+            "desc"
+          ],
+          "title": "Order",
+          "type": "string"
+        },
+        "limit": {
+          "default": 200,
+          "maximum": 500,
+          "minimum": 1,
+          "title": "Limit",
+          "type": "integer"
+        },
+        "cursor": {
+          "anyOf": [
+            {
+              "maxLength": 16000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cursor"
+        },
+        "include_format": {
+          "default": false,
+          "title": "Include Format",
+          "type": "boolean"
+        },
+        "include_capabilities": {
+          "default": false,
+          "title": "Include Capabilities",
+          "type": "boolean"
+        },
+        "include_sha256": {
+          "default": false,
+          "title": "Include Sha256",
+          "type": "boolean"
+        },
+        "root_id": {
+          "anyOf": [
+            {
+              "maxLength": 32,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Root Id"
+        }
+      },
+      "title": "query_filesArguments",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  "write_file": {
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "title": "Path",
+          "type": "string"
+        },
+        "content": {
+          "maxLength": 2097152,
+          "title": "Content",
+          "type": "string"
+        },
+        "mode": {
+          "default": "create",
+          "enum": [
+            "create",
+            "rewrite",
+            "append"
+          ],
+          "title": "Mode",
+          "type": "string"
+        },
+        "expected_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Expected Sha256"
+        },
+        "root_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Root Id"
+        }
+      },
+      "required": [
+        "path",
+        "content"
+      ],
+      "title": "write_fileArguments",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  "edit_block": {
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "title": "Path",
+          "type": "string"
+        },
+        "old_string": {
+          "maxLength": 2097152,
+          "title": "Old String",
+          "type": "string"
+        },
+        "new_string": {
+          "maxLength": 2097152,
+          "title": "New String",
+          "type": "string"
+        },
+        "expected_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Expected Sha256",
+          "type": "string"
+        },
+        "expected_replacements": {
+          "default": 1,
+          "maximum": 1000,
+          "minimum": 1,
+          "title": "Expected Replacements",
+          "type": "integer"
+        },
+        "root_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Root Id"
+        }
+      },
+      "required": [
+        "path",
+        "old_string",
+        "new_string",
+        "expected_sha256"
+      ],
+      "title": "edit_blockArguments",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  "create_directory": {
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "title": "Path",
+          "type": "string"
+        },
+        "root_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Root Id"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "title": "create_directoryArguments",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  "move_file": {
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "title": "Source",
+          "type": "string"
+        },
+        "destination": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "title": "Destination",
+          "type": "string"
+        },
+        "expected_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Expected Sha256",
+          "type": "string"
+        },
+        "root_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Root Id"
+        }
+      },
+      "required": [
+        "source",
+        "destination",
+        "expected_sha256"
+      ],
+      "title": "move_fileArguments",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  "delete_file": {
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "title": "Path",
+          "type": "string"
+        },
+        "expected_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Expected Sha256",
+          "type": "string"
+        },
+        "root_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Root Id"
+        }
+      },
+      "required": [
+        "path",
+        "expected_sha256"
+      ],
+      "title": "delete_fileArguments",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  "start_process": {
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "maxLength": 8192,
+          "minLength": 1,
+          "title": "Command",
+          "type": "string"
+        },
+        "working_directory": {
+          "anyOf": [
+            {
+              "maxLength": 4096,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Working Directory"
+        },
+        "root_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Root Id"
+        },
+        "timeout_ms": {
+          "default": 1000,
+          "maximum": 3000,
+          "minimum": 0,
+          "title": "Timeout Ms",
+          "type": "integer"
+        },
+        "lifetime_seconds": {
+          "default": 900,
+          "maximum": 3600,
+          "minimum": 1,
+          "title": "Lifetime Seconds",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "command"
+      ],
+      "title": "start_processArguments",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": true
+    }
+  },
+  "read_process_output": {
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "session_id": {
+          "pattern": "^[0-9a-f]{32}$",
+          "title": "Session Id",
+          "type": "string"
+        },
+        "offset": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Offset",
+          "type": "integer"
+        },
+        "length": {
+          "default": 24000,
+          "maximum": 32000,
+          "minimum": 1,
+          "title": "Length",
+          "type": "integer"
+        },
+        "wait_ms": {
+          "default": 0,
+          "maximum": 3000,
+          "minimum": 0,
+          "title": "Wait Ms",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "session_id"
+      ],
+      "title": "read_process_outputArguments",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  "interact_with_process": {
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "session_id": {
+          "pattern": "^[0-9a-f]{32}$",
+          "title": "Session Id",
+          "type": "string"
+        },
+        "input": {
+          "default": "",
+          "maxLength": 4096,
+          "title": "Input",
+          "type": "string"
+        },
+        "close_stdin": {
+          "default": false,
+          "title": "Close Stdin",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "session_id"
+      ],
+      "title": "interact_with_processArguments",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": true
+    }
+  },
+  "list_sessions": {
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {},
+      "title": "list_sessionsArguments",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  "force_terminate": {
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "session_id": {
+          "pattern": "^[0-9a-f]{32}$",
+          "title": "Session Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "session_id"
+      ],
+      "title": "force_terminateArguments",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  "close_session": {
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "session_id": {
+          "pattern": "^[0-9a-f]{32}$",
+          "title": "Session Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "session_id"
+      ],
+      "title": "close_sessionArguments",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  "export_session_file": {
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "session_id": {
+          "pattern": "^[0-9a-f]{32}$",
+          "title": "Session Id",
+          "type": "string"
+        },
+        "path": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "title": "Path",
+          "type": "string"
+        },
+        "destination": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "title": "Destination",
+          "type": "string"
+        },
+        "expected_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Expected Sha256"
+        },
+        "root_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Root Id"
+        }
+      },
+      "required": [
+        "session_id",
+        "path",
+        "destination"
+      ],
+      "title": "export_session_fileArguments",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  }
+}

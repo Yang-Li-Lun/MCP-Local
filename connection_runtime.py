@@ -39,6 +39,7 @@ class ConnectionErrorKind(str, Enum):
     CANCELLED = 'CANCELLED'
     INTERNAL_ERROR = 'INTERNAL_ERROR'
     ALREADY_RUNNING = 'ALREADY_RUNNING'
+    RESOURCE_CLEANUP_FAILED = 'RESOURCE_CLEANUP_FAILED'
 
 class RetryPolicy:
     delays = (5, 15, 30, 60, 300)
@@ -80,8 +81,11 @@ class Connection:
         self.stage_timeout = stage_timeout
         self.error_kind = None
         self.running_since = None
+        self.cleanup_failed = False
 
     def start(self, settings: dict, key: str) -> None:
+        if self.cleanup_failed:
+            raise ValueError('RESOURCE_CLEANUP_FAILED：舊連線停止未確認，不能重新啟動。')
         if self.thread and self.thread.is_alive():
             raise ValueError('連線流程已執行中。')
         self.cancel.clear()
@@ -102,6 +106,7 @@ class Connection:
         mutex = None
         process = None
         power_started = False
+        vm_guard = None
         try:
             self.error_kind = ConnectionErrorKind.MIGRATION_REQUIRED
             require_migration(settings)
@@ -124,6 +129,12 @@ class Connection:
             self.error_kind = ConnectionErrorKind.START_FAILED
             environment = os.environ.copy()
             environment['CONTROL_PLANE_API_KEY'] = key
+            if settings.get('access_mode') == 'developer_control' and settings.get('developer_toolchains'):
+                from developer_vm_client import GuardOwner, GUARD_ENV
+                # The guard is outside the Connection Job: EOF/Job kill must
+                # leave it alive long enough to stop its VM and prove absence.
+                vm_guard = GuardOwner()
+                environment[GUARD_ENV] = vm_guard.encode()
             # 先啟動等待訊號的 Python 包裝器，納入 Job 後才允許啟動通道。
             # 避免通道在被納管前就建立子程序。
             wrapper = START_WRAPPER
@@ -200,6 +211,7 @@ class Connection:
             key = ''
             if 'environment' in locals():
                 environment.pop('CONTROL_PLANE_API_KEY', None)
+                environment.pop('MCP_LOCAL_VM_GUARD', None)
             cleanup_failed = False
             def cleanup(action):
                 nonlocal cleanup_failed
@@ -223,6 +235,8 @@ class Connection:
                 cleanup(lambda: drainer.join(timeout=2))
             if process is not None and process.stdout:
                 cleanup(process.stdout.close)
+            if vm_guard is not None:
+                cleanup(vm_guard.close)
             if mutex:
                 cleanup(lambda: kernel.CloseHandle(mutex))
             if power_started:
@@ -231,5 +245,7 @@ class Connection:
             if self.cancel.is_set():
                 self.error_kind = ConnectionErrorKind.CANCELLED
             if cleanup_failed:
+                self.cleanup_failed = True
+                self.error_kind = ConnectionErrorKind.RESOURCE_CLEANUP_FAILED
                 self.events.put(('error', 'RESOURCE_CLEANUP_FAILED：部分資源清理失敗。'))
             self.events.put(('done', '清理失敗，請檢查本次程序' if cleanup_failed else '已停止'))

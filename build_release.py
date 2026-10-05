@@ -9,7 +9,11 @@ import zipfile
 
 
 ROOT = Path(__file__).resolve().parent
-PAYLOAD = '''autostart.py autostart_windows.py backup_rotation.py
+PAYLOAD = '''access_mode.py control_edit.py control_files.py control_sessions.py
+full_control.py sandbox_windows.py verify_full_control_stdio.py
+host_windows.py host_files.py host_control.py developer_control.py verify_access_modes_stdio.py
+developer_vm.py developer_vm_client.py developer_vm_guard.py developer_guest.ps1 verify_developer_control_stdio.py
+autostart.py autostart_windows.py backup_rotation.py
 capability_diagnostics.py connection_cli.py connection_runtime.py connection_settings.py
 document_extras.py file_query.py format_parsers.py format_reader.py format_worker.py gui_tasks.py
 icon_assets.py image_reader.py incremental_state.py integrity.py key_store.py
@@ -17,11 +21,13 @@ local_files_gui.py local_files_mcp.py media_parser.py operation_budget.py power_
 power_restore_guard.py power_windows.py reader_settings.py safe_logging.py security_policy.py
 snapshot_cache.py stream_read.py stream_search.py structured_parser.py tool_contract.py
 tray_windows.py workspace_reader.py workspace_settings.py verify_release_stdio.py
-requirements.txt requirements-lock.txt tool-contract.json vendor-integrity.json
+requirements.txt requirements-lock.txt tool-contract.json tool-contract-full-control.json
+tool-contract-developer-control.json tool-contract-host-control.json vendor-integrity.json
 LICENSE NOTICE mcp-local.ico start-local-files-tunnel.ps1 開啟連線設定.vbs
 README.md README_繁體中文.md RELEASE.md 介面使用說明.md 自啟動與優化說明.md
 低功耗模式工程設計.md 性能優化交付報告.md 體感效能優化交付報告.md
-格式讀取說明.md 圖片讀取說明.md 增量與診斷工具說明.md
+格式讀取說明.md 圖片讀取說明.md 增量與診斷工具說明.md 完整控制模式.md
+third_party/DesktopCommanderMCP/LICENSE third_party/DesktopCommanderMCP/NOTICE
 assets/icons/mcp-local-classic.png assets/icons/mcp-local-v2.png assets/icons/mcp-local-v2.ico
 shared/README.md shared/image-acceptance.png'''.split()
 MANIFEST = 'SHA256SUMS.json'
