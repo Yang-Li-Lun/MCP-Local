@@ -22,7 +22,7 @@ from tkinter import filedialog, messagebox, ttk
 from local_files_mcp import FileReader
 from reader_settings import MIB, NUMERIC_FIELDS, LIST_FIELDS, normalize_reader_settings, encode_reader_settings
 
-from connection_settings import (PROJECT, CONFIG_DIR, CONFIG_FILE, DEFAULT_TUNNEL,
+from connection_settings import (PROJECT, CONFIG_DIR, CONFIG_FILE, DEFAULT_TUNNEL, SETTINGS_VERSION,
                                  validate_settings, normalize_connection, load_settings, save_settings, build_commands,
                                  require_migration, backup_connection_profile)
 
@@ -72,7 +72,6 @@ class App:
         window.title('MCP-Local｜連線與快捷設定')
         self.icon_style = tk.StringVar(value=settings.get('icon_style', 'classic'))
         self.access_mode = tk.StringVar(value=settings.get('access_mode', 'read_only'))
-        self.developer_toolchains = list(settings.get('developer_toolchains', []))
         self.active_access_mode = None
         window.iconbitmap(str(icon_path(self.icon_style.get())))
         window.geometry('800x820')
@@ -458,13 +457,6 @@ class App:
             state = 'normal' if enabled else 'disabled'
             if str(button.cget('state')) != state:
                 button.configure(state=state)
-        toolchain_enabled = enabled and self.access_mode.get() == 'developer_control'
-        toolchain_state = 'normal' if toolchain_enabled else 'disabled'
-        if str(self.toolchain_list.cget('state')) != toolchain_state:
-            self.toolchain_list.configure(state=toolchain_state)
-        for button in self.toolchain_buttons:
-            if str(button.cget('state')) != toolchain_state:
-                button.configure(state=toolchain_state)
         bg = self.background_status
         if self.dirty or self.key_dirty:
             auto = '有未儲存變更；請先儲存'
@@ -508,52 +500,13 @@ class App:
         for value, label in MODE_LABELS.items():
             ttk.Radiobutton(frame, text=label, variable=self.access_mode, value=value).pack(anchor='w', pady=6)
         ttk.Label(frame, text='唯讀：22 工具，只允許讀取。\n'
-                  '完整控制：34 工具，可修改授權 root；命令在無網路 AppContainer 副本工作區執行。\n'
-                  '開發控制：34 工具，Windows Sandbox VM 直接修改授權 root；工具鏈唯讀。\n'
+                  '開發控制：34 工具，Windows Sandbox VM 直接修改授權 root；自動偵測的工具鏈唯讀。\n'
+                  '不需手動設定工具鏈；未偵測到額外工具時，仍可使用 VM 內建 PowerShell。\n'
                   '主機控制：36 工具，直接以目前 Windows 使用者執行受信任命令；非沙箱。\n\n'
                   '切換模式需儲存並重連；遠端無法切換權限模式。啟用控制模式時會再次確認風險。',
                   wraplength=670).pack(anchor='w', pady=12)
-        tools = ttk.LabelFrame(frame, text='開發 VM 工具鏈（本機授權、唯讀）', padding=6)
-        tools.pack(fill='x')
-        self.toolchain_list = tk.Listbox(tools, height=2, exportselection=False)
-        self.toolchain_list.pack(side='left', fill='x', expand=True)
-        buttons = ttk.Frame(tools)
-        buttons.pack(side='right', padx=(6, 0))
-        self.toolchain_buttons = []
-        for label, callback in [('新增目錄', self.add_toolchain), ('移除選取', self.remove_toolchain)]:
-            button = ttk.Button(buttons, text=label, command=callback)
-            button.pack()
-            self.toolchain_buttons.append(button)
-        self.refresh_toolchains()
         self.access_mode_status = tk.StringVar(value='目前尚未連線')
         ttk.Label(frame, textvariable=self.access_mode_status, wraplength=670).pack(anchor='w', pady=12)
-
-    def refresh_toolchains(self) -> None:
-        self.toolchain_list.delete(0, 'end')
-        for directory in self.developer_toolchains:
-            self.toolchain_list.insert('end', directory)
-
-    def add_toolchain(self) -> None:
-        if self.access_mode.get() != 'developer_control':
-            return
-        directory = filedialog.askdirectory(title='選擇僅含工具鏈的目錄，例如 Python、Git 或 Node 安裝目錄', parent=self.window)
-        if not directory:
-            return
-        try:
-            from developer_control import normalize_toolchains
-            self.developer_toolchains = normalize_toolchains([*self.developer_toolchains, directory])
-            self.refresh_toolchains()
-            self.mark_dirty()
-        except ValueError as exc:
-            messagebox.showerror('工具鏈目錄無效', str(exc), parent=self.window)
-
-    def remove_toolchain(self) -> None:
-        if self.access_mode.get() != 'developer_control':
-            return
-        for index in reversed(self.toolchain_list.curselection()):
-            del self.developer_toolchains[index]
-        self.refresh_toolchains()
-        self.mark_dirty()
 
     def reload_settings(self) -> None:
         editable = load_for_edit()
@@ -568,8 +521,6 @@ class App:
             self.auto_start.set(value.get('auto_start', False))
             self.icon_style.set(value.get('icon_style', 'classic'))
             self.access_mode.set(value.get('access_mode', 'read_only'))
-            self.developer_toolchains = list(value.get('developer_toolchains', []))
-            self.refresh_toolchains()
             self.apply_icon(self.icon_style.get())
             self.workspace_rows = [dict(row) for row in value['roots']]
             self.invalid_root_ids = {row['root_id'] for row in editable.errors}
@@ -597,18 +548,9 @@ class App:
             settings['auto_start'] = self.auto_start.get()
             settings['auto_connect'] = self.auto_start.get()
             settings['icon_style'] = self.icon_style.get()
-            settings['access_mode'] = self.access_mode.get()
-            settings['developer_toolchains'] = list(self.developer_toolchains)
+            from access_mode import normalize_access_mode
+            settings['access_mode'] = normalize_access_mode(self.access_mode.get())
             mode_changed = settings['access_mode'] != self.settings.get('access_mode', 'read_only')
-            toolchains_changed = settings['developer_toolchains'] != self.settings.get('developer_toolchains', [])
-            mode_changed |= toolchains_changed and 'developer_control' in (settings['access_mode'], self.settings.get('access_mode'))
-            if mode_changed and settings['access_mode'] == 'full_control':
-                if not messagebox.askyesno('啟用完整控制模式',
-                        '允許此連線修改以下共享資料夾內的檔案，並執行沙箱 PowerShell：\n'
-                        + '\n'.join(row['path'] for row in self.workspace_rows)
-                        + '\n\n修改來源檔案無法自動復原。命令仍受 Windows AppContainer 隔離。\n'
-                        '模式會保存；連線中切換將停止所有舊 sessions 並重新連線。', parent=self.window):
-                    return False
             if mode_changed and settings['access_mode'] in ('developer_control', 'host_control'):
                 from access_mode import MODE_LABELS
                 description = ('允許以目前使用者權限讀寫主機檔案與執行受信任命令，可跨原共享 root。\n'
@@ -617,8 +559,8 @@ class App:
                                if settings['access_mode'] == 'host_control' else
                                '允許 VM 直接修改下列授權 root：\n'
                                + '\n'.join(row['path'] for row in self.workspace_rows)
-                               + '\n\n並唯讀使用下列主機工具鏈：\n'
-                               + ('\n'.join(settings['developer_toolchains']) or '（未設定；命令會被拒絕）')
+                               + '\n\n自動偵測安全安裝目錄中的開發工具鏈，僅唯讀映射；不需手動設定。'
+                               + '\n沒有額外工具鏈仍可使用 VM 內建 PowerShell；VM 不可用時拒絕命令。'
                                + '\nroot 為完整映射，包含其中的 .git、隱藏及檔案 API 排除項目。'
                                + '\nVM 不繼承主機憑證，網路及剪貼簿關閉；禁止映射向外硬連結與重新解析點。')
                 if not messagebox.askyesno('啟用' + MODE_LABELS[settings['access_mode']],
@@ -629,13 +571,13 @@ class App:
             settings['reader'] = self.collect_advanced()
             settings['default_root'] = self.workspace_rows[0]['id']
             settings['roots'] = [dict(row) for row in self.workspace_rows]
-            if self.settings.get('settings_version') not in (1, 2, 3, 4, 5, 6, 7):
+            if self.settings.get('settings_version') not in range(1, SETTINGS_VERSION + 1):
                 if not messagebox.askyesno('首次共用設定遷移',
                         '舊 PowerShell 分享範圍為 D:\\codee；GUI 使用獨立設定。\n'
                         f'確認兩個入口今後都使用：\n{settings["root"]}\n{settings["tunnel"]}\n'
                         '確認後會備份並保存一般設定；加密金鑰保留。', parent=self.window):
                     return False
-            settings['settings_version'] = 7
+            settings['settings_version'] = SETTINGS_VERSION
             previous = self.settings.copy()
             key = self.key.get().strip()
             saved_key = self.saved_key

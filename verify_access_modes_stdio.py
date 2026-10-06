@@ -1,4 +1,4 @@
-"""四種模式 discovery 與受信任主機能力驗收；VM 執行明確記錄未就緒。"""
+"""三種公開模式 discovery 與受信任主機能力驗收；VM 執行明確記錄未就緒。"""
 import argparse
 import asyncio
 import ctypes as c
@@ -18,6 +18,10 @@ from pathlib import Path
 sys.path.insert(0, sys.argv[1])
 import security_policy
 security_policy.STATE_DIR = Path(sys.argv[2])
+import developer_control
+developer_control.backend_status = lambda toolchains=None: {'ready': False, 'reason': 'FIXTURE_BACKEND_DISABLED', 'host_fallback': False}
+import developer_toolchains
+developer_toolchains.discover_toolchains = lambda roots=None: []
 from local_files_mcp import main
 sys.argv = ['local_files_mcp.py', '--root', sys.argv[3], '--access-mode', sys.argv[4]]
 main()
@@ -30,7 +34,7 @@ async def verify() -> dict:
     kernel.OpenProcess.argtypes, kernel.OpenProcess.restype = [w.DWORD, w.BOOL, w.DWORD], w.HANDLE
     kernel.WaitForSingleObject.argtypes, kernel.WaitForSingleObject.restype = [w.HANDLE, w.DWORD], w.DWORD
     kernel.CloseHandle.argtypes = [w.HANDLE]
-    with tempfile.TemporaryDirectory(prefix='mcp-four-mode-stdio-') as temporary:
+    with tempfile.TemporaryDirectory(prefix='mcp-three-mode-stdio-') as temporary:
         base = Path(temporary).resolve()
         root, outside, state = base / 'authorized', base / 'outside', base / 'synthetic-state'
         for folder in (root, outside, state):
@@ -38,7 +42,7 @@ async def verify() -> dict:
         (root / 'input.txt').write_text('fixture marker', encoding='utf-8')
         (state / 'credential.txt').write_text('SYNTHETIC_NOT_SECRET', encoding='utf-8')
         previous_session = '0' * 32
-        for mode in ('read_only', 'full_control', 'developer_control', 'host_control', 'read_only'):
+        for mode in ('read_only', 'developer_control', 'host_control', 'read_only'):
             owned_handles = []
             parameters = StdioServerParameters(command=sys.executable,
                 args=['-I', '-B', '-c', BOOTSTRAP, str(Path(__file__).resolve().parent), str(state), str(root), mode],
@@ -69,9 +73,6 @@ async def verify() -> dict:
                         if mode == 'read_only':
                             for name in HOST_TOOLS:
                                 await call(name, {'session_id': previous_session}, denied=True)
-                        elif mode == 'full_control':
-                            await call('write_file', {'path': str(outside / 'denied.txt'), 'content': 'denied'}, denied=True)
-                            await call('read_host_file', {'path': str(outside / 'denied.txt')}, denied=True)
                         elif mode == 'developer_control':
                             await call('write_file', {'path': 'developer.txt', 'content': 'guarded root write'})
                             await call('write_file', {'path': str(outside / 'denied.txt'), 'content': 'denied'}, denied=True)
@@ -126,7 +127,7 @@ async def verify() -> dict:
                                 owned_handles.append(handle)
                         results.append({'mode': mode, 'tools': len(tools), 'discovery': 'PASS',
                                         'mode_ready': diagnostics['mode_ready'],
-                                        'vm_execution': 'TOOLCHAINS_NOT_CONFIGURED' if mode == 'developer_control' else 'NOT_APPLICABLE'})
+                                        'vm_execution': 'FIXTURE_BACKEND_DISABLED' if mode == 'developer_control' else 'NOT_APPLICABLE'})
                 for handle in owned_handles:
                     assert kernel.WaitForSingleObject(handle, 5000) == 0, 'owned host descendant survived STDIO shutdown'
                 if owned_handles:

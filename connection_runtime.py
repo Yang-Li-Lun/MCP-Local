@@ -129,7 +129,7 @@ class Connection:
             self.error_kind = ConnectionErrorKind.START_FAILED
             environment = os.environ.copy()
             environment['CONTROL_PLANE_API_KEY'] = key
-            if settings.get('access_mode') == 'developer_control' and settings.get('developer_toolchains'):
+            if settings.get('access_mode') == 'developer_control':
                 from developer_vm_client import GuardOwner, GUARD_ENV
                 # The guard is outside the Connection Job: EOF/Job kill must
                 # leave it alive long enough to stop its VM and prove absence.

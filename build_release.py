@@ -10,9 +10,9 @@ import zipfile
 
 ROOT = Path(__file__).resolve().parent
 PAYLOAD = '''access_mode.py control_edit.py control_files.py control_sessions.py
-full_control.py sandbox_windows.py verify_full_control_stdio.py
+full_control.py sandbox_windows.py
 host_windows.py host_files.py host_control.py developer_control.py verify_access_modes_stdio.py
-developer_vm.py developer_vm_client.py developer_vm_guard.py developer_guest.ps1 verify_developer_control_stdio.py
+developer_vm.py developer_vm_client.py developer_vm_guard.py developer_guest.ps1 developer_toolchains.py verify_developer_control_stdio.py
 autostart.py autostart_windows.py backup_rotation.py
 capability_diagnostics.py connection_cli.py connection_runtime.py connection_settings.py
 document_extras.py file_query.py format_parsers.py format_reader.py format_worker.py gui_tasks.py

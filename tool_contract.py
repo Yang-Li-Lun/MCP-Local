@@ -4,8 +4,8 @@ import json
 from pathlib import Path
 from mcp.server.fastmcp.utilities.func_metadata import FuncMetadata
 
-SERVICE_VERSION = '2026.10.05.2'
-CONTRACT_VERSION = 12
+SERVICE_VERSION = '2026.10.06.1'
+CONTRACT_VERSION = 13
 
 
 class StrictArguments(FuncMetadata):
@@ -22,7 +22,7 @@ def contract(tools):
 
 def contract_filename(access_mode='read_only'):
     from access_mode import normalize_access_mode, READ_ONLY
-    mode = normalize_access_mode(access_mode)
+    mode = normalize_access_mode(access_mode, allow_legacy=True)  # Internal AppContainer regression only.
     return 'tool-contract.json' if mode == READ_ONLY else 'tool-contract-' + mode.replace('_', '-') + '.json'
 
 

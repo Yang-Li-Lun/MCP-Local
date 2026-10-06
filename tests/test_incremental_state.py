@@ -353,7 +353,7 @@ class IncrementalTests(unittest.TestCase):
             async with stdio_client(StdioServerParameters(command=sys.executable, args=args)) as (read, write):
                 async with ClientSession(read, write) as session:
                     initialized = await session.initialize()
-                    self.assertEqual(initialized.serverInfo.version, '2026.10.05.2')
+                    self.assertEqual(initialized.serverInfo.version, '2026.10.06.1')
                     verify_contract((await session.list_tools()).tools)
                     async def call(name, args):
                         response = await session.call_tool(name, args)

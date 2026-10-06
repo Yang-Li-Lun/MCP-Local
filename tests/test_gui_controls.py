@@ -62,42 +62,44 @@ class GuiControlTests(unittest.TestCase):
                     self.assertEqual(str(getattr(a, name + '_button')['state']), 'normal' if enabled else 'disabled')
         a.quitting = False
 
-    def test_developer_toolchain_controls_only_enabled_in_developer_mode(self):
+    def test_only_three_modes_and_no_manual_toolchain_controls(self):
+        from access_mode import MODE_LABELS
         a = self.app
-        for mode, expected in [
-                ('read_only', 'disabled'),
-                ('full_control', 'disabled'),
-                ('developer_control', 'normal'),
-                ('host_control', 'disabled')]:
-            with self.subTest(mode=mode):
-                a.access_mode.set(mode)
-                a.refresh_controls()
-                self.assertEqual(str(a.toolchain_list.cget('state')), expected)
-                for button in a.toolchain_buttons:
-                    self.assertEqual(str(button.cget('state')), expected)
+        permissions = a.tabs.nametowidget(a.tabs.tabs()[3])
+        options = [widget for widget in permissions.winfo_children() if widget.winfo_class() == 'TRadiobutton']
+        self.assertEqual([widget.cget('value') for widget in options], list(MODE_LABELS))
+        self.assertEqual([widget.cget('text') for widget in options], list(MODE_LABELS.values()))
+        for name in ('toolchain_list', 'toolchain_buttons', 'developer_toolchains', 'add_toolchain', 'remove_toolchain'):
+            self.assertFalse(hasattr(a, name))
+
+    def test_removed_mode_cannot_be_saved_from_gui(self):
+        self.app.access_mode.set('full_control')
+        with patch('local_files_gui.messagebox.showerror'), patch('local_files_gui.save_settings') as save:
+            self.assertFalse(self.app.save())
+        save.assert_not_called()
 
     def test_access_mode_opt_in_persists_and_reload_uses_saved_mode(self):
         a = self.app
-        a.access_mode.set('full_control')
+        a.access_mode.set('developer_control')
         with patch('local_files_gui.messagebox.askyesno', return_value=True), patch(
                 'local_files_gui.save_settings', side_effect=lambda value, **kw: save_settings(value, self.target, **kw)):
             self.assertTrue(a.save())
             self.poll()
-        self.assertEqual(load_for_edit(self.target).settings['access_mode'], 'full_control')
+        self.assertEqual(load_for_edit(self.target).settings['access_mode'], 'developer_control')
         a.access_mode.set('read_only')
         with patch('local_files_gui.load_for_edit', lambda: load_for_edit(self.target)):
             a.reload_settings()
-        self.assertEqual(a.access_mode.get(), 'full_control')
+        self.assertEqual(a.access_mode.get(), 'developer_control')
         self.assertFalse(a.dirty)
         a.finish()
         self.window = tk.Tk()
         self.window.withdraw()
         self.app = App(self.window, load_for_edit(self.target).settings, Mock(load=Mock(return_value='fake-key')))
-        self.assertEqual(self.app.access_mode.get(), 'full_control')
+        self.assertEqual(self.app.access_mode.get(), 'developer_control')
 
     def test_access_mode_opt_in_can_be_cancelled(self):
         a = self.app
-        a.access_mode.set('full_control')
+        a.access_mode.set('developer_control')
         with patch('local_files_gui.messagebox.askyesno', return_value=False), patch('local_files_gui.save_settings') as save:
             self.assertFalse(a.save())
         save.assert_not_called()
@@ -117,7 +119,7 @@ class GuiControlTests(unittest.TestCase):
                 if mode == 'host_control':
                     self.assertIn('命令不是沙箱', confirmation.call_args.args[1])
                 else:
-                    self.assertIn('命令會被拒絕', confirmation.call_args.args[1])
+                    self.assertIn('自動偵測', confirmation.call_args.args[1])
 
     def test_host_confirmation_cancellation_preserves_saved_mode(self):
         self.app.access_mode.set('host_control')
@@ -125,26 +127,6 @@ class GuiControlTests(unittest.TestCase):
             self.assertFalse(self.app.save())
         save.assert_not_called()
         self.assertEqual(load_for_edit(self.target).settings['access_mode'], 'read_only')
-
-    def test_developer_toolchain_change_requires_confirmation_and_reconnect(self):
-        with tempfile.TemporaryDirectory(prefix='mcp-toolchain-fixture-') as directory:
-            a = self.app
-            a.access_mode.set('developer_control')
-            a.settings['access_mode'] = 'developer_control'
-            a.running, a.state = True, 'RUNNING'
-            a.developer_toolchains = [directory]
-            a.refresh_toolchains()
-            a.mark_dirty()
-            with patch('local_files_gui.messagebox.askyesno', return_value=True) as confirmation, patch(
-                    'local_files_gui.save_settings', side_effect=lambda value, **kw: save_settings(value, self.target, **kw)):
-                self.assertTrue(a.save())
-                self.assertFalse(a.connection.cancel.is_set())
-                self.poll()
-            confirmation.assert_called_once()
-            self.assertIn(directory, confirmation.call_args.args[1])
-            self.assertEqual(load_for_edit(self.target).settings['developer_toolchains'], [directory])
-            self.assertTrue(a.connection.cancel.is_set())
-            self.assertTrue(a.restart_pending)
 
     def test_host_to_readonly_stops_before_relaunch(self):
         self.app.settings['access_mode'] = 'host_control'
@@ -161,7 +143,7 @@ class GuiControlTests(unittest.TestCase):
     def test_mode_save_stops_old_connection_only_after_poll_and_restarts(self):
         a = self.app
         a.running, a.state = True, 'RUNNING'
-        a.access_mode.set('full_control')
+        a.access_mode.set('developer_control')
         with patch('local_files_gui.messagebox.askyesno', return_value=True), patch(
                 'local_files_gui.save_settings', side_effect=lambda value, **kw: save_settings(value, self.target, **kw)):
             self.assertTrue(a.save())
@@ -178,7 +160,7 @@ class GuiControlTests(unittest.TestCase):
 
     def test_return_to_readonly_restarts_full_connection(self):
         a = self.app
-        a.settings['access_mode'] = 'full_control'
+        a.settings['access_mode'] = 'developer_control'
         a.running, a.state = True, 'RUNNING'
         a.access_mode.set('read_only')
         with patch('local_files_gui.messagebox.askyesno') as confirmation, patch(
@@ -217,7 +199,7 @@ class GuiControlTests(unittest.TestCase):
     def test_failed_mode_save_does_not_change_active_mode(self):
         a = self.app
         a.running, a.state = True, 'RUNNING'
-        a.access_mode.set('full_control')
+        a.access_mode.set('developer_control')
         with patch('local_files_gui.messagebox.askyesno', return_value=True), patch(
                 'local_files_gui.save_settings', side_effect=OSError('fixture')), patch('local_files_gui.messagebox.showerror'):
             self.assertTrue(a.save())
@@ -228,7 +210,7 @@ class GuiControlTests(unittest.TestCase):
 
     def test_unknown_background_mode_switch_refused_before_saving(self):
         a = self.app
-        a.access_mode.set('full_control')
+        a.access_mode.set('developer_control')
         with patch('local_files_gui.messagebox.askyesno', return_value=True), patch(
                 'local_files_gui.get_background_status', return_value=background.BackgroundStatus(False, False, False, 'UNKNOWN')), patch(
                 'local_files_gui.save_settings') as save, patch('local_files_gui.messagebox.showerror'):

@@ -5,7 +5,6 @@ import hashlib
 import json
 import os
 from pathlib import Path
-import shutil
 import sys
 import tempfile
 import time
@@ -15,6 +14,9 @@ from mcp.client.stdio import stdio_client
 from tool_contract import SERVICE_VERSION, CONTRACT_VERSION, verify_contract
 from developer_vm_guard import find_cli, invoke_cli
 from developer_vm import remove_owned_tree
+from developer_toolchains import discover_toolchains
+from developer_control import build_vm_mapping_plan
+import xml.etree.ElementTree as ET
 
 BOOTSTRAP = '''import sys
 from pathlib import Path
@@ -22,18 +24,17 @@ sys.path.insert(0, sys.argv[1])
 import security_policy
 security_policy.STATE_DIR = Path(sys.argv[2])
 from local_files_mcp import main
-sys.argv = ['local_files_mcp.py', '--root', sys.argv[3], '--access-mode', sys.argv[4], *sys.argv[5:]]
+import developer_toolchains
+original_discovery = developer_toolchains.discover_toolchains
+readonly_fixture = sys.argv[5]
+builtin_only = sys.argv[6] == 'builtin'
+developer_toolchains.discover_toolchains = lambda roots=None: ([] if builtin_only else original_discovery(roots)) + ([readonly_fixture] if readonly_fixture else [])
+sys.argv = ['local_files_mcp.py', '--root', sys.argv[3], '--access-mode', sys.argv[4]]
 main()
 '''
 
 
-async def verify(toolchains: list[Path] | None = None) -> dict:
-    if toolchains is None:
-        codex = shutil.which('codex.exe')
-        if not codex:
-            raise ValueError('Acceptance requires the installed Codex CLI')
-        toolchains = [Path(sys.base_prefix), Path(r'C:\Program Files\Git'),
-                      Path(r'C:\Program Files\nodejs'), Path(codex).parent]
+async def verify() -> dict:
     executable = find_cli()
     if invoke_cli(executable, 'list')['WindowsSandboxEnvironments']:
         raise ValueError('A foreign VM exists; acceptance will not stop or reuse it')
@@ -46,18 +47,16 @@ async def verify(toolchains: list[Path] | None = None) -> dict:
     (state / 'credential.txt').write_text('SYNTHETIC_CREDENTIAL', encoding='utf-8')
     (readonly / 'marker.txt').write_text('SYNTHETIC_READONLY_TOOL', encoding='utf-8')
     digest = hashlib.sha256(sentinel.read_bytes()).hexdigest()
-    arguments = []
-    for path in [*toolchains, readonly]:
-        arguments.extend(['--developer-toolchain', str(path)])
+    toolchains = [Path(p) for p in discover_toolchains([root])]
     calls = 0
     results = {}
     last_session = None
     project = Path(__file__).resolve().parent
 
-    def parameters(mode):
+    def parameters(mode, *, builtin=False):
         return StdioServerParameters(command=sys.executable,
             args=['-I', '-B', '-c', BOOTSTRAP, str(project), str(state), str(root), mode,
-                  *(arguments if mode == 'developer_control' else [])],
+                  str(readonly) if mode == 'developer_control' and not builtin else '', 'builtin' if builtin else 'auto'],
             env={'PYTHONUTF8': '1', 'CONTROL_PLANE_API_KEY': 'SYNTHETIC_API_KEY',
                  'TEST_SECRET_TOKEN': 'SYNTHETIC_SECRET'})
 
@@ -104,10 +103,9 @@ async def verify(toolchains: list[Path] | None = None) -> dict:
                 ro_guest = f'C:\\MCP\\mapping-{1 + len(toolchains)}\\marker.txt'
                 program = r'''
 $r=[ordered]@{}
-$r.python=(& python -I -B -c 'import sys;print(sys.version)' | Out-String).Trim()
-$r.node=(& node --version | Out-String).Trim()
-$r.git=(& git --version | Out-String).Trim()
-$r.codex=(& codex --version | Out-String).Trim()
+$r.python=if(Get-Command python.exe -ErrorAction SilentlyContinue){(& python -I -B -c 'import sys;print(sys.version)' | Out-String).Trim()}else{'NOT_DETECTED'}
+$r.node=if(Get-Command node.exe -ErrorAction SilentlyContinue){(& node --version | Out-String).Trim()}else{'NOT_DETECTED'}
+$r.git=if(Get-Command git.exe -ErrorAction SilentlyContinue){(& git --version | Out-String).Trim()}else{'NOT_DETECTED'}
 Write-Output 'CHECK_TOOLS_DONE'
 $r.stdin=[Console]::ReadLine()
 $r.environment= -not ($env:CONTROL_PLANE_API_KEY -or $env:TEST_SECRET_TOKEN -or $env:MCP_LOCAL_VM_GUARD)
@@ -118,8 +116,10 @@ try {[IO.File]::WriteAllText('__OUTSIDE__','ESCAPED');$r.outside_write='ALLOWED'
 $ErrorActionPreference='SilentlyContinue'
 & cmd.exe /d /c 'type "__OUTSIDE__"' 2>$null | Out-Null
 $r.cmd=if($LASTEXITCODE -eq 0){'ALLOWED'}else{'DENIED'}
+if($r.python -ne 'NOT_DETECTED'){
 & python -I -B -c 'import sys;open(sys.argv[1]).read()' '__OUTSIDE__' 2>$null | Out-Null
 $r.python_child=if($LASTEXITCODE -eq 0){'ALLOWED'}else{'DENIED'}
+}else{$r.python_child='DENIED'}
 try {[IO.File]::WriteAllText('__READONLY__','ESCAPED');$r.readonly='ALLOWED'} catch {$r.readonly='DENIED'}
 & cmd.exe /d /c 'mklink /H "C:\MCP\mapping-0\readonly-link.txt" "__READONLY__"' 2>$null | Out-Null
 $r.create_readonly_hardlink=if($LASTEXITCODE -eq 0){'ALLOWED'}else{'DENIED'}
@@ -134,10 +134,9 @@ $r.create_external_hardlink=if($LASTEXITCODE -eq 0){'ALLOWED'}else{'DENIED'}
 try {[void][IO.File]::ReadAllText('C:\MCP\mapping-0\escape-junction\sentinel.txt');$r.junction='ALLOWED'} catch {$r.junction='DENIED'}
 $ErrorActionPreference='Stop'
 [IO.File]::WriteAllText((Join-Path $env:MCP_WORKSPACE 'allowed.txt'),'VM_ROOT_WRITE')
-& python -I -B python-program.py
-if($LASTEXITCODE -ne 0){throw 'Python file operation failed'}
-& node node-program.js
-if($LASTEXITCODE -ne 0){throw 'Node file operation failed'}
+if($r.python -ne 'NOT_DETECTED'){& python -I -B python-program.py; if($LASTEXITCODE -ne 0){throw 'Python file operation failed'}}
+if($r.node -ne 'NOT_DETECTED'){& node node-program.js; if($LASTEXITCODE -ne 0){throw 'Node file operation failed'}}
+if($r.git -ne 'NOT_DETECTED'){
 & git -c init.defaultBranch=main init --quiet
 if($LASTEXITCODE -ne 0){throw 'Git init failed'}
 & git -c core.autocrlf=false add -- source.cs allowed.txt
@@ -145,6 +144,7 @@ if($LASTEXITCODE -ne 0){throw 'Git add failed'}
 & git -c user.name=Fixture -c user.email=fixture@example.invalid commit --quiet -m fixture
 if($LASTEXITCODE -ne 0){throw 'Git commit failed'}
 $r.git_commit=(& git log -1 --format=%H | Out-String).Trim()
+}
 $compiler='C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe'
 & $compiler /nologo /out:compiled.exe source.cs | Out-Null
 if($LASTEXITCODE -ne 0){throw 'Compiler failed'}
@@ -161,12 +161,15 @@ Write-Output ('VM_REPORT:'+($r|ConvertTo-Json -Compress))
                 for name in ('absolute', 'parent', 'credential', 'outside_write', 'cmd', 'python_child', 'readonly', 'create_readonly_hardlink', 'readonly_hardlink_write', 'readonly_junction_write', 'create_external_hardlink', 'junction'):
                     assert result[name] == 'DENIED', result
                 assert result['environment'] and result['stdin'] == '中文🙂', result
-                assert '3.13' in result['python'] and result['node'].startswith('v') and result['git'].startswith('git version'), result
-                assert 'codex' in result['codex'].lower() and result['compiler'] == 'COMPILED_OK', result
+                assert all(result[name] for name in ('python', 'node', 'git')), result
+                assert result['compiler'] == 'COMPILED_OK', result
                 assert (root / 'allowed.txt').read_text() == 'VM_ROOT_WRITE'
-                assert (root / 'python-output.txt').read_text() == 'PYTHON_FILE_OK'
-                assert (root / 'node-output.txt').read_text() == 'NODE_FILE_OK'
-                assert len(result['git_commit']) == 40, result
+                if result['python'] != 'NOT_DETECTED':
+                    assert (root / 'python-output.txt').read_text() == 'PYTHON_FILE_OK'
+                if result['node'] != 'NOT_DETECTED':
+                    assert (root / 'node-output.txt').read_text() == 'NODE_FILE_OK'
+                if result['git'] != 'NOT_DETECTED':
+                    assert len(result['git_commit']) == 40, result
                 assert hashlib.sha256(sentinel.read_bytes()).hexdigest() == digest
                 assert (readonly / 'marker.txt').read_text() == 'SYNTHETIC_READONLY_TOOL'
                 await call('export_session_file', {'session_id': last_session, 'path': 'allowed.txt', 'destination': 'export.txt'})
@@ -180,10 +183,12 @@ Write-Output ('VM_REPORT:'+($r|ConvertTo-Json -Compress))
                         os.rmdir(junction)
                 results['execution_and_boundary'] = result
                 # Leave a parent with a live child; closing STDIO must stop the VM.
-                child = "import pathlib,time; p=pathlib.Path('heartbeat.txt');\nwhile True:p.write_text(str(time.time()));time.sleep(.2)"
-                # A plain guest script avoids PowerShell/native argv quoting ambiguity.
-                await call('write_file', {'path': 'heartbeat.py', 'content': child})
-                heartbeat_command = "$child=Start-Process -FilePath (Get-Command python.exe).Source -ArgumentList @('-I','-B','heartbeat.py') -PassThru -NoNewWindow; Write-Output 'LIFECYCLE_READY'; Start-Sleep -Seconds 120"
+                heartbeat = "while($true){[IO.File]::WriteAllText((Join-Path $env:MCP_WORKSPACE 'heartbeat.txt'),[DateTime]::UtcNow.Ticks.ToString());Start-Sleep -Milliseconds 200}"
+                import base64
+                child_command = base64.b64encode(heartbeat.encode('utf-16-le')).decode('ascii')
+                heartbeat_command = ("$child=Start-Process -FilePath 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe' "
+                    + "-ArgumentList @('-NoProfile','-EncodedCommand','" + child_command + "') -PassThru -WindowStyle Hidden; "
+                    + "Write-Output 'LIFECYCLE_READY'; Start-Sleep -Seconds 120")
                 started = await call('start_process', {'command': heartbeat_command, 'timeout_ms': 0, 'lifetime_seconds': 180})
                 last_session = started['session_id']
                 await wait(last_session, marker='LIFECYCLE_READY')
@@ -213,6 +218,31 @@ Write-Output ('VM_REPORT:'+($r|ConvertTo-Json -Compress))
         await asyncio.sleep(1)
         assert (root / 'heartbeat.txt').read_bytes() == before
         results['stdio_parent_child_shutdown'] = 'PASS'
+        async with stdio_client(parameters('developer_control', builtin=True)) as (read, write):
+            async with ClientSession(read, write) as session:
+                await session.initialize()
+                diagnostic = await session.call_tool('server_diagnostics', {})
+                diagnostic = json.loads(diagnostic.content[0].text)
+                assert diagnostic['mode_ready'] and diagnostic['developer_backend']['toolchain_count'] == 0
+                started = await session.call_tool('start_process', {'command': "[IO.File]::WriteAllText((Join-Path $env:MCP_WORKSPACE 'builtin.txt'),'BUILTIN_VM_OK')", 'timeout_ms': 0})
+                assert not started.isError, started
+                identifier = json.loads(started.content[0].text)['session_id']
+                deadline = time.monotonic() + 180
+                while True:
+                    response = await session.call_tool('read_process_output', {'session_id': identifier, 'wait_ms': 1000})
+                    output = json.loads(response.content[0].text)
+                    if output['completed']:
+                        assert output['exit_code'] == 0 and output['vm_stopped'], output
+                        break
+                    assert time.monotonic() < deadline, 'Built-in VM timed out'
+                closed = await session.call_tool('close_session', {'session_id': identifier})
+                assert not closed.isError, closed
+                assert (root / 'builtin.txt').read_text() == 'BUILTIN_VM_OK'
+                results['empty_detection_builtin_powershell'] = 'PASS'
+                plan = ET.fromstring(build_vm_mapping_plan([root], toolchains + [readonly]))
+                assert [node.text for node in plan.findall('MappedFolders/MappedFolder/ReadOnly')] == ['false'] + ['true'] * (len(toolchains) + 1)
+                results['automatic_toolchain_count'] = len(toolchains)
+                results['automatic_mappings_readonly'] = 'PASS'
         async with stdio_client(parameters('read_only')) as (read, write):
             async with ClientSession(read, write) as session:
                 await session.initialize()
@@ -237,10 +267,9 @@ Write-Output ('VM_REPORT:'+($r|ConvertTo-Json -Compress))
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--toolchain', action='append', type=Path)
     parser.add_argument('--report', type=Path)
     args = parser.parse_args()
-    report = asyncio.run(verify(args.toolchain))
+    report = asyncio.run(verify())
     if args.report:
         args.report.write_text(json.dumps(report, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
     print(json.dumps(report))

@@ -20,10 +20,17 @@ class WorkspaceRootErrorTests(unittest.TestCase):
     def test_drive_root_roundtrip_and_read_with_state_exclusion(self):
         import os
         import tempfile
-        from local_files_mcp import FileReader
+        from local_files_mcp import FileReader, hidden, linked
         from workspace_settings import encode_workspace, decode_workspace
-        # A hidden checkout directory must not make this public-file fixture hidden.
-        with tempfile.TemporaryDirectory() as directory:
+        # Drive-root reads validate every child, including the fixture's ancestors.
+        # System TEMP may be under hidden AppData; use a checked repository path.
+        fixture_parent = Path(__file__).absolute().parent
+        for ancestor in (fixture_parent, *fixture_parent.parents):
+            self.assertFalse(linked(ancestor), f'Linked fixture ancestor: {ancestor}')
+            if ancestor != Path(ancestor.anchor):
+                self.assertFalse(hidden(ancestor), f'Hidden fixture ancestor: {ancestor}')
+        with tempfile.TemporaryDirectory(prefix='drive-root-public-',
+                                         dir=fixture_parent) as directory:
             folder = Path(directory).resolve()
             public = folder / 'public.txt'
             public.write_text('test', encoding='utf-8')
@@ -35,7 +42,9 @@ class WorkspaceRootErrorTests(unittest.TestCase):
                 workspace = {'roots': [row], 'default_root': row['id']}
                 self.assertEqual(decode_workspace(encode_workspace(workspace)), workspace)
                 reader = FileReader(Path(folder.anchor))
-                self.assertEqual(reader.checked(public.relative_to(reader.root).as_posix()), public)
+                relative = public.relative_to(reader.root).as_posix()
+                self.assertEqual(reader.checked(relative), public)
+                self.assertEqual(reader.read_file(relative)['content'], '1: test')
                 for path in (state, state / 'key.txt'):
                     with self.assertRaisesRegex(ValueError, '金鑰'):
                         reader.checked(path.relative_to(reader.root).as_posix())

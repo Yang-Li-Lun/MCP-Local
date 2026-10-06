@@ -2,7 +2,7 @@
 
 ## 專案範圍與架構
 
-本專案是預設唯讀的檔案 MCP 服務；明確 opt-in 的完整控制模式允許受保護的共享根寫入與 Windows AppContainer Terminal。主機模式明確信任主機命令，檔案 API 與環境清理持續保護；開發模式使用 Windows Sandbox VM 與本機明確授權的唯讀工具鏈，前置條件或隔離檢查不符必須拒絕命令，不得 fallback。唯讀模式不得修改來源或執行命令。
+本專案是預設唯讀的檔案 MCP 服務；公開模式僅有唯讀、開發控制與主機控制；既有 AppContainer 實作保留供內部共用與回歸。主機模式明確信任主機命令，檔案 API 與環境清理持續保護；開發模式使用 Windows Sandbox VM 與自動偵測的安全唯讀工具鏈，前置條件或隔離檢查不符必須拒絕命令，不得 fallback。唯讀模式不得修改來源或執行命令。
 
 可辨識模組與責任：
 
@@ -15,7 +15,7 @@
 - `access_mode.py` / `full_control.py` / `control_files.py` / `control_edit.py`：模式驗證與有界共享根寫入；保留原唯讀契約
 - `sandbox_windows.py` / `control_sessions.py`：無網路 AppContainer、專用副本、Job 與 session 清理；禁止主機權限 fallback
 - `host_windows.py` / `host_files.py` / `host_control.py`：目前未提升使用者的受信任主機命令、跨 root 的受保護檔案 API；不宣稱命令憑證隔離
-- `developer_control.py` / `developer_vm.py` / `developer_guest.ps1`：開發 VM 映射、工具鏈、guest I/O；拒絕向外硬連結／重新解析點，回傳檔案仍視為不受信任輸入
+- `developer_toolchains.py` / `developer_control.py` / `developer_vm.py` / `developer_guest.ps1`：開發 VM 映射、工具鏈、guest I/O；拒絕向外硬連結／重新解析點，回傳檔案仍視為不受信任輸入
 - `developer_vm_guard.py` / `developer_vm_client.py`：本機認證 pipe 與獨立 VM 生命週期 guard；由 APP 在 Connection Job 前啟動，不接收通道金鑰，停止失敗禁止重連
 - `connection_settings.py`：連線設定、遷移、備份、啟動指令管理
 - `connection_cli.py` / `start-local-files-tunnel.ps1`：CLI 與 Tunnel 啟動流程（共用 `Connection` 管理）
@@ -61,8 +61,8 @@ Python 3.10+ 保留相容性；完整 TOML／SQLite 解析需要 Python 3.11+、
 - `.\.venv\Scripts\python.exe -B -m unittest discover -s tests -v`
 - `.\.venv\Scripts\python.exe -B verify_isolated.py`
 - `.\.venv\Scripts\python.exe -B verify_release_stdio.py`：隔離 fixture、真實 STDIO 22 工具與重要拒絕路徑。
-- `.\.venv\Scripts\python.exe -B verify_full_control_stdio.py`：隔離雙模式及 Windows AppContainer 的真實 STDIO 驗收。
-- `.\.venv\Scripts\python.exe -B verify_access_modes_stdio.py`：四模式 discovery、未配置工具鏈時拒絕命令與受信任主機 fixture；不能代替 VM 驗收。
+- `.\.venv\Scripts\python.exe -B verify_full_control_stdio.py`：內部測試 server 與 Windows AppContainer 的真實 STDIO 回歸；非公開模式。
+- `.\.venv\Scripts\python.exe -B verify_access_modes_stdio.py`：三模式 discovery、模擬後端不可用時拒絕命令與受信任主機 fixture；不能代替 VM 驗收。
 - `.\.venv\Scripts\python.exe -B verify_developer_control_stdio.py`：真實 Windows Sandbox、唯讀工具鏈、root 寫入、逃逸拒絕、STDIO 關閉與降權驗收；需互動式桌面及已安裝工具，缺少前置條件不得宣稱通過。
 - 本機封裝與 clean-clone 步驟見 `RELEASE.md`；`build_release.py` 僅依固定白名單封裝，不自動發布。
 - 變更 MCP schema 時：同步檢查 `tool-contract.json`、`tool-contract-full-control.json`、`tool-contract-developer-control.json`、`tool-contract-host-control.json`；原唯讀工具 schema 不可因控制模式功能改變，並以 MCP 1.30.0 介面條件進行檢核。
@@ -106,5 +106,5 @@ Python 3.10+ 保留相容性；完整 TOML／SQLite 解析需要 Python 3.11+、
 - `power_policy.py` / `power_windows.py` / `power_restore_guard.py` 管理雙模式電源、原生事件與 crash 回復；預設 OFF。
 - 一般測試必須 mock Power Scheme、Process QoS、Power Request 與 Windows 使用者電源模式；不得切換正式系統電源方案。
 - 真實整合測試需 `MCP_LOCAL_ALLOW_POWER_INTEGRATION_TEST=1` 與明確使用者授權；benchmark_power.py 另要求 `--allow-system-power-changes`。
-- 設定版本 7，MCP 契約為 12（服務 2026.10.05.2；唯讀 22／完整控制 34／開發控制 34／主機控制 36 個註冊工具）；`developer_toolchains` 缺省為空，不能隱式取得主機工具鏈授權。舊個別排除不可因 GUI 簡化而刪除。
+- 設定版本 8，MCP 契約為 13（服務 2026.10.06.1；唯讀 22／開發控制 34／主機控制 36 個註冊工具）；不保存 `developer_toolchains`；從可信安裝子目錄與實際 executable 自動偵測，工具鏈唯讀，無額外工具仍可用 VM 內建 PowerShell。舊個別排除不可因 GUI 簡化而刪除。
 - Restore guard 不接收金鑰、不加入 Connection Job；回復失敗需保留日誌，不能宣稱已還原。

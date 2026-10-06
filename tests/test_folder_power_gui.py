@@ -61,7 +61,7 @@ class FolderPowerGuiTests(unittest.TestCase):
             old = dict(self.settings, settings_version=version, power={'mode': 'extreme'})
             target.write_text(json.dumps(old), encoding='utf-8')
             value = load_settings(target)
-            self.assertEqual(value['settings_version'], 7)
+            self.assertEqual(value['settings_version'], 8)
             self.assertEqual(value['power']['mode'], 'off')
             self.assertEqual(value['roots'], self.rows)
             before = target.read_bytes()
