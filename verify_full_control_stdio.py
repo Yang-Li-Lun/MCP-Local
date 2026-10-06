@@ -1,4 +1,4 @@
-"""隔離 fixture 的真實 MCP 雙模式驗收，不載入正式設定、金鑰或遠端通道。"""
+"""僅供 repository 內部 AppContainer 回歸；不是公開權限模式驗收。"""
 import argparse
 import asyncio
 import hashlib
@@ -24,8 +24,13 @@ async def verify() -> dict:
         sentinel.write_text('host-canary-not-secret')
         for mode in ('read_only', 'full_control', 'read_only'):
             lifecycle_workspace = None
-            parameters = StdioServerParameters(command=sys.executable, args=[
-                '-B', str(Path(__file__).with_name('local_files_mcp.py')), '--root', str(root), '--access-mode', mode],
+            project = Path(__file__).resolve().parent
+            arguments = (['-I', '-B', '-c',
+                "import sys,runpy;sys.path[:0]=[sys.argv[1],sys.argv[1]+'/tests'];sys.argv=sys.argv[2:];runpy.run_path(sys.argv[0],run_name='__main__')",
+                str(project), str(project / 'tests/legacy_control_fixture.py'), str(root), str(root.with_name(root.name + '-synthetic-state'))]
+                if mode == 'full_control' else
+                ['-B', str(project / 'local_files_mcp.py'), '--root', str(root), '--access-mode', mode])
+            parameters = StdioServerParameters(command=sys.executable, args=arguments,
                 env={'CONTROL_PLANE_API_KEY': 'fixture-not-real', 'TEST_SECRET_TOKEN': 'fixture-only'})
             async with stdio_client(parameters) as (read, write):
                 async with ClientSession(read, write) as session:

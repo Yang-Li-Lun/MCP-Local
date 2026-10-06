@@ -2,7 +2,7 @@
 
 MCP-Local 是 Windows 上預設唯讀的本機檔案 MCP 服務，在使用者明確授權的資料夾或磁碟範圍內，提供一般檔案探索、格式辨識、metadata、雜湊與有界原始資料，並支援文字、文件、靜態圖片、影音 metadata 與壓縮檔清冊。支援本機 STDIO，也可透過已設定的遠端通道連線。
 
-**服務版本：`2026.10.05.2` · MCP 工具契約：12 · 設定版本：7 · 唯讀工具：22 個**
+**服務版本：`2026.10.06.1` · MCP 工具契約：13 · 設定版本：8 · 唯讀工具：22 個**
 
 ## 權限模式與目前可用性
 
@@ -11,15 +11,14 @@ MCP-Local 是 Windows 上預設唯讀的本機檔案 MCP 服務，在使用者�
 | 模式 | 註冊工具 | 目前能力 |
 | --- | ---: | --- |
 | `read_only` | 22 | 原有授權 root 唯讀能力及契約 |
-| `full_control` | 34 | 受保護的 root 寫入；無網路 AppContainer 副本 Terminal |
-| `developer_control` | 34 | Windows Sandbox VM 直接讀寫 root，明確工具鏈唯讀映射；不繼承主機憑證 |
+| `developer_control` | 34 | Windows Sandbox VM 直接讀寫 root，自動工具鏈唯讀映射；不繼承主機憑證 |
 | `host_control` | 36 | 可跨原 root 的主機檔案 API；目前使用者的受信任主機命令 |
 
 主機模式不自動提升 Administrator／SYSTEM。檔案 API 保留程式寫入、設定、金鑰、
 隱藏與連結等防護；**主機命令不是沙箱，可存取使用者檔案、設定與憑證**，只適合受信任操作。
-開發模式須先啟用 Windows Sandbox、新版 `wsb` CLI，並在 APP 選擇工具鏈目錄。
+開發模式需要已啟用的 Windows Sandbox 與新版 `wsb` CLI；安全安裝工具鏈會自動偵測並唯讀映射。
 缺少條件時 `mode_ready=false` 並拒絕命令，沒有主機 fallback。VM 網路／剪貼簿關閉；需主機 profile、網路或特定系統安裝狀態的工具流程須另行確認相容性。
-預設與 v1–v5 遷移為唯讀；v6 已授權完整控制保留，舊檔不能自動啟用兩個新模式。
+預設唯讀；任何舊 `full_control` 設定安全降為 `read_only`。v1–v6 不會自動取得開發或主機控制權限。
 切換並儲存會停止舊連線／sessions 後重連。詳細限制、CLI 與驗收見 [權限模式說明](完整控制模式.md)。
 
 ## 主要功能
@@ -34,7 +33,7 @@ MCP-Local 是 Windows 上預設唯讀的本機檔案 MCP 服務，在使用者�
 
 ## 圖示選擇
 
-開啟 GUI 的「外觀」頁籤，可預覽並選擇「原版圖示」或「資料夾連結」。按「儲存設定」後立即套用至視窗與系統匣，不需重新連線；下次啟動沿用已保存的選擇。舊設定未指定 `icon_style` 時維持原版，設定版本為 7。
+開啟 GUI 的「外觀」頁籤，可預覽並選擇「原版圖示」或「資料夾連結」。按「儲存設定」後立即套用至視窗與系統匣，不需重新連線；下次啟動沿用已保存的選擇。舊設定未指定 `icon_style` 時維持原版，設定版本為 8。
 
 兩款圖示共存，原始 `mcp-local.ico` 保留。ChatGPT 端需另外選用 PNG，本機外觀設定不會同步至 ChatGPT：
 
@@ -135,7 +134,7 @@ Windows 11 支援時會套用「最佳電源效率」，不強制開啟 Windows 
 
 `verify_isolated.py` 執行隔離語法、相依套件及回歸檢查，並寫出測試報告。一般電源測試使用 mock；真實系統電源測試需另外明確授權。本機驗收與正式用戶端工具發現分別記錄。
 
-遠端驗收須在實際 MCP 用戶端重新整理工具清單，依啟動模式確認 22／34／34／36 個工具並比對對應 contract，再實際呼叫代表性工具。本機測試成功不能代替遠端驗收。
+遠端驗收須在實際 MCP 用戶端重新整理工具清單，依啟動模式確認 22／34／36 個工具並比對對應 contract，再實際呼叫代表性工具。本機測試成功不能代替遠端驗收。
 
 - [增量與診斷工具說明](增量與診斷工具說明.md)：呼叫範例、基準生命週期、差異語意與驗收。
 - [完整繁體中文說明](README_繁體中文.md)：容量、游標、多根設定、遷移及錯誤處理。
@@ -149,20 +148,20 @@ Windows 11 支援時會套用「最佳電源效率」，不強制開啟 Windows 
 
 ## 2026-09-29 雜湊、差異與增量診斷
 
-新增 `hash_files`、`compare_paths`、`project_status`、`server_diagnostics`。服務版本 `2026.10.05.2`、契約 12、共 22 工具，設定版本為 7。
+新增 `hash_files`、`compare_paths`、`project_status`、`server_diagnostics`。服務版本 `2026.10.06.1`、契約 13、共 22 工具，設定版本為 8。
 
 雜湊涵蓋一般檔案的原始位元組，保留 Hidden、link、排除名稱、共享根及容量限制。增量基準僅存在 MCP 程序記憶體，最長 24 小時，每個 workspace 最多 8 份；重啟或淘汰後須重新建立。只快取 metadata 與雜湊，文字讀取仍完整驗證。
 
 更新服務後，用 `server_diagnostics` 核對實際註冊，再從用戶端 `tools/list` 確認工具可見；server 無法自行證明 ChatGPT 已取得工具。完整參數、界線與示例見 [增量與診斷工具說明](增量與診斷工具說明.md)。
 
-## 原生圖片讀取（契約 12）
+## 原生圖片讀取（契約 13）
 
 新增 `read_image(path, root_id?)`，以原生 MCP `ImageContent` 傳回 PNG 圖片，既有工具皆保留，目前共 22 個唯讀工具。支援靜態 PNG、JPEG、WebP、GIF、BMP、TIFF、ICO、PNM 與可用 build 的 AVIF；僅使用既有授權根，檔案須通過路徑、Hidden、link、排除名稱、狀態目錄及檔案身分檢查。詳見 [圖片讀取說明](圖片讀取說明.md)。
 
-## 契約 12 格式擴充
+## 契約 13 格式擴充
 
 保留 22 工具，在 read_document 加入 format_hint/table/expected_sha256，在 inspect_archive 加入 member_path/offset/length/expected_sha256。支援結構化資料、OpenDocument、EPUB、郵件、外掛字幕與更多圖片／媒體 metadata；來源唯讀與原有安全上限保留。詳見 [格式讀取說明](格式讀取說明.md)。
 
-## 批次 metadata 查詢（契約 12）
+## 批次 metadata 查詢（契約 13）
 
 新增單一 `query_files`，保留原有 21 個工具輸入契約。先完整掃描再篩選、排序與分頁；預設只查 metadata，不讀取檔案內容。`sort_by="created_time", order="asc", limit=1` 查詢整個安全範圍最早建立的檔案。Windows 使用真正 creation time。格式、能力與 SHA-256 僅 opt-in，且只處理本頁。參數、游標及資源限制見 [格式讀取說明](格式讀取說明.md#query_files-批次-metadata-查詢)。

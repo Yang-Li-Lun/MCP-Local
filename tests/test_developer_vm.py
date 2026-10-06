@@ -80,7 +80,7 @@ class DeveloperVMTests(unittest.TestCase):
                 'connection_runtime.build_commands', return_value=[]), patch(
                 'developer_vm_client.GuardOwner', side_effect=create_guard), patch('tray_windows.Job', side_effect=create_job):
             connection.start({'settings_version': 7, 'access_mode': 'developer_control',
-                              'developer_toolchains': ['fixture']}, 'synthetic-key')
+                              'developer_toolchains': []}, 'synthetic-key')
             connection.thread.join(5)
         self.assertFalse(connection.thread.is_alive())
         self.assertEqual(events, ['guard-create', 'job-create', 'job-close', 'guard-close'])
@@ -95,7 +95,7 @@ class DeveloperVMTests(unittest.TestCase):
                 'connection_runtime.build_commands', return_value=[]), patch(
                 'developer_vm_client.GuardOwner', return_value=guard), patch('tray_windows.Job'):
             connection.start({'settings_version': 7, 'access_mode': 'developer_control',
-                              'developer_toolchains': ['fixture']}, 'synthetic-key')
+                              'developer_toolchains': []}, 'synthetic-key')
             connection.thread.join(5)
         self.assertTrue(connection.cleanup_failed)
         self.assertEqual(connection.error_kind, ConnectionErrorKind.RESOURCE_CLEANUP_FAILED)

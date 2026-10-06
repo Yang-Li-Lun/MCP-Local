@@ -1,4 +1,4 @@
-"""四模式本機設定、discovery、拒絕 fallback 與隔離 fixture STDIO。"""
+"""三模式本機設定、discovery、拒絕 fallback 與隔離 fixture STDIO。"""
 import asyncio
 import os
 from pathlib import Path
@@ -39,11 +39,11 @@ class AccessModesTests(unittest.TestCase):
                 migrated = normalize_connection({**self.settings, 'settings_version': version, 'access_mode': mode})
                 self.assertEqual(migrated['access_mode'], 'read_only')
         legacy_full = normalize_connection({**self.settings, 'settings_version': 6, 'access_mode': 'full_control'})
-        self.assertEqual(legacy_full['access_mode'], 'full_control')
-        self.assertEqual(legacy_full['settings_version'], 7)
+        self.assertEqual(legacy_full['access_mode'], 'read_only')
+        self.assertEqual(legacy_full['settings_version'], 8)
 
-    def test_registry_and_contracts_for_all_four_modes(self):
-        for mode, count in zip(MODES, (22, 34, 34, 36)):
+    def test_registry_and_contracts_for_all_three_modes(self):
+        for mode, count in zip(MODES, (22, 34, 36)):
             workspace = WorkspaceReader(self.settings['roots'], 'main')
             server = create_server(workspace, mode)
             try:
@@ -52,7 +52,7 @@ class AccessModesTests(unittest.TestCase):
                 self.assertEqual(len(tools), count)
                 diagnostics = workspace.server_diagnostics()
                 self.assertTrue(diagnostics['consistent'])
-                self.assertEqual(diagnostics['mode_ready'], mode != 'developer_control')
+                self.assertEqual(diagnostics['mode_ready'], backend_status()['ready'] if mode == 'developer_control' else True)
                 self.assertFalse(any('set_access_mode' == tool.name for tool in tools))
             finally:
                 if server._full_control:
@@ -94,15 +94,15 @@ class AccessModesTests(unittest.TestCase):
         workspace = WorkspaceReader(self.settings['roots'], 'main')
         control = DeveloperControl(workspace)
         self.addCleanup(control.close)
-        with patch('host_windows.HostProcess.start') as host, patch('control_sessions.Sandbox') as sandbox:
+        with patch('developer_control.backend_status', return_value={'ready': False}), patch('host_windows.HostProcess.start') as host, patch('control_sessions.Sandbox') as sandbox:
             with self.assertRaisesRegex(ValueError, 'DEVELOPER_BACKEND_UNAVAILABLE'):
                 control.start_process("Write-Output 'must not run'")
         host.assert_not_called()
         sandbox.assert_not_called()
         with patch('developer_control.Path.is_file', return_value=True):
-            self.assertFalse(backend_status()['ready'])
+            self.assertTrue(backend_status()['ready'])
             self.assertTrue(backend_status()['execution_adapter_implemented'])
-            self.assertFalse(backend_status()['ready'])  # Installing WSB never authorizes toolchain maps.
+            self.assertTrue(backend_status()['ready'])  # Built-in PowerShell needs no extra toolchain.
 
     def test_vm_mapping_plan_readonly_tools_and_protected_overlap_denial(self):
         toolchain, state, service = self.base / 'tools & runtime', self.base / 'state', self.base / 'service'
@@ -122,9 +122,9 @@ class AccessModesTests(unittest.TestCase):
     def test_real_stdio_mode_discovery_host_commands_and_downgrade(self):
         from verify_access_modes_stdio import verify
         report = asyncio.run(verify())
-        self.assertEqual([row['tools'] for row in report['modes']], [22, 34, 34, 36, 22])
+        self.assertEqual([row['tools'] for row in report['modes']], [22, 34, 36, 22])
         self.assertEqual(report['developer_vm_acceptance'], 'NOT_RUN_IN_THIS_SCRIPT')
-        self.assertEqual(report['modes'][3]['host_parent_and_child_shutdown'], 'PASS')
+        self.assertEqual(report['modes'][2]['host_parent_and_child_shutdown'], 'PASS')
 
     def test_vm_mapping_rejects_root_file_alias_to_external_fixture(self):
         external = self.base / 'outside.txt'
@@ -155,22 +155,37 @@ class AccessModesTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'VM_MAPPING_ALIAS'):
             build_vm_mapping_plan([self.root], [toolchain])
 
-    def test_toolchains_require_explicit_local_configuration_and_survive_save(self):
-        tools = self.base / 'tools'
-        tools.mkdir()
-        saved = {**self.settings, 'access_mode': 'developer_control', 'developer_toolchains': [str(tools)]}
+    def test_legacy_toolchains_are_removed_without_granting_maps(self):
+        saved = {**self.settings, 'access_mode': 'developer_control',
+                 'developer_toolchains': ['../tools', str(self.base)]}
         save_settings(saved, self.path)
-        self.assertEqual(load_settings(self.path)['developer_toolchains'], [str(tools)])
-        self.assertEqual(normalize_connection({**saved, 'settings_version': 6})['developer_toolchains'], [])
+        self.assertNotIn('developer_toolchains', load_settings(self.path))
+        self.assertNotIn('developer_toolchains', self.path.read_text())
+        for version in (6, 7, 8):
+            migrated = normalize_connection({**saved, 'settings_version': version, 'access_mode': 'full_control'})
+            self.assertEqual(migrated['access_mode'], 'read_only')
+            self.assertNotIn('developer_toolchains', migrated)
+
+    def test_removed_mode_rejected_by_all_public_entrypoints(self):
         with self.assertRaises(ValueError):
-            normalize_connection({**saved, 'developer_toolchains': ['../tools']})
-        missing = str(self.base / 'uninstalled-toolchain')
-        for mode in ('read_only', 'full_control', 'host_control'):
-            value = normalize_connection({**saved, 'access_mode': mode, 'developer_toolchains': [missing]})
-            self.assertEqual(value['access_mode'], mode)
-            self.assertEqual(value['developer_toolchains'], [missing])
+            create_server(WorkspaceReader(self.settings['roots'], 'main'), 'full_control')
         with self.assertRaises(ValueError):
-            normalize_connection({**saved, 'developer_toolchains': [missing]})
+            set_local_mode(self.path, 'full_control')
+        project = Path(__file__).resolve().parents[1]
+        for script in ('local_files_mcp.py', 'connection_cli.py'):
+            for arguments in (['--access-mode', 'full_control'], ['--developer-toolchain', str(self.base)]):
+                result = subprocess.run([sys.executable, '-B', str(project / script), *arguments],
+                                        capture_output=True, timeout=20, creationflags=subprocess.CREATE_NO_WINDOW)
+                self.assertEqual(result.returncode, 2, result.stderr)
+
+    def test_empty_detection_can_start_guest_builtin_with_ready_backend(self):
+        control = DeveloperControl(WorkspaceReader(self.settings['roots'], 'main'), toolchains=[])
+        self.addCleanup(control.close)
+        with patch('developer_control.backend_status', return_value={'ready': True}), patch(
+                'developer_vm.VMProcess.start', side_effect=ValueError('REACHED_VM_START')) as start:
+            with self.assertRaisesRegex(ValueError, 'REACHED_VM_START'):
+                control.start_process("Write-Output 'guest builtin'")
+        start.assert_called_once()
 
 
 if __name__ == '__main__':

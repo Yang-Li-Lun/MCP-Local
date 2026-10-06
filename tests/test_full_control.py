@@ -18,6 +18,7 @@ from local_files_mcp import create_server
 from tool_contract import verify_contract
 from workspace_reader import WorkspaceReader, TOOLS
 from command_fixture import command_project
+from legacy_control_fixture import legacy_server
 
 
 class FullControlTests(unittest.TestCase):
@@ -27,13 +28,13 @@ class FullControlTests(unittest.TestCase):
         self.root = Path(self.temp.name).resolve()
         self.workspace = WorkspaceReader([{'id': 'main', 'path': str(self.root),
                                            'excluded_names': ['private']}], 'main')
-        self.server = create_server(self.workspace, 'full_control')
+        self.server = legacy_server(self.workspace)
         self.control = self.server._full_control
         self.addCleanup(self.control.close)
 
     def test_contracts_and_diagnostics_match_both_modes(self):
         for mode, expected in [('read_only', set(TOOLS)), ('full_control', set(TOOLS + CONTROL_TOOLS))]:
-            server = create_server(self.workspace, mode)
+            server = legacy_server(self.workspace) if mode == 'full_control' else create_server(self.workspace, mode)
             if server._full_control:
                 self.addCleanup(server._full_control.close)
             tools = self.workspace._registered_tools_provider()
@@ -155,9 +156,9 @@ class FullControlTests(unittest.TestCase):
         target.write_text(json.dumps(source))
         loaded = load_settings(target)
         self.assertEqual(loaded['access_mode'], 'read_only')
-        self.assertEqual(loaded['settings_version'], 7)
+        self.assertEqual(loaded['settings_version'], 8)
         save_settings({**loaded, 'access_mode': 'full_control'}, target)
-        self.assertEqual(load_for_edit(target).settings['access_mode'], 'full_control')
+        self.assertEqual(load_for_edit(target).settings['access_mode'], 'read_only')
         with self.assertRaises(ValueError):
             normalize_connection({**loaded, 'access_mode': 'anything'})
         target.write_text(json.dumps({**source, 'settings_version': 99}))
@@ -173,7 +174,7 @@ class FullControlTests(unittest.TestCase):
             with command_project():
                 commands = build_commands(value)
             command = commands[0][commands[0].index('--mcp-command') + 1]
-            self.assertIn('--access-mode ' + mode, command)
+            self.assertIn('--access-mode read_only', command)
             self.assertNotIn('CONTROL_PLANE_API_KEY', command)
 
     def test_output_buffer_caps_long_unbroken_output(self):

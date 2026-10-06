@@ -154,7 +154,7 @@ class WorkspaceTests(unittest.TestCase):
                'key': 'fake-secret'}
         target.write_text(json.dumps(old), encoding='utf-8')
         loaded = load_settings(target)
-        self.assertEqual(loaded['settings_version'], 7)
+        self.assertEqual(loaded['settings_version'], 8)
         self.assertEqual(len(loaded['roots']), 1)
         self.assertEqual(loaded['roots'][0]['path'], str(self.a))
         self.assertEqual(loaded['recent'], old['recent'])

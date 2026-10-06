@@ -17,10 +17,11 @@ from local_files_mcp import linked
 import security_policy
 
 
-def validate_mapping_tree(root: Path, max_entries: int = 200000) -> None:
+def validate_mapping_tree(root: Path, max_entries: int = 200000, *, protect_credentials: bool = False) -> None:
     """拒絕指向樹外的 NTFS 別名；樹內硬連結須完整計數（例如 Git 的程式別名）。"""
     pending, visited = [root], 0
     aliases = {}
+    builtin_configs = []
     while pending:
         folder = pending.pop()
         with os.scandir(folder) as entries:
@@ -28,6 +29,13 @@ def validate_mapping_tree(root: Path, max_entries: int = 200000) -> None:
                 visited += 1
                 if visited > max_entries:
                     raise ValueError('VM_MAPPING_LIMIT：映射樹超過安全檢查上限。')
+                if protect_credentials:
+                    from developer_toolchains import CREDENTIAL_NAMES
+                    if entry.name.casefold() in CREDENTIAL_NAMES:
+                        if entry.name.casefold() == '.npmrc' and len(builtin_configs) < 16:
+                            builtin_configs.append(Path(entry.path))
+                        else:
+                            raise ValueError('VM_TOOLCHAIN_CREDENTIALS：工具鏈不可含主機憑證或設定。')
                 # Windows DirEntry.stat caches FindFirstFile metadata with zero
                 # inode/link counts. Query the path itself for actual NTFS identity.
                 info = Path(entry.path).lstat()
@@ -45,6 +53,9 @@ def validate_mapping_tree(root: Path, max_entries: int = 200000) -> None:
                     aliases[key] = (expected, count + 1)
     if any(expected != count for expected, count in aliases.values()):
         raise ValueError('VM_MAPPING_ALIAS：映射樹含有指向樹外的硬連結。')
+    from developer_toolchains import safe_builtin_npm_config
+    if any(not safe_builtin_npm_config(path, root) for path in builtin_configs):
+        raise ValueError('VM_TOOLCHAIN_CREDENTIALS：工具鏈不可含主機憑證或設定。')
 
 
 def normalize_toolchains(value, *, validate_paths: bool = True) -> list[str]:
@@ -72,13 +83,13 @@ def backend_status(toolchains=None) -> dict:
     executable = Path(os.environ.get('SystemRoot', 'C:/Windows')) / 'System32/WindowsSandbox.exe'
     present = os.name == 'nt' and executable.is_file()
     cli = Path(os.environ.get('LOCALAPPDATA', '')) / 'Microsoft/WindowsApps/wsb.exe'
-    configured = bool(toolchains)
     available = present and cli.is_file()
-    return {'backend': 'windows_sandbox_vm', 'ready': available and configured,
+    return {'backend': 'windows_sandbox_vm', 'ready': available,
             'windows_sandbox_present': present,
-            'reason': 'READY_TO_START' if available and configured else 'TOOLCHAINS_NOT_CONFIGURED' if available else 'WINDOWS_SANDBOX_CLI_UNAVAILABLE',
+            'reason': 'READY_TO_START' if available else 'WINDOWS_SANDBOX_CLI_UNAVAILABLE',
             'execution_adapter_implemented': True, 'host_fallback': False,
-            'toolchain_count': len(toolchains or []), 'max_active_sessions': 1,
+            'toolchain_count': len(toolchains or []), 'toolchain_source': 'automatic_readonly_detection',
+            'builtin_powershell': True, 'max_active_sessions': 1,
             'mapping_validation': 'performed again before command execution'}
 
 
@@ -107,7 +118,10 @@ def build_vm_mapping_plan(roots: list[Path], toolchains: list[Path]) -> str:
             raise ValueError('VM_MAPPING_PROTECTED：可寫映射不得涵蓋 MCP、主機 Python 或 Windows 系統程式。')
         if any(path.is_relative_to(other) or other.is_relative_to(path) for other in seen):
             raise ValueError('VM_MAPPING_OVERLAP：映射不可重疊。')
-        validate_mapping_tree(path)
+        if readonly:
+            from developer_toolchains import validate_toolchain_boundary
+            validate_toolchain_boundary(raw)
+        validate_mapping_tree(path, protect_credentials=readonly)
         seen.append(path)
         item = ET.SubElement(mapped, 'MappedFolder')
         ET.SubElement(item, 'HostFolder').text = str(path)
@@ -129,7 +143,7 @@ class DeveloperSessions(Sessions):
               timeout_ms: int, lifetime_seconds: int) -> dict:
         self.require_mode()
         if not backend_status(self.toolchains)['ready']:
-            raise ValueError('DEVELOPER_BACKEND_UNAVAILABLE：需要 Windows Sandbox CLI 與本機明確設定的唯讀工具鏈；不會改用主機命令。')
+            raise ValueError('DEVELOPER_BACKEND_UNAVAILABLE：需要可用的 Windows Sandbox CLI；不會改用主機命令。')
         if not command.strip() or '\0' in command or len(command) > 8192:
             raise ValueError('COMMAND_LIMIT：命令必須為 1 至 8192 字元。')
         from developer_vm import VMProcess
@@ -167,16 +181,19 @@ class DeveloperControl(FullControl):
         if normalize_access_mode(mode) != DEVELOPER_CONTROL:
             raise ValueError('DEVELOPER_MODE_REQUIRED：需要本機明確授權的開發模式。')
         self.files = ControlledFiles(workspace, FULL_CONTROL)
+        if toolchains is None:
+            from developer_toolchains import discover_toolchains
+            toolchains = discover_toolchains([reader.root for reader in workspace.readers.values()])
         self.sessions = DeveloperSessions(self.files, mode, normalize_toolchains(toolchains))
 
     def start_process(self, command: Annotated[str, Field(strict=True, min_length=1, max_length=8192)],
                       working_directory: RelativePath | None = None, root_id: str | None = None,
                       timeout_ms: Annotated[int, Field(strict=True, ge=0, le=3000)] = 1000,
                       lifetime_seconds: Annotated[int, Field(strict=True, ge=1, le=3600)] = 900) -> dict:
-        """在隔離 Windows Sandbox 執行 PowerShell；root 直接讀寫、明確工具鏈唯讀映射。
+        """在隔離 Windows Sandbox 執行 PowerShell；root 直接讀寫、自動偵測工具鏈唯讀映射。
 
         只用 guest 系統環境，不繼承主機 profile／憑證；網路與剪貼簿關閉。
-        PATH 含本機指定工具鏈的 root/cmd/bin/usr/bin/mingw64/bin；工作目錄為 root 內相對路徑。
+        PATH 含安全安裝工具鏈的 root/cmd/bin/usr/bin/mingw64/bin；無額外工具仍可使用內建 PowerShell。
         初次啟動可能需數十秒，用 session_id 讀取輸出；同時只執行一個 VM session。
         映射含向外硬連結／重新解析點、VM 或清理能力不可用時拒絕，沒有主機 fallback。
         """
