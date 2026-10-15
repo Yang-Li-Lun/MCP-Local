@@ -278,7 +278,9 @@ class App:
         self.wake_tick()
 
     def popup(self) -> None:
-        self.tray.popup([
+        from tray_windows import TrayDesktopUnavailable
+
+        actions = [
             ('開啟快捷設定', True, self.show),
             ('啟動連線', self.control_states()['start'], self.start),
             ('停止連線', self.control_states()['stop'], self.stop),
@@ -287,7 +289,11 @@ class App:
                lambda value=mode: self.change_power_mode(value), self.power.mode.value == mode)
               for mode, label in (('off', '電源：關閉'), ('extreme', '電源：極致節能'))],
             ('退出程式', not self.quitting, self.quit),
-        ])
+        ]
+        try:
+            self.tray.popup(actions)
+        except TrayDesktopUnavailable as exc:
+            self.status.set(str(exc))
 
     def create_folder_selector(self, parent) -> None:
         frame = ttk.LabelFrame(parent, text='授權資料夾', padding=6)

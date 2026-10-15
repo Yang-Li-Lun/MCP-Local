@@ -62,6 +62,46 @@ class GuiControlTests(unittest.TestCase):
                     self.assertEqual(str(getattr(a, name + '_button')['state']), 'normal' if enabled else 'disabled')
         a.quitting = False
 
+    def test_restore_advanced_defaults_includes_dart(self):
+        from tkinter import ttk
+
+        def buttons(widget):
+            for child in widget.winfo_children():
+                if isinstance(child, ttk.Button):
+                    yield child
+                yield from buttons(child)
+
+        reset = next(button for button in buttons(self.window)
+                     if button.cget('text') == '還原進階預設值')
+        reset.invoke()
+        extensions = self.app.reader_lists['extensions'].get('1.0', 'end')
+        self.assertIn('.dart', extensions)
+
+    def test_tray_desktop_denied_preserves_connection_and_allows_retry(self):
+        from tray_windows import TrayDesktopUnavailable
+
+        app = self.app
+        app.running, app.state = True, 'RUNNING'
+        settings = dict(app.settings)
+        with patch.object(app.connection, 'stop') as stop, patch.object(
+                app.connection.cancel, 'set') as cancel:
+            app.tray.popup.side_effect = TrayDesktopUnavailable('互動桌面目前無法存取')
+            app.popup()
+            self.assertIn('互動桌面', app.status.get())
+            self.assertTrue(app.running)
+            self.assertEqual(app.state, 'RUNNING')
+            self.assertEqual(app.settings, settings)
+            stop.assert_not_called()
+            cancel.assert_not_called()
+            app.tray.popup.side_effect = None
+            app.popup()
+            self.assertEqual(app.tray.popup.call_count, 2)
+
+    def test_tray_unrelated_failure_is_not_hidden(self):
+        self.app.tray.popup.side_effect = OSError('injected menu failure')
+        with self.assertRaisesRegex(OSError, 'injected menu failure'):
+            self.app.popup()
+
     def test_only_three_modes_and_no_manual_toolchain_controls(self):
         from access_mode import MODE_LABELS
         a = self.app

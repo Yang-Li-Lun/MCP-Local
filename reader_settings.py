@@ -11,7 +11,7 @@ DEFAULT_EXTENSIONS = {
     '.json', '.yaml', '.yml', '.toml', '.ini', '.cfg', '.csv', '.tsv',
     '.py', '.js', '.jsx', '.ts', '.tsx', '.html', '.css', '.scss',
     '.c', '.h', '.cpp', '.hpp', '.cs', '.go', '.rs', '.sql', '.pine',
-    '.sh', '.ps1', '.bat', '.log', '.properties',
+    '.sh', '.ps1', '.bat', '.log', '.properties', '.dart',
 }
 DEFAULT_NAMES = {'readme', 'license', 'dockerfile', 'makefile', 'cmakelists.txt', 'go.mod'}
 DEFAULT_EXCLUSIONS = {

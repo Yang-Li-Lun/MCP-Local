@@ -13,6 +13,60 @@ from tool_contract import verify_contract
 
 
 class McpSmokeTests(unittest.TestCase):
+    def test_dart_read_tools_over_stdio(self):
+        async def smoke(root):
+            parameters = StdioServerParameters(command=sys.executable, args=[
+                '-B', str(Path('local_files_mcp.py').resolve()), '--root', str(root),
+                '--reader-settings', encode_reader_settings({'max_file_bytes': 128})])
+            async with stdio_client(parameters) as (read, write):
+                async with ClientSession(read, write) as session:
+                    await session.initialize()
+                    verify_contract((await session.list_tools()).tools)
+                    for path in ('sample.dart', 'upper.DART', 'original.txt', 'original.py'):
+                        for tool, args in (
+                            ('read_file', {'path': path}),
+                            ('read_files', {'files': [{'path': path}]}),
+                            ('read_file_ranges', {'path': path, 'ranges': [
+                                {'start_line': 1, 'line_count': 1},
+                                {'start_line': 2, 'line_count': 1}]}),
+                        ):
+                            with self.subTest(path=path, tool=tool):
+                                result = await session.call_tool(tool, args)
+                                self.assertFalse(result.isError)
+                                self.assertIn('測試', str(result.content))
+                                if tool == 'read_files':
+                                    self.assertNotIn('skipped_reason', json.loads(result.content[0].text)['files'][0])
+                    for path in ('bad.dart', 'nul.dart', 'large.dart', '.hidden.dart',
+                                 'build/blocked.dart', '../outside.dart', 'blocked.unknown',
+                                 'linked.dart', 'hardlink.dart'):
+                        for tool, args in (
+                            ('read_file', {'path': path, 'line_count': 1}),
+                            ('read_files', {'files': [{'path': path, 'line_count': 1}]}),
+                            ('read_file_ranges', {'path': path, 'ranges': [
+                                {'start_line': 1, 'line_count': 1}]}),
+                        ):
+                            with self.subTest(path=path, tool=tool):
+                                result = await session.call_tool(tool, args)
+                                if tool == 'read_files':
+                                    self.assertIn('skipped_reason', json.loads(result.content[0].text)['files'][0])
+                                else:
+                                    self.assertTrue(result.isError)
+
+        with tempfile.TemporaryDirectory(dir=Path.cwd()) as directory:
+            root = Path(directory)
+            for name in ('sample.dart', 'upper.DART', 'original.txt', 'original.py',
+                         '.hidden.dart', 'blocked.unknown'):
+                (root / name).write_text('// 測試\nvoid main() {}\n', encoding='utf-8')
+            (root / 'bad.dart').write_bytes(b'// valid first line\n\xff')
+            (root / 'nul.dart').write_bytes(b'// valid first line\n\x00')
+            (root / 'large.dart').write_bytes(b'// first\n' + b'x' * 129)
+            (root / 'build').mkdir()
+            (root / 'build' / 'blocked.dart').write_text('// blocked', encoding='utf-8')
+            (root / 'linked.dart').symlink_to(root / 'sample.dart')
+            (root / 'link-target.dart').write_text('// blocked', encoding='utf-8')
+            (root / 'hardlink.dart').hardlink_to(root / 'link-target.dart')
+            asyncio.run(smoke(root))
+
     def test_pagination_over_stdio(self):
         async def smoke(root):
             parameters = StdioServerParameters(command=sys.executable, args=[

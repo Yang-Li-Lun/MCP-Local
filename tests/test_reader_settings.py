@@ -11,6 +11,11 @@ from reader_settings import normalize_reader_settings, encode_reader_settings, d
 
 
 class ReaderSettingsTests(unittest.TestCase):
+    def test_dart_default_and_explicit_extension_selection(self):
+        self.assertIn('.dart', normalize_reader_settings()['extensions'])
+        self.assertIn('.dart', decode_reader_settings(encode_reader_settings())['extensions'])
+        self.assertEqual(normalize_reader_settings({'extensions': ['.txt']})['extensions'], ['.txt'])
+
     def test_old_configuration_migrates_without_losing_fields(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / 'settings.json'
