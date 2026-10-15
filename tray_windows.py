@@ -117,6 +117,10 @@ class Job:
             self.handle = None
 
 
+class TrayDesktopUnavailable(PermissionError):
+    """Windows 暫時拒絕存取輸入桌面；不得切換桌面或提升權限。"""
+
+
 class Tray:
     """左鍵開啟設定，右鍵開啟操作選單；Explorer 重啟時恢復圖示。"""
     def __init__(self, show, menu, notify=None, *, icon_style='classic'):
@@ -202,7 +206,12 @@ class Tray:
                     raise c.WinError(c.get_last_error())
             point = w.POINT()
             if not user.GetCursorPos(c.byref(point)):
-                raise c.WinError(c.get_last_error())
+                error = c.get_last_error()
+                if error == 5:
+                    raise TrayDesktopUnavailable(
+                        '目前無法存取互動桌面，請返回已解鎖的桌面後再開啟系統匣選單。'
+                    ) from c.WinError(error)
+                raise c.WinError(error)
             user.SetForegroundWindow(self.window)
             # TPM_RETURNCMD | TPM_RIGHTBUTTON；使用原生選單迴圈處理點選。
             selected = user.TrackPopupMenuEx(menu, 0x102, point.x, point.y, self.window, None)

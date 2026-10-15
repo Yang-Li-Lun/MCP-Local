@@ -8,10 +8,32 @@ from unittest.mock import patch
 from PIL import Image
 from connection_settings import load_settings, save_settings
 from icon_assets import ICON_STYLES, icon_path
-from tray_windows import NotifyIcon, Tray
+from tray_windows import NotifyIcon, Tray, TrayDesktopUnavailable
 
 
 class IconTests(unittest.TestCase):
+    def test_tray_cursor_denied_releases_menu_without_dispatch(self):
+        from unittest.mock import Mock
+
+        tray = Tray.__new__(Tray)
+        tray.window = 101
+        action = Mock()
+        for error, expected in ((5, TrayDesktopUnavailable), (6, OSError)):
+            with self.subTest(error=error), patch(
+                    'tray_windows.user.CreatePopupMenu', return_value=202), patch(
+                    'tray_windows.user.AppendMenuW', return_value=1), patch(
+                    'tray_windows.user.GetCursorPos', return_value=0), patch(
+                    'tray_windows.c.get_last_error', return_value=error), patch(
+                    'tray_windows.user.TrackPopupMenuEx') as track, patch(
+                    'tray_windows.user.DestroyMenu') as destroy:
+                with self.assertRaises(expected) as raised:
+                    tray.popup([('fixture', True, action)])
+                if error != 5:
+                    self.assertNotIsInstance(raised.exception, TrayDesktopUnavailable)
+                destroy.assert_called_once_with(202)
+                track.assert_not_called()
+                action.assert_not_called()
+
     def test_default_roundtrip_and_backup(self):
         with tempfile.TemporaryDirectory() as folder:
             target = Path(folder) / 'settings.json'

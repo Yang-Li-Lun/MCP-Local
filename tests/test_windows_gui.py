@@ -23,6 +23,13 @@ class WindowsGuiTests(unittest.TestCase):
         self.addCleanup(mutex.stop)
 
     def test_real_tray_notifications_open_menu_then_settings(self):
+        from tray_windows import user
+        point = wintypes.POINT()
+        if not user.GetCursorPos(ctypes.byref(point)):
+            error = ctypes.get_last_error()
+            if error == 5:
+                self.skipTest('輸入桌面無法存取（WinError 5）；需已解鎖且可操作的桌面驗收原生選單。')
+            raise ctypes.WinError(error)
         # 獨立程序執行真正的 Tcl/Win32 訊息迴圈，能捕捉原生 GIL 崩潰。
         program = r'''
 import ctypes, os, threading, time, tkinter as tk
@@ -114,6 +121,10 @@ print('REAL_TRAY_EVENTS_OK')
         self.assertIsNone(connection.job)
 
     def test_tray_hide_restore_and_exit(self):
+        # 本測試已模擬選單選取；游標同樣隔離，不依賴鎖定狀態。
+        cursor = patch('tray_windows.user.GetCursorPos', return_value=1)
+        cursor.start()
+        self.addCleanup(cursor.stop)
         window = tk.Tk()
         settings = load_settings(Path('nonexistent-test-settings.json'))
         store = Mock()
