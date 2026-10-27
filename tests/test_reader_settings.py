@@ -4,10 +4,10 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from local_files_gui import build_commands, load_settings, save_settings
-from local_files_mcp import FileReader
+from mcp_local.local_files_gui import build_commands, load_settings, save_settings
+from mcp_local.local_files_mcp import FileReader
 from command_fixture import command_project
-from reader_settings import normalize_reader_settings, encode_reader_settings, decode_reader_settings
+from mcp_local.reader_settings import normalize_reader_settings, encode_reader_settings, decode_reader_settings
 
 
 class ReaderSettingsTests(unittest.TestCase):

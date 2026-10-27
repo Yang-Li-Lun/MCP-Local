@@ -23,10 +23,10 @@ from PIL import Image, features
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
-from format_reader import parse_snapshot, MAX_RESPONSE
-from structured_parser import sqlite_supported
-from workspace_reader import WorkspaceReader
-from tool_contract import verify_contract, SERVICE_VERSION, CONTRACT_VERSION
+from mcp_local.format_reader import parse_snapshot, MAX_RESPONSE
+from mcp_local.structured_parser import sqlite_supported
+from mcp_local.workspace_reader import WorkspaceReader
+from mcp_local.tool_contract import verify_contract, SERVICE_VERSION, CONTRACT_VERSION
 
 
 def zip_bytes(entries, compression=zipfile.ZIP_STORED):
@@ -444,7 +444,7 @@ class ExpansionTests(unittest.TestCase):
 
     def test_worker_audit_denies_file_network_process_sqlite_file_extension(self):
         script = '''import sys, sqlite3, socket, subprocess
-from format_worker import deny_external_access
+from mcp_local.format_worker import deny_external_access
 sys.addaudithook(deny_external_access)
 checks = [lambda: open('forbidden','w'), lambda: socket.socket(), lambda: subprocess.run(['never']),
           lambda: sqlite3.connect('forbidden.db'), lambda: sqlite3.connect(':memory:').enable_load_extension(True)]
@@ -462,7 +462,7 @@ print('all blocked')
         self.assertIn('all blocked', result.stdout)
 
     def test_worker_real_memory_ceiling(self):
-        script = '''from format_worker import memory_limit
+        script = '''from mcp_local.format_worker import memory_limit
 memory_limit()
 try:
     data = bytearray(1024*1024*1024)

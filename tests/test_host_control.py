@@ -6,9 +6,9 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from host_control import HostControl
-from host_windows import host_environment
-from workspace_reader import WorkspaceReader
+from mcp_local.host_control import HostControl
+from mcp_local.host_windows import host_environment
+from mcp_local.workspace_reader import WorkspaceReader
 
 
 class HostControlTests(unittest.TestCase):
@@ -52,7 +52,7 @@ class HostControlTests(unittest.TestCase):
         state.mkdir()
         program.mkdir()
         (state / 'credential.txt').write_text('synthetic only')
-        with patch('security_policy.STATE_DIR', state), patch('control_files.PROJECT', program):
+        with patch('mcp_local.security_policy.STATE_DIR', state), patch('mcp_local.control_files.PROJECT', program):
             with self.assertRaises(ValueError):
                 self.control.read_host_file(str(state / 'credential.txt'))
             for path in (state / 'new.txt', program / 'new.txt'):
@@ -111,7 +111,7 @@ class HostControlTests(unittest.TestCase):
             self.control.start_process("Write-Output 'denied'")
 
     def test_failed_token_check_never_resumes_command(self):
-        from host_windows import HostProcess
+        from mcp_local.host_windows import HostProcess
         process = HostProcess(self.outside)
         self.addCleanup(process.close)
         target = str(self.outside / 'never.txt').replace("'", "''")

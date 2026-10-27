@@ -4,7 +4,7 @@ import sys
 import threading
 import time
 import unittest
-from power_windows import CancelEvent
+from mcp_local.power_windows import CancelEvent
 
 
 class NativeWaitTests(unittest.TestCase):
@@ -39,10 +39,10 @@ class NativeWaitTests(unittest.TestCase):
     def test_live_mode_channel_updates_existing_child_without_restart(self):
         import os
         import queue
-        from power_windows import WindowsPower, ModeChannel
+        from mcp_local.power_windows import WindowsPower, ModeChannel
         api = WindowsPower()
         channel = ModeChannel(api, 'off')
-        program = ('import sys,threading; from power_windows import WindowsPower,follow_mode; '
+        program = ('import sys,threading; from mcp_local.power_windows import WindowsPower,follow_mode; '
                    'WindowsPower.qos=lambda self,enabled: print(int(enabled),flush=True); '
                    'follow_mode(sys.argv[1],int(sys.argv[2])); threading.Event().wait()')
         process = subprocess.Popen([sys.executable, '-B', '-c', program, channel.token, str(os.getpid())],

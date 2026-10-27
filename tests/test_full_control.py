@@ -9,14 +9,14 @@ import time
 import unittest
 from unittest.mock import patch, Mock
 
-from access_mode import CONTROL_TOOLS
-from connection_settings import normalize_connection, save_settings, load_settings, load_for_edit, build_commands
-from control_edit import replace_block
-from control_files import ControlledFiles, MAX_WRITE_BYTES
-from control_sessions import Session, MAX_OUTPUT
-from local_files_mcp import create_server
-from tool_contract import verify_contract
-from workspace_reader import WorkspaceReader, TOOLS
+from mcp_local.access_mode import CONTROL_TOOLS
+from mcp_local.connection_settings import normalize_connection, save_settings, load_settings, load_for_edit, build_commands
+from mcp_local.control_edit import replace_block
+from mcp_local.control_files import ControlledFiles, MAX_WRITE_BYTES
+from mcp_local.control_sessions import Session, MAX_OUTPUT
+from mcp_local.local_files_mcp import create_server
+from mcp_local.tool_contract import verify_contract
+from mcp_local.workspace_reader import WorkspaceReader, TOOLS
 from command_fixture import command_project
 from legacy_control_fixture import legacy_server
 
@@ -114,12 +114,12 @@ class FullControlTests(unittest.TestCase):
             self.control.create_directory('linkdir/new')
 
     def test_service_and_state_protected(self):
-        import control_files
+        from mcp_local import control_files
         with patch.object(control_files, 'PROJECT', self.root / 'program'):
             (self.root / 'program').mkdir()
             with self.assertRaisesRegex(ValueError, 'CONTROL_PLANE_PROTECTED'):
                 self.control.write_file('program/a.py', 'pass')
-        with patch('security_policy.STATE_DIR', self.root / 'state'):
+        with patch('mcp_local.security_policy.STATE_DIR', self.root / 'state'):
             (self.root / 'state').mkdir()
             with self.assertRaises(ValueError):
                 self.control.write_file('state/settings.json', '{}')
@@ -132,7 +132,7 @@ class FullControlTests(unittest.TestCase):
     def test_write_failure_rolls_back_preserves_acl_object(self):
         result = self.control.write_file('a.txt', 'old')
         inode = (self.root / 'a.txt').stat().st_ino
-        with patch('control_files.os.fsync', side_effect=[OSError('fixture'), None]):
+        with patch('mcp_local.control_files.os.fsync', side_effect=[OSError('fixture'), None]):
             with self.assertRaises(OSError):
                 self.control.write_file('a.txt', 'replacement', 'rewrite', result['sha256'])
         self.assertEqual((self.root / 'a.txt').read_bytes(), b'old')
@@ -237,7 +237,7 @@ class FullControlTests(unittest.TestCase):
             self.control.force_terminate('0' * 32)
 
     def test_sandbox_failure_never_runs_host_fallback(self):
-        with patch('control_sessions.Sandbox', side_effect=ValueError('SANDBOX_UNAVAILABLE')):
+        with patch('mcp_local.control_sessions.Sandbox', side_effect=ValueError('SANDBOX_UNAVAILABLE')):
             with self.assertRaisesRegex(ValueError, 'SANDBOX_UNAVAILABLE'):
                 self.control.start_process('Write-Output unsafe')
         self.assertEqual(self.control.list_sessions()['sessions'], [])

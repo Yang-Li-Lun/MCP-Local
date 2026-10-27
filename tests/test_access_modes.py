@@ -9,14 +9,14 @@ import unittest
 from unittest.mock import patch
 import xml.etree.ElementTree as ET
 
-from access_mode import MODES
-from autostart_windows import BackgroundStatus
-from connection_cli import set_local_mode
-from connection_settings import normalize_connection, load_settings, save_settings
-from developer_control import DeveloperControl, backend_status, build_vm_mapping_plan
-from local_files_mcp import create_server
-from tool_contract import verify_contract
-from workspace_reader import WorkspaceReader
+from mcp_local.access_mode import MODES
+from mcp_local.autostart_windows import BackgroundStatus
+from mcp_local.connection_cli import set_local_mode
+from mcp_local.connection_settings import normalize_connection, load_settings, save_settings
+from mcp_local.developer_control import DeveloperControl, backend_status, build_vm_mapping_plan
+from mcp_local.local_files_mcp import create_server
+from mcp_local.tool_contract import verify_contract
+from mcp_local.workspace_reader import WorkspaceReader
 
 
 class AccessModesTests(unittest.TestCase):
@@ -74,18 +74,18 @@ class AccessModesTests(unittest.TestCase):
         def save(value, path, **kwargs):
             order.append('save')
             save_settings(value, path, **kwargs)
-        with patch('connection_cli.CONFIG_FILE', self.path), patch('autostart_windows.get_background_status',
-                return_value=BackgroundStatus(True, True, True)), patch('autostart_windows.stop_background',
-                side_effect=lambda: order.append('stop')), patch('autostart_windows.start_background',
-                side_effect=lambda: order.append('start')), patch('connection_cli.save_settings', side_effect=save):
+        with patch('mcp_local.connection_cli.CONFIG_FILE', self.path), patch('mcp_local.autostart_windows.get_background_status',
+                return_value=BackgroundStatus(True, True, True)), patch('mcp_local.autostart_windows.stop_background',
+                side_effect=lambda: order.append('stop')), patch('mcp_local.autostart_windows.start_background',
+                side_effect=lambda: order.append('start')), patch('mcp_local.connection_cli.save_settings', side_effect=save):
             set_local_mode(self.path, 'host_control')
         self.assertEqual(order, ['stop', 'save', 'start'])
 
     def test_cli_refuses_unknown_manual_connection_even_if_saved_mode_matches(self):
         save_settings(self.settings, self.path)
         before = self.path.read_bytes()
-        with patch('connection_cli.CONFIG_FILE', self.path), patch('autostart_windows.get_background_status',
-                return_value=BackgroundStatus(False, False, False)), patch('connection_cli.existing_tunnel', return_value=True):
+        with patch('mcp_local.connection_cli.CONFIG_FILE', self.path), patch('mcp_local.autostart_windows.get_background_status',
+                return_value=BackgroundStatus(False, False, False)), patch('mcp_local.connection_cli.existing_tunnel', return_value=True):
             with self.assertRaisesRegex(ValueError, 'MODE_SWITCH_APP_RUNNING'):
                 set_local_mode(self.path, 'read_only')
         self.assertEqual(self.path.read_bytes(), before)
@@ -94,12 +94,12 @@ class AccessModesTests(unittest.TestCase):
         workspace = WorkspaceReader(self.settings['roots'], 'main')
         control = DeveloperControl(workspace)
         self.addCleanup(control.close)
-        with patch('developer_control.backend_status', return_value={'ready': False}), patch('host_windows.HostProcess.start') as host, patch('control_sessions.Sandbox') as sandbox:
+        with patch('mcp_local.developer_control.backend_status', return_value={'ready': False}), patch('mcp_local.host_windows.HostProcess.start') as host, patch('mcp_local.control_sessions.Sandbox') as sandbox:
             with self.assertRaisesRegex(ValueError, 'DEVELOPER_BACKEND_UNAVAILABLE'):
                 control.start_process("Write-Output 'must not run'")
         host.assert_not_called()
         sandbox.assert_not_called()
-        with patch('developer_control.Path.is_file', return_value=True):
+        with patch('mcp_local.developer_control.Path.is_file', return_value=True):
             self.assertTrue(backend_status()['ready'])
             self.assertTrue(backend_status()['execution_adapter_implemented'])
             self.assertTrue(backend_status()['ready'])  # Built-in PowerShell needs no extra toolchain.
@@ -109,8 +109,8 @@ class AccessModesTests(unittest.TestCase):
         runtime, windows = self.base / 'python-runtime', self.base / 'windows-system'
         for path in (toolchain, state, service, runtime, windows):
             path.mkdir()
-        with patch('developer_control.security_policy.STATE_DIR', state), patch('developer_control.PROJECT', service), patch(
-                'developer_control.sys.base_prefix', str(runtime)), patch.dict(os.environ, {'SystemRoot': str(windows)}):
+        with patch('mcp_local.developer_control.security_policy.STATE_DIR', state), patch('mcp_local.developer_control.PROJECT', service), patch(
+                'mcp_local.developer_control.sys.base_prefix', str(runtime)), patch.dict(os.environ, {'SystemRoot': str(windows)}):
             xml = ET.fromstring(build_vm_mapping_plan([self.root], [toolchain]))
             self.assertEqual([node.text for node in xml.findall('MappedFolders/MappedFolder/ReadOnly')], ['false', 'true'])
             self.assertEqual(xml.findtext('ClipboardRedirection'), 'Disable')
@@ -120,7 +120,7 @@ class AccessModesTests(unittest.TestCase):
                     build_vm_mapping_plan(roots, tools)
 
     def test_real_stdio_mode_discovery_host_commands_and_downgrade(self):
-        from verify_access_modes_stdio import verify
+        from tools.verification.verify_access_modes_stdio import verify
         report = asyncio.run(verify())
         self.assertEqual([row['tools'] for row in report['modes']], [22, 34, 36, 22])
         self.assertEqual(report['developer_vm_acceptance'], 'NOT_RUN_IN_THIS_SCRIPT')
@@ -137,8 +137,8 @@ class AccessModesTests(unittest.TestCase):
         toolchain.mkdir()
         control = DeveloperControl(WorkspaceReader(self.settings['roots'], 'main'), toolchains=[str(toolchain)])
         self.addCleanup(control.close)
-        with patch('developer_control.backend_status', return_value={'ready': True}), patch(
-                'developer_vm.GuardOwner') as guard:
+        with patch('mcp_local.developer_control.backend_status', return_value={'ready': True}), patch(
+                'mcp_local.developer_vm.GuardOwner') as guard:
             with self.assertRaisesRegex(ValueError, 'VM_MAPPING_ALIAS'):
                 control.start_process('must never execute')
         guard.assert_not_called()
@@ -181,8 +181,8 @@ class AccessModesTests(unittest.TestCase):
     def test_empty_detection_can_start_guest_builtin_with_ready_backend(self):
         control = DeveloperControl(WorkspaceReader(self.settings['roots'], 'main'), toolchains=[])
         self.addCleanup(control.close)
-        with patch('developer_control.backend_status', return_value={'ready': True}), patch(
-                'developer_vm.VMProcess.start', side_effect=ValueError('REACHED_VM_START')) as start:
+        with patch('mcp_local.developer_control.backend_status', return_value={'ready': True}), patch(
+                'mcp_local.developer_vm.VMProcess.start', side_effect=ValueError('REACHED_VM_START')) as start:
             with self.assertRaisesRegex(ValueError, 'REACHED_VM_START'):
                 control.start_process("Write-Output 'guest builtin'")
         start.assert_called_once()

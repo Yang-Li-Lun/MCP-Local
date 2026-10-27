@@ -1,0 +1,3 @@
+# Preserve fixed contract and upstream notice bytes across Git checkouts.
+/contracts/tool-contract*.json text eol=crlf
+/third_party/tunnel-client/* -text

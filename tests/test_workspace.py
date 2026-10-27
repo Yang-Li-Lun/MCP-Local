@@ -9,16 +9,16 @@ import unittest
 from unittest.mock import patch
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
-from connection_settings import load_settings, save_settings, normalize_connection, build_commands
-from workspace_settings import normalize_workspace, encode_workspace
+from mcp_local.connection_settings import load_settings, save_settings, normalize_connection, build_commands
+from mcp_local.workspace_settings import normalize_workspace, encode_workspace
 from command_fixture import command_project
-from workspace_reader import WorkspaceReader, TOOLS, BATCH_BYTES, CONTEXT_BYTES, encoded_size
+from mcp_local.workspace_reader import WorkspaceReader, TOOLS, BATCH_BYTES, CONTEXT_BYTES, encoded_size
 
 
 class WorkspaceTests(unittest.TestCase):
     def setUp(self):
-        from autostart_windows import BackgroundStatus
-        status = patch('local_files_gui.get_background_status',
+        from mcp_local.autostart_windows import BackgroundStatus
+        status = patch('mcp_local.local_files_gui.get_background_status',
                        return_value=BackgroundStatus(False, False, False))
         status.start()
         self.addCleanup(status.stop)
@@ -36,8 +36,8 @@ class WorkspaceTests(unittest.TestCase):
         self.reader = WorkspaceReader(self.roots, 'main')
 
     def test_isolation_default_and_cursor(self):
-        self.assertIn('alpha', self.reader.read_file('README.md')['content'])
-        self.assertIn('beta', self.reader.read_file('README.md', root_id='other')['content'])
+        self.assertIn('alpha', self.reader.read_file('README.md')['text'])
+        self.assertIn('beta', self.reader.read_file('README.md', root_id='other')['text'])
         for root in (self.a, self.b):
             (root / 'second.txt').touch()
         cursor = self.reader.list_files(limit=1)['next_cursor']
@@ -287,8 +287,8 @@ class WorkspaceTests(unittest.TestCase):
     def test_command_snapshot_and_gui_persistence(self):
         import tkinter as tk
         from unittest.mock import Mock
-        from local_files_gui import App
-        from workspace_settings import decode_workspace
+        from mcp_local.local_files_gui import App
+        from mcp_local.workspace_settings import decode_workspace
         settings = normalize_connection({'roots': self.roots, 'default_root': 'main',
                                          'tunnel': 'tunnel_test', 'settings_version': 2})
         with command_project():
@@ -301,14 +301,14 @@ class WorkspaceTests(unittest.TestCase):
         window.withdraw()
         store = Mock()
         store.load.return_value = ''
-        with patch('tray_windows.Tray'):
+        with patch('mcp_local.tray_windows.Tray'):
             app = App(window, settings, store)
         try:
             app.folder_list.selection_set(0)
             app.remove_selected_folders()
             self.assertEqual(app.workspace_rows[0]['path'], str(self.b))
             target = self.base / 'settings.json'
-            with patch('local_files_gui.save_settings', side_effect=lambda value: save_settings(value, target)):
+            with patch('mcp_local.local_files_gui.save_settings', side_effect=lambda value: save_settings(value, target)):
                 self.assertTrue(app.save())
                 import time
                 deadline = time.monotonic() + 5
@@ -333,7 +333,7 @@ class WorkspaceTests(unittest.TestCase):
         self.assertIn('credentials.json', accepted.workspace_info()['roots'][0]['limits']['excluded_names'])
 
     def test_snapshot_respects_custom_global_exclusions(self):
-        from workspace_settings import decode_workspace
+        from mcp_local.workspace_settings import decode_workspace
         roots = [dict(self.roots[0], excluded_names=[f'exclude{i}' for i in range(128)])]
         settings = {'excluded_names': []}
         snapshot = encode_workspace({'roots': roots, 'default_root': 'main', 'reader': settings})

@@ -8,13 +8,13 @@ import unittest
 from unittest.mock import patch
 import xml.etree.ElementTree as ET
 
-from local_files_mcp import FileReader
-from snapshot_cache import SnapshotCache
-from connection_settings import save_settings, load_settings, backup_connection_profile
-from connection_runtime import RetryPolicy, ConnectionErrorKind
-from workspace_settings import normalize_workspace
-from integrity import verify_client, IntegrityError
-import autostart_windows as tasks
+from mcp_local.local_files_mcp import FileReader
+from mcp_local.snapshot_cache import SnapshotCache
+from mcp_local.connection_settings import save_settings, load_settings, backup_connection_profile
+from mcp_local.connection_runtime import RetryPolicy, ConnectionErrorKind
+from mcp_local.workspace_settings import normalize_workspace
+from mcp_local.integrity import verify_client, IntegrityError
+from mcp_local import autostart_windows as tasks
 
 
 class OptimizationTests(unittest.TestCase):
@@ -130,9 +130,10 @@ class OptimizationTests(unittest.TestCase):
         self.assertEqual(len(list(self.root.glob('local-files-gui.yaml.*.bak'))), 3)
 
     def test_integrity_valid_invalid_missing_manifest(self):
-        client = self.root / 'tunnel-client.exe'
+        client = self.root / 'third_party/tunnel-client/tunnel-client.exe'
+        client.parent.mkdir(parents=True)
         client.write_bytes(b'fixture')
-        manifest = self.root / 'vendor-integrity.json'
+        manifest = self.root / 'third_party/tunnel-client/vendor-integrity.json'
         manifest.write_text(json.dumps({'tunnel-client.exe': {'sha256': hashlib.sha256(b'fixture').hexdigest()}}))
         verify_client(self.root)
         client.write_bytes(b'changed')
@@ -144,7 +145,7 @@ class OptimizationTests(unittest.TestCase):
 
     def test_retry_backoff_bounded_and_permanent_errors(self):
         policy = RetryPolicy()
-        with patch('connection_runtime.random.uniform', return_value=1):
+        with patch('mcp_local.connection_runtime.random.uniform', return_value=1):
             self.assertEqual([policy.next_delay() for _ in range(7)], [5, 15, 30, 60, 300, 300, 300])
             policy.reset()
             self.assertEqual(policy.next_delay(), 5)
@@ -166,18 +167,18 @@ class OptimizationTests(unittest.TestCase):
         import subprocess
         import sys
         result = subprocess.run([sys.executable, '-B', '-c',
-                                 "import autostart,sys; assert 'tkinter' not in sys.modules"], capture_output=True)
+                                 "import sys; from mcp_local import autostart; assert 'tkinter' not in sys.modules"], capture_output=True)
         self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_autostart_uses_tray_entry(self):
-        import autostart
-        with patch('local_files_gui.main', return_value=0) as run:
+        from mcp_local import autostart
+        with patch('mcp_local.local_files_gui.main', return_value=0) as run:
             self.assertEqual(autostart.main(), 0)
             run.assert_called_once_with(startup=True)
 
     def test_startup_duplicate_is_silent(self):
-        import local_files_gui as gui
-        with patch.object(gui.tk, 'Tk') as window, patch('tray_windows.kernel') as kernel, patch.object(
+        from mcp_local import local_files_gui as gui
+        with patch.object(gui.tk, 'Tk') as window, patch('mcp_local.tray_windows.kernel') as kernel, patch.object(
                 gui.ctypes, 'get_last_error', return_value=183), patch.object(gui.messagebox, 'showinfo') as info:
             self.assertEqual(gui.main(startup=True), 0)
             info.assert_not_called()
@@ -185,9 +186,9 @@ class OptimizationTests(unittest.TestCase):
             kernel.CloseHandle.assert_called_once()
 
     def test_disabled_startup_does_not_create_app(self):
-        import local_files_gui as gui
+        from mcp_local import local_files_gui as gui
         from unittest.mock import Mock
-        with patch.object(gui.tk, 'Tk') as window, patch('tray_windows.kernel'), patch.object(
+        with patch.object(gui.tk, 'Tk') as window, patch('mcp_local.tray_windows.kernel'), patch.object(
                 gui.ctypes, 'get_last_error', return_value=0), patch.object(gui, 'load_for_edit',
                 return_value=Mock(settings={'auto_start': False})), patch.object(gui, 'App') as app:
             self.assertEqual(gui.main(startup=True), 0)
@@ -195,7 +196,7 @@ class OptimizationTests(unittest.TestCase):
             window.return_value.destroy.assert_called_once()
 
     def test_backup_link_is_preserved(self):
-        from backup_rotation import rotate_backups
+        from mcp_local.backup_rotation import rotate_backups
         source = self.root / 'source.txt'
         source.write_text('preserve')
         link = self.root / ('settings.json.' + 'a' * 32 + '.bak')
@@ -205,7 +206,7 @@ class OptimizationTests(unittest.TestCase):
         self.assertEqual(link.read_text(), 'preserve')
 
     def test_remote_approval_only_allows_exact_fixture(self):
-        from secure_tunnel_smoke import FIXTURE, validate_approval
+        from tools.diagnostics.secure_tunnel_smoke import FIXTURE, validate_approval
         item = {'type': 'mcp_approval_request', 'name': 'read_file', 'server_label': 'local_fixture',
                 'arguments': json.dumps(FIXTURE)}
         self.assertTrue(validate_approval(item))

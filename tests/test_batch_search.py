@@ -3,7 +3,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from local_files_mcp import FileReader
+from mcp_local.local_files_mcp import FileReader
 
 
 class BatchSearchTests(unittest.TestCase):

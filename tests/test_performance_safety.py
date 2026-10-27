@@ -6,7 +6,7 @@ import tempfile
 from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
-from local_files_mcp import FileReader
+from mcp_local.local_files_mcp import FileReader
 
 
 class PerformanceSafetyTests(unittest.TestCase):

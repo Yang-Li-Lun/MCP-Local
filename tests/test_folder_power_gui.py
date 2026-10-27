@@ -6,10 +6,10 @@ import time
 import tkinter as tk
 import unittest
 from unittest.mock import Mock, patch
-from connection_settings import normalize_connection, save_settings, load_settings
-from workspace_settings import create_workspace_root, allocate_root_id, normalize_workspace
-from power_policy import PowerPolicyManager, PowerMode
-from local_files_gui import App
+from mcp_local.connection_settings import normalize_connection, save_settings, load_settings
+from mcp_local.workspace_settings import create_workspace_root, allocate_root_id, normalize_workspace
+from mcp_local.power_policy import PowerPolicyManager, PowerMode
+from mcp_local.local_files_gui import App
 
 
 class FolderPowerGuiTests(unittest.TestCase):
@@ -51,7 +51,7 @@ class FolderPowerGuiTests(unittest.TestCase):
         for path in (self.base / 'missing', Path.home(), Path('relative')):
             with self.assertRaises(ValueError):
                 create_workspace_root(str(path), [])
-        with patch('connection_settings.CONFIG_DIR', self.folders[0] / 'settings'):
+        with patch('mcp_local.connection_settings.CONFIG_DIR', self.folders[0] / 'settings'):
             with self.assertRaisesRegex(ValueError, '設定'):
                 create_workspace_root(str(self.folders[0]), [])
 
@@ -86,7 +86,7 @@ class FolderPowerGuiTests(unittest.TestCase):
     def create_app(self):
         window = tk.Tk()
         window.withdraw()
-        with patch('tray_windows.Tray'):
+        with patch('mcp_local.tray_windows.Tray'):
             app = App(window, self.settings)
         window.update_idletasks()
         self.addCleanup(app.finish)
@@ -111,7 +111,7 @@ class FolderPowerGuiTests(unittest.TestCase):
         self.assertEqual(app.workspace_rows, [])
         self.assertFalse(app.control_states()['save'])
         self.assertFalse(app.control_states()['start'])
-        with patch('local_files_gui.messagebox.showerror'):
+        with patch('mcp_local.local_files_gui.messagebox.showerror'):
             self.assertFalse(app.save())
 
     def test_gui_changes_preserve_identity_and_save_order(self):
@@ -119,15 +119,15 @@ class FolderPowerGuiTests(unittest.TestCase):
         app.workspace_rows[0]['excluded_names'] = ['private']
         identifier = app.workspace_rows[0]['id']
         app.folder_list.selection_set(0)
-        with patch('local_files_gui.filedialog.askdirectory', return_value=str(self.folders[1])):
+        with patch('mcp_local.local_files_gui.filedialog.askdirectory', return_value=str(self.folders[1])):
             app.change_selected_folder()
         self.assertEqual(app.workspace_rows[0]['id'], identifier)
         self.assertEqual(app.workspace_rows[0]['excluded_names'], ['private'])
-        with patch('local_files_gui.filedialog.askdirectory', return_value=str(self.folders[2])):
+        with patch('mcp_local.local_files_gui.filedialog.askdirectory', return_value=str(self.folders[2])):
             app.add_folder()
         target = self.base / 'settings.json'
-        with patch('local_files_gui.save_settings', side_effect=lambda v: save_settings(v, target)), \
-             patch('local_files_gui.get_background_status', return_value=None):
+        with patch('mcp_local.local_files_gui.save_settings', side_effect=lambda v: save_settings(v, target)), \
+             patch('mcp_local.local_files_gui.get_background_status', return_value=None):
             app.save()
             self.poll(app)
         loaded = load_settings(target)
@@ -152,7 +152,7 @@ class FolderPowerGuiTests(unittest.TestCase):
             start.assert_not_called()
             stop.assert_not_called()
         with patch.object(app.power, 'apply', side_effect=RuntimeError('fixture')), \
-             patch('local_files_gui.messagebox.showerror'):
+             patch('mcp_local.local_files_gui.messagebox.showerror'):
             app.change_power_mode('off')
             self.poll(app)
         self.assertEqual(app.power_mode.get(), 'extreme')
@@ -167,7 +167,7 @@ class FolderPowerGuiTests(unittest.TestCase):
         self.assertNotIn(app.workspace_rows[0]['id'], app.folder_list.get(0))
 
     def test_three_root_routing_for_all_tools(self):
-        from workspace_reader import WorkspaceReader
+        from mcp_local.workspace_reader import WorkspaceReader
         roots = []
         for index, path in enumerate(self.folders[:3]):
             (path / 'README.md').write_text('marker' + str(index), encoding='utf-8')
@@ -189,4 +189,4 @@ class FolderPowerGuiTests(unittest.TestCase):
                             if other != index:
                                 self.assertNotIn('marker' + str(other), str(result))
         remaining = WorkspaceReader(roots[1:], roots[1]['id'])
-        self.assertIn('marker1', remaining.read_file('README.md')['content'])
+        self.assertIn('marker1', remaining.read_file('README.md')['text'])

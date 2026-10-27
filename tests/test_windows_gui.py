@@ -11,19 +11,19 @@ import tkinter as tk
 import unittest
 from unittest.mock import patch, Mock
 
-from local_files_gui import App, Connection, load_settings
-from tray_windows import Job, kernel, signature
+from mcp_local.local_files_gui import App, Connection, load_settings
+from mcp_local.tray_windows import Job, kernel, signature
 
 
 class WindowsGuiTests(unittest.TestCase):
     def setUp(self):
         import uuid
-        mutex = patch('connection_runtime.CONNECTION_MUTEX', 'Local\\MCP_Test_' + uuid.uuid4().hex)
+        mutex = patch('mcp_local.connection_runtime.CONNECTION_MUTEX', 'Local\\MCP_Test_' + uuid.uuid4().hex)
         mutex.start()
         self.addCleanup(mutex.stop)
 
     def test_real_tray_notifications_open_menu_then_settings(self):
-        from tray_windows import user
+        from mcp_local.tray_windows import user
         point = wintypes.POINT()
         if not user.GetCursorPos(ctypes.byref(point)):
             error = ctypes.get_last_error()
@@ -35,14 +35,14 @@ class WindowsGuiTests(unittest.TestCase):
 import ctypes, os, threading, time, tkinter as tk
 from ctypes import wintypes
 from pathlib import Path
-from local_files_gui import App, load_settings
-from tray_windows import user, signature
+from mcp_local.local_files_gui import App, load_settings
+from mcp_local.tray_windows import user, signature
 signature(user, 'FindWindowW', wintypes.HWND, wintypes.LPCWSTR, wintypes.LPCWSTR)
 signature(user, 'GetWindowThreadProcessId', wintypes.DWORD, wintypes.HWND,
           ctypes.POINTER(wintypes.DWORD))
 w = tk.Tk()
 a = App(w, load_settings(Path('nonexistent-test-settings.json')))
-from power_policy import PowerMode
+from mcp_local.power_policy import PowerMode
 # Exercise five-second hidden ticks without applying Windows policy.
 a.power.mode = PowerMode.EXTREME
 w.withdraw()
@@ -93,8 +93,8 @@ print('REAL_TRAY_EVENTS_OK')
         commands = [[python, '-c', 'import os,ctypes; assert os.environ["CONTROL_PLANE_API_KEY"] == "fake-key"; assert not ctypes.windll.kernel32.GetConsoleWindow()'],
                     [python, '-c', 'raise SystemExit(7)'],
                     [python, '-c', 'raise RuntimeError("must not run")']]
-        with patch('connection_runtime.existing_tunnel', return_value=False), patch(
-                'connection_runtime.build_commands', return_value=commands):
+        with patch('mcp_local.connection_runtime.existing_tunnel', return_value=False), patch(
+                'mcp_local.connection_runtime.build_commands', return_value=commands):
             connection.start({'settings_version': 1}, 'fake-key')
             connection.thread.join(timeout=10)
         self.assertFalse(connection.thread.is_alive())
@@ -106,13 +106,13 @@ print('REAL_TRAY_EVENTS_OK')
     def test_connection_stop_and_duplicate_guard(self):
         python = sys.executable
         connection = Connection()
-        with patch('connection_runtime.existing_tunnel', return_value=True):
+        with patch('mcp_local.connection_runtime.existing_tunnel', return_value=True):
             connection.start({'settings_version': 1}, 'fake-key')
             connection.thread.join(timeout=5)
         self.assertTrue(any(kind == 'error' and 'Ctrl+C' in text for kind, text in connection.events.queue))
         connection = Connection()
-        with patch('connection_runtime.existing_tunnel', return_value=False), patch(
-                'connection_runtime.build_commands', return_value=[[python, '-c', 'import time; time.sleep(60)']]):
+        with patch('mcp_local.connection_runtime.existing_tunnel', return_value=False), patch(
+                'mcp_local.connection_runtime.build_commands', return_value=[[python, '-c', 'import time; time.sleep(60)']]):
             connection.start({'settings_version': 1}, 'fake-key')
             self.assertEqual(connection.events.get(timeout=5)[0], 'status')
             connection.stop()
@@ -122,7 +122,7 @@ print('REAL_TRAY_EVENTS_OK')
 
     def test_tray_hide_restore_and_exit(self):
         # 本測試已模擬選單選取；游標同樣隔離，不依賴鎖定狀態。
-        cursor = patch('tray_windows.user.GetCursorPos', return_value=1)
+        cursor = patch('mcp_local.tray_windows.user.GetCursorPos', return_value=1)
         cursor.start()
         self.addCleanup(cursor.stop)
         window = tk.Tk()
@@ -139,15 +139,15 @@ print('REAL_TRAY_EVENTS_OK')
             window.update()
             self.assertEqual(window.state(), 'withdrawn')
             app.key.set('fake-key-retained')
-            with patch('tray_windows.user.TrackPopupMenuEx', return_value=0) as popup:
+            with patch('mcp_local.tray_windows.user.TrackPopupMenuEx', return_value=0) as popup:
                 app.popup()
                 self.assertTrue(popup.called)
             self.assertEqual(window.state(), 'withdrawn')
             self.assertEqual(app.key.get(), 'fake-key-retained')
-            with patch('tray_windows.user.TrackPopupMenuEx', return_value=2), patch.object(app, 'start') as start:
+            with patch('mcp_local.tray_windows.user.TrackPopupMenuEx', return_value=2), patch.object(app, 'start') as start:
                 app.popup()
                 start.assert_called_once()
-            with patch('tray_windows.user.TrackPopupMenuEx', return_value=7), patch.object(app, 'quit') as quit_app:
+            with patch('mcp_local.tray_windows.user.TrackPopupMenuEx', return_value=7), patch.object(app, 'quit') as quit_app:
                 app.popup()
                 quit_app.assert_called_once()
             app.show()

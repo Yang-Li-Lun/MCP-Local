@@ -6,9 +6,9 @@ import unittest
 from unittest.mock import patch
 
 from PIL import Image
-from connection_settings import load_settings, save_settings
-from icon_assets import ICON_STYLES, icon_path
-from tray_windows import NotifyIcon, Tray, TrayDesktopUnavailable
+from mcp_local.connection_settings import load_settings, save_settings
+from mcp_local.icon_assets import ICON_STYLES, icon_path
+from mcp_local.tray_windows import NotifyIcon, Tray, TrayDesktopUnavailable
 
 
 class IconTests(unittest.TestCase):
@@ -20,12 +20,12 @@ class IconTests(unittest.TestCase):
         action = Mock()
         for error, expected in ((5, TrayDesktopUnavailable), (6, OSError)):
             with self.subTest(error=error), patch(
-                    'tray_windows.user.CreatePopupMenu', return_value=202), patch(
-                    'tray_windows.user.AppendMenuW', return_value=1), patch(
-                    'tray_windows.user.GetCursorPos', return_value=0), patch(
-                    'tray_windows.c.get_last_error', return_value=error), patch(
-                    'tray_windows.user.TrackPopupMenuEx') as track, patch(
-                    'tray_windows.user.DestroyMenu') as destroy:
+                    'mcp_local.tray_windows.user.CreatePopupMenu', return_value=202), patch(
+                    'mcp_local.tray_windows.user.AppendMenuW', return_value=1), patch(
+                    'mcp_local.tray_windows.user.GetCursorPos', return_value=0), patch(
+                    'mcp_local.tray_windows.c.get_last_error', return_value=error), patch(
+                    'mcp_local.tray_windows.user.TrackPopupMenuEx') as track, patch(
+                    'mcp_local.tray_windows.user.DestroyMenu') as destroy:
                 with self.assertRaises(expected) as raised:
                     tray.popup([('fixture', True, action)])
                 if error != 5:
@@ -68,16 +68,16 @@ class IconTests(unittest.TestCase):
         tray = Tray.__new__(Tray)
         tray.icon_style, tray.icon = 'classic', 101
         tray.data = NotifyIcon(icon=101)
-        with patch('tray_windows.user.LoadImageW', return_value=202), patch(
-                'tray_windows.shell.Shell_NotifyIconW', return_value=0), patch(
-                'tray_windows.user.DestroyIcon') as destroy:
+        with patch('mcp_local.tray_windows.user.LoadImageW', return_value=202), patch(
+                'mcp_local.tray_windows.shell.Shell_NotifyIconW', return_value=0), patch(
+                'mcp_local.tray_windows.user.DestroyIcon') as destroy:
             with self.assertRaises(OSError):
                 tray.set_icon('folder_link')
             self.assertEqual((tray.icon, tray.data.icon, tray.icon_style), (101, 101, 'classic'))
             destroy.assert_called_once_with(202)
-        with patch('tray_windows.user.LoadImageW', return_value=303), patch(
-                'tray_windows.shell.Shell_NotifyIconW', return_value=1), patch(
-                'tray_windows.user.DestroyIcon') as destroy:
+        with patch('mcp_local.tray_windows.user.LoadImageW', return_value=303), patch(
+                'mcp_local.tray_windows.shell.Shell_NotifyIconW', return_value=1), patch(
+                'mcp_local.tray_windows.user.DestroyIcon') as destroy:
             tray.set_icon('folder_link')
             self.assertEqual((tray.icon, tray.data.icon, tray.icon_style), (303, 303, 'folder_link'))
             destroy.assert_called_once_with(101)

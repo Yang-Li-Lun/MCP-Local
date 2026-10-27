@@ -1,5 +1,7 @@
 # MCP-Local 本機檔案工具
 
+[文件總索引](docs/INDEX.md) · [專案結構與開發入口](docs/PROJECT_LAYOUT.md)
+
 MCP-Local 是 Windows 上預設唯讀的本機檔案 MCP 服務，在使用者明確授權的資料夾或磁碟範圍內，提供一般檔案探索、格式辨識、metadata、雜湊與有界原始資料，並支援文字、文件、靜態圖片、影音 metadata 與壓縮檔清冊。支援本機 STDIO，也可透過已設定的遠端通道連線。
 
 **服務版本：`2026.10.06.1` · MCP 工具契約：13 · 設定版本：8 · 唯讀工具：22 個**
@@ -19,7 +21,7 @@ MCP-Local 是 Windows 上預設唯讀的本機檔案 MCP 服務，在使用者�
 開發模式需要已啟用的 Windows Sandbox 與新版 `wsb` CLI；安全安裝工具鏈會自動偵測並唯讀映射。
 缺少條件時 `mode_ready=false` 並拒絕命令，沒有主機 fallback。VM 網路／剪貼簿關閉；需主機 profile、網路或特定系統安裝狀態的工具流程須另行確認相容性。
 預設唯讀；任何舊 `full_control` 設定安全降為 `read_only`。v1–v6 不會自動取得開發或主機控制權限。
-切換並儲存會停止舊連線／sessions 後重連。詳細限制、CLI 與驗收見 [權限模式說明](完整控制模式.md)。
+切換並儲存會停止舊連線／sessions 後重連。詳細限制、CLI 與驗收見 [權限模式說明](docs/architecture/完整控制模式.md)。
 
 ## 主要功能
 
@@ -35,11 +37,11 @@ MCP-Local 是 Windows 上預設唯讀的本機檔案 MCP 服務，在使用者�
 
 開啟 GUI 的「外觀」頁籤，可預覽並選擇「原版圖示」或「資料夾連結」。按「儲存設定」後立即套用至視窗與系統匣，不需重新連線；下次啟動沿用已保存的選擇。舊設定未指定 `icon_style` 時維持原版，設定版本為 8。
 
-兩款圖示共存，原始 `mcp-local.ico` 保留。ChatGPT 端需另外選用 PNG，本機外觀設定不會同步至 ChatGPT：
+兩款圖示共存，原始 `assets/icons/mcp-local.ico` 保留。ChatGPT 端需另外選用 PNG，本機外觀設定不會同步至 ChatGPT：
 
 | 樣式 | Windows ICO | MCP 圖標 PNG |
 | --- | --- | --- |
-| 原版圖示 | [mcp-local.ico](mcp-local.ico) | [mcp-local-classic.png](assets/icons/mcp-local-classic.png) |
+| 原版圖示 | [assets/icons/mcp-local.ico](assets/icons/mcp-local.ico) | [mcp-local-classic.png](assets/icons/mcp-local-classic.png) |
 | 資料夾連結 | [mcp-local-v2.ico](assets/icons/mcp-local-v2.ico) | [mcp-local-v2.png](assets/icons/mcp-local-v2.png) |
 
 散布專案時請一併保留 `assets/icons/`。PNG 為 512×512；兩款 ICO 均含 16、24、32、48、64、128、256 像素尺寸。
@@ -55,8 +57,8 @@ py -3.13 -m venv .venv
 .\.venv\Scripts\python.exe -B -c "import sys,tomllib,sqlite3; assert hasattr(sqlite3.Connection,'deserialize') and hasattr(sqlite3.Connection,'setlimit'), 'SQLite runtime 缺少完整解析 API'; print(sys.version, sqlite3.sqlite_version)"
 .\.venv\Scripts\python.exe -m pip install -r requirements-lock.txt
 .\.venv\Scripts\python.exe -m pip check
-.\.venv\Scripts\python.exe -B verify_isolated.py
-.\.venv\Scripts\python.exe -B verify_release_stdio.py
+.\.venv\Scripts\python.exe -B tools/verification/verify_isolated.py
+.\.venv\Scripts\python.exe -B tools/verification/verify_release_stdio.py --report <本次報告.json>
 ```
 
 若未安裝 `py` launcher，可用完整 Python 路徑執行 `-m venv .venv`。升級 Python 不會自動升級既有 `.venv`；重建前先停止 MCP，將舊 `.venv` 移至備份，保留新環境驗證失敗時的回復路徑。不要修改 `%LOCALAPPDATA%\MCP-Local` 的設定、金鑰或共享根。正式 GUI、CLI 與 MCP 子程序均使用專案 `.venv`，應以此環境的能力檢查及實際 `read_document` 呼叫驗收。
@@ -73,7 +75,7 @@ py -3.13 -m venv .venv
 
 ### GUI 與遠端連線
 
-1. 準備經驗證的官方 `tunnel-client.exe`，以及具備通道使用權限的金鑰。供應商二進位檔不包含在 Git 原始碼內。
+1. 準備經驗證的官方 `third_party/tunnel-client/tunnel-client.exe`，以及具備通道使用權限的金鑰。供應商二進位檔不包含在 Git 原始碼內。
 2. 雙擊 `開啟連線設定.vbs`，選取共享資料夾，填入自己的通道識別碼與金鑰，再按「儲存設定」。
 3. 按「啟動連線」，或於完成設定後執行 `.\start-local-files-tunnel.ps1`。
 
@@ -97,7 +99,7 @@ py -3.13 -m venv .venv
 | `list_directory` | 分頁列出直接子目錄與安全規則允許的一般檔案 |
 | `list_files` | 取得有界掃描、全域排序後的分頁檔案清冊 |
 | `find_files` | 依相對路徑做不分大小寫的字面包含比對，定位檔名 |
-| `read_file` | 讀取單檔指定行視窗 |
+| `read_file` | 讀取單檔指定行視窗，`text` 含行號，`next_start_line` 提供續讀位置 |
 | `read_files` | 一次讀取最多 32 個檔案，總回傳上限 512 KiB |
 | `read_file_ranges` | 一次讀取同檔最多 16 個區段，總回傳上限 512 KiB |
 | `search_text` | 搜尋單個字面查詢，可附前後文 |
@@ -107,11 +109,13 @@ py -3.13 -m venv .venv
 | `project_status` | 建立或比較限時記憶體基準；metadata 未變時重用雜湊 |
 | `server_diagnostics` | 核對程式宣告、實際註冊與契約，回報版本、限制及格式 |
 
-省略 `root_id` 時只使用預設根，不會搜尋全部共享根。完整輸入結構與唯讀標記見 [tool-contract.json](tool-contract.json)。
+省略 `root_id` 時只使用預設根，不會搜尋全部共享根。完整輸入結構與唯讀標記見 [contracts/tool-contract.json](contracts/tool-contract.json)。
 
-建議先用 `workspace_info` 確認範圍；已知專案用 `project_context`，探索目錄用 `list_directory`，找檔名用 `find_files`。內容搜尋盡量指定較小目錄，多個已知檔案用 `read_files`，同檔多段用 `read_file_ranges`。
+範圍不明時用 `workspace_info`；已知路徑直接讀取，已知專案入口用 `project_context`。探索目錄用 `list_directory`，多個檔名合併於一次 `find_files`，多詞內容搜尋合併於 `search_texts` 並指定最小目錄。需要少量前後文可設 `context_lines`，片段足夠時不再讀取；多個已知檔案用 `read_files`，同檔多段用 `read_file_ranges`。只有完整 metadata 篩選或全域排序才用 `query_files`；`limit` 不會縮減掃描，續頁沿用相同條件與 `next_cursor`。
 
-完整格式、限制、呼叫範例與部署方式見 [格式讀取說明](格式讀取說明.md)。一般列舉不做內容解析；副檔名設定只控制文字 reader，與檔案是否可見分離。
+公開 `read_file` 的文字欄位為 `text`，其餘欄位為 `path`、`start_line`、`next_start_line`、`total_lines`。`read_files.files[]` 與 `read_file_ranges.ranges[]` 的文字欄位仍為 `content`。MCP 外層仍以 `content` 的文字區塊承載 JSON；客戶端解析單檔結果時須讀取 `text`。
+
+完整格式、限制、呼叫範例與部署方式見 [格式讀取說明](docs/guides/格式讀取說明.md)。一般列舉不做內容解析；副檔名設定只控制文字 reader，與檔案是否可見分離。
 
 ## 限制與安全邊界
 
@@ -128,18 +132,18 @@ py -3.13 -m venv .venv
 
 GUI 與系統匣可即時切換「關閉」或「極致節能」，不需重連；按「儲存設定」保留下次啟動偏好。極致節能使用 EcoQoS、臨時電源方案與 CPU 效能限制，可能增加工具回應時間；連線存活期間會提出防止系統睡眠的要求。
 
-Windows 11 支援時會套用「最佳電源效率」，不強制開啟 Windows 節能器。正常退出或異常結束由還原流程處理；使用者中途改選其他方案或模式時保留其選擇，還原失敗需查看日誌。實機功耗與長時間遠端穩定性仍需另行驗收，詳見 [低功耗模式工程設計](低功耗模式工程設計.md)。
+Windows 11 支援時會套用「最佳電源效率」，不強制開啟 Windows 節能器。正常退出或異常結束由還原流程處理；使用者中途改選其他方案或模式時保留其選擇，還原失敗需查看日誌。實機功耗與長時間遠端穩定性仍需另行驗收，詳見 [低功耗模式工程設計](docs/history/低功耗模式工程設計.md)。
 
 ## 驗證與文件
 
-`verify_isolated.py` 執行隔離語法、相依套件及回歸檢查，並寫出測試報告。一般電源測試使用 mock；真實系統電源測試需另外明確授權。本機驗收與正式用戶端工具發現分別記錄。
+`tools/verification/verify_isolated.py` 執行隔離語法、相依套件及回歸檢查，並寫出測試報告。一般電源測試使用 mock；真實系統電源測試需另外明確授權。本機驗收與正式用戶端工具發現分別記錄。
 
 遠端驗收須在實際 MCP 用戶端重新整理工具清單，依啟動模式確認 22／34／36 個工具並比對對應 contract，再實際呼叫代表性工具。本機測試成功不能代替遠端驗收。
 
-- [增量與診斷工具說明](增量與診斷工具說明.md)：呼叫範例、基準生命週期、差異語意與驗收。
+- [增量與診斷工具說明](docs/guides/增量與診斷工具說明.md)：呼叫範例、基準生命週期、差異語意與驗收。
 - [完整繁體中文說明](README_繁體中文.md)：容量、游標、多根設定、遷移及錯誤處理。
-- [介面使用說明](介面使用說明.md)：GUI、系統匣與連線操作。
-- [性能優化交付報告](性能優化交付報告.md)：性能工具、測試方法與既有實測。
+- [介面使用說明](docs/guides/介面使用說明.md)：GUI、系統匣與連線操作。
+- [性能優化交付報告](docs/history/性能優化交付報告.md)：性能工具、測試方法與既有實測。
 
 ## 授權
 
@@ -152,16 +156,16 @@ Windows 11 支援時會套用「最佳電源效率」，不強制開啟 Windows 
 
 雜湊涵蓋一般檔案的原始位元組，保留 Hidden、link、排除名稱、共享根及容量限制。增量基準僅存在 MCP 程序記憶體，最長 24 小時，每個 workspace 最多 8 份；重啟或淘汰後須重新建立。只快取 metadata 與雜湊，文字讀取仍完整驗證。
 
-更新服務後，用 `server_diagnostics` 核對實際註冊，再從用戶端 `tools/list` 確認工具可見；server 無法自行證明 ChatGPT 已取得工具。完整參數、界線與示例見 [增量與診斷工具說明](增量與診斷工具說明.md)。
+更新服務後，用 `server_diagnostics` 核對實際註冊，再從用戶端 `tools/list` 確認工具可見；server 無法自行證明 ChatGPT 已取得工具。完整參數、界線與示例見 [增量與診斷工具說明](docs/guides/增量與診斷工具說明.md)。
 
 ## 原生圖片讀取（契約 13）
 
-新增 `read_image(path, root_id?)`，以原生 MCP `ImageContent` 傳回 PNG 圖片，既有工具皆保留，目前共 22 個唯讀工具。支援靜態 PNG、JPEG、WebP、GIF、BMP、TIFF、ICO、PNM 與可用 build 的 AVIF；僅使用既有授權根，檔案須通過路徑、Hidden、link、排除名稱、狀態目錄及檔案身分檢查。詳見 [圖片讀取說明](圖片讀取說明.md)。
+新增 `read_image(path, root_id?)`，以原生 MCP `ImageContent` 傳回 PNG 圖片，既有工具皆保留，目前共 22 個唯讀工具。支援靜態 PNG、JPEG、WebP、GIF、BMP、TIFF、ICO、PNM 與可用 build 的 AVIF；僅使用既有授權根，檔案須通過路徑、Hidden、link、排除名稱、狀態目錄及檔案身分檢查。詳見 [圖片讀取說明](docs/guides/圖片讀取說明.md)。
 
 ## 契約 13 格式擴充
 
-保留 22 工具，在 read_document 加入 format_hint/table/expected_sha256，在 inspect_archive 加入 member_path/offset/length/expected_sha256。支援結構化資料、OpenDocument、EPUB、郵件、外掛字幕與更多圖片／媒體 metadata；來源唯讀與原有安全上限保留。詳見 [格式讀取說明](格式讀取說明.md)。
+保留 22 工具，在 read_document 加入 format_hint/table/expected_sha256，在 inspect_archive 加入 member_path/offset/length/expected_sha256。支援結構化資料、OpenDocument、EPUB、郵件、外掛字幕與更多圖片／媒體 metadata；來源唯讀與原有安全上限保留。詳見 [格式讀取說明](docs/guides/格式讀取說明.md)。
 
 ## 批次 metadata 查詢（契約 13）
 
-新增單一 `query_files`，保留原有 21 個工具輸入契約。先完整掃描再篩選、排序與分頁；預設只查 metadata，不讀取檔案內容。`sort_by="created_time", order="asc", limit=1` 查詢整個安全範圍最早建立的檔案。Windows 使用真正 creation time。格式、能力與 SHA-256 僅 opt-in，且只處理本頁。參數、游標及資源限制見 [格式讀取說明](格式讀取說明.md#query_files-批次-metadata-查詢)。
+新增單一 `query_files`，保留原有 21 個工具輸入契約。先完整掃描再篩選、排序與分頁；預設只查 metadata，不讀取檔案內容。`sort_by="created_time", order="asc", limit=1` 查詢整個安全範圍最早建立的檔案。Windows 使用真正 creation time。格式、能力與 SHA-256 僅 opt-in，且只處理本頁。參數、游標及資源限制見 [格式讀取說明](docs/guides/格式讀取說明.md#query_files-批次-metadata-查詢)。

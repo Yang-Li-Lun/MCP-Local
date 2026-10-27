@@ -1,0 +1,295 @@
+"""真實 Windows Sandbox + MCP STDIO；所有資料均為獨立 fixture，工具鏈僅唯讀。"""
+
+# Direct script execution and python -m use the same installed package.
+if __package__ in (None, ""):
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+import argparse
+import asyncio
+import hashlib
+import json
+import os
+from pathlib import Path
+import sys
+import tempfile
+import time
+
+from mcp import ClientSession, StdioServerParameters
+from mcp.client.stdio import stdio_client
+from mcp_local.tool_contract import SERVICE_VERSION, CONTRACT_VERSION, verify_contract
+from mcp_local.developer_vm_guard import find_cli, invoke_cli
+from mcp_local.developer_vm import remove_owned_tree
+from mcp_local.developer_toolchains import discover_toolchains
+from mcp_local.developer_control import build_vm_mapping_plan
+import xml.etree.ElementTree as ET
+
+BOOTSTRAP = '''import sys
+from pathlib import Path
+sys.path.insert(0, sys.argv[1])
+from mcp_local import security_policy
+security_policy.STATE_DIR = Path(sys.argv[2])
+from mcp_local.local_files_mcp import main
+from mcp_local import developer_toolchains
+original_discovery = developer_toolchains.discover_toolchains
+readonly_fixture = sys.argv[5]
+builtin_only = sys.argv[6] == 'builtin'
+developer_toolchains.discover_toolchains = lambda roots=None: ([] if builtin_only else original_discovery(roots)) + ([readonly_fixture] if readonly_fixture else [])
+sys.argv = ['local_files_mcp.py', '--root', sys.argv[3], '--access-mode', sys.argv[4]]
+main()
+'''
+
+
+async def verify(*, allow_git_mutations: bool = True, preserve_on_failure: bool = False) -> dict:
+    executable = find_cli()
+    if invoke_cli(executable, 'list')['WindowsSandboxEnvironments']:
+        raise ValueError('A foreign VM exists; acceptance will not stop or reuse it')
+    fixture = Path(tempfile.mkdtemp(prefix='mcp-dev-stdio-')).resolve()
+    root, outside, state, readonly = (fixture / name for name in ('root', 'outside', 'state', 'readonly-tools'))
+    for path in (root, outside, state, readonly):
+        path.mkdir()
+    sentinel = outside / 'sentinel.txt'
+    sentinel.write_text('SYNTHETIC_OUTSIDE_SENTINEL', encoding='utf-8')
+    (state / 'credential.txt').write_text('SYNTHETIC_CREDENTIAL', encoding='utf-8')
+    (readonly / 'marker.txt').write_text('SYNTHETIC_READONLY_TOOL', encoding='utf-8')
+    digest = hashlib.sha256(sentinel.read_bytes()).hexdigest()
+    toolchains = [Path(p) for p in discover_toolchains([root])]
+    calls = 0
+    results = {}
+    last_session = None
+    succeeded = False
+    project = Path(__file__).resolve().parents[2]
+
+    def parameters(mode, *, builtin=False):
+        return StdioServerParameters(command=sys.executable,
+            args=['-I', '-B', '-c', BOOTSTRAP, str(project), str(state), str(root), mode,
+                  str(readonly) if mode == 'developer_control' and not builtin else '', 'builtin' if builtin else 'auto'],
+            env={'PYTHONUTF8': '1', 'CONTROL_PLANE_API_KEY': 'SYNTHETIC_API_KEY',
+                 'TEST_SECRET_TOKEN': 'SYNTHETIC_SECRET'})
+
+    try:
+        async with stdio_client(parameters('developer_control')) as (read, write):
+            async with ClientSession(read, write) as session:
+                async def call(name, args=None, denied=False):
+                    nonlocal calls
+                    value = await session.call_tool(name, args or {})
+                    calls += 1
+                    assert bool(value.isError) == denied, (name, value.content)
+                    return None if denied else json.loads(value.content[0].text)
+
+                async def wait(identifier, marker=None, timeout=180):
+                    deadline = time.monotonic() + timeout
+                    while time.monotonic() < deadline:
+                        output = await call('read_process_output', {'session_id': identifier, 'wait_ms': 1000})
+                        if marker is not None and marker in output['output']:
+                            return output
+                        if output['completed']:
+                            assert marker is None, output
+                            assert output['exit_code'] == 0, output
+                            assert output['vm_stopped'] is True, output
+                            return output
+                    raise AssertionError('Developer session timed out')
+
+                initialized = await session.initialize()
+                assert initialized.serverInfo.version == SERVICE_VERSION
+                tools = (await session.list_tools()).tools
+                verify_contract(tools, 'developer_control')
+                assert len(tools) == 34
+                diagnostics = await call('server_diagnostics')
+                assert diagnostics['mode_ready'] and diagnostics['consistent']
+                assert diagnostics['developer_backend']['execution_adapter_implemented']
+                await call('set_access_mode', {'mode': 'host_control'}, denied=True)
+                await call('start_process', {'command': 'ignored', 'developer_toolchain': str(outside)}, denied=True)
+                await call('write_file', {'path': str(sentinel), 'content': 'denied'}, denied=True)
+                await call('write_file', {'path': '../outside/denied.txt', 'content': 'denied'}, denied=True)
+                await call('write_file', {'path': 'source.cs', 'content': 'class Hello { static void Main() { System.Console.WriteLine("COMPILED_OK"); } }'})
+                await call('write_file', {'path': 'python-program.py', 'content': "from pathlib import Path\nPath('python-output.txt').write_text('PYTHON_FILE_OK')\n"})
+                await call('write_file', {'path': 'node-program.js', 'content': "require('fs').writeFileSync('node-output.txt','NODE_FILE_OK');\n"})
+                outside_path = str(sentinel).replace("'", "''")
+                state_path = str(state / 'credential.txt').replace("'", "''")
+                ro_guest = f'C:\\MCP\\mapping-{1 + len(toolchains)}\\marker.txt'
+                program = r'''
+$r=[ordered]@{}
+$r.python=if(Get-Command python.exe -ErrorAction SilentlyContinue){(& python -I -B -c 'import sys;print(sys.version)' | Out-String).Trim()}else{'NOT_DETECTED'}
+$r.node=if(Get-Command node.exe -ErrorAction SilentlyContinue){(& node --version | Out-String).Trim()}else{'NOT_DETECTED'}
+$r.git=if(Get-Command git.exe -ErrorAction SilentlyContinue){(& git --version | Out-String).Trim()}else{'NOT_DETECTED'}
+Write-Output 'CHECK_TOOLS_DONE'
+$r.stdin=[Console]::ReadLine()
+$r.environment= -not ($env:CONTROL_PLANE_API_KEY -or $env:TEST_SECRET_TOKEN -or $env:MCP_LOCAL_VM_GUARD)
+foreach($item in @(@('absolute','__OUTSIDE__'),@('parent','C:\MCP\mapping-0\..\outside\sentinel.txt'),@('credential','__STATE__'))) {
+    try {[void][IO.File]::ReadAllText($item[1]);$r[$item[0]]='ALLOWED'} catch {$r[$item[0]]='DENIED'}
+}
+try {[IO.File]::WriteAllText('__OUTSIDE__','ESCAPED');$r.outside_write='ALLOWED'} catch {$r.outside_write='DENIED'}
+$ErrorActionPreference='SilentlyContinue'
+& cmd.exe /d /c 'type "__OUTSIDE__"' 2>$null | Out-Null
+$r.cmd=if($LASTEXITCODE -eq 0){'ALLOWED'}else{'DENIED'}
+if($r.python -ne 'NOT_DETECTED'){
+& python -I -B -c 'import sys;open(sys.argv[1]).read()' '__OUTSIDE__' 2>$null | Out-Null
+$r.python_child=if($LASTEXITCODE -eq 0){'ALLOWED'}else{'DENIED'}
+}else{$r.python_child='DENIED'}
+try {[IO.File]::WriteAllText('__READONLY__','ESCAPED');$r.readonly='ALLOWED'} catch {$r.readonly='DENIED'}
+& cmd.exe /d /c 'mklink /H "C:\MCP\mapping-0\readonly-link.txt" "__READONLY__"' 2>$null | Out-Null
+$r.create_readonly_hardlink=if($LASTEXITCODE -eq 0){'ALLOWED'}else{'DENIED'}
+if($r.create_readonly_hardlink -eq 'ALLOWED') {
+    try {[IO.File]::WriteAllText('C:\MCP\mapping-0\readonly-link.txt','ESCAPED');$r.readonly_hardlink_write='ALLOWED'} catch {$r.readonly_hardlink_write='DENIED'}
+} else {$r.readonly_hardlink_write='DENIED'}
+& cmd.exe /d /c 'mklink /J "C:\MCP\mapping-0\readonly-junction" "__READONLY_DIR__"' 2>$null | Out-Null
+try {[IO.File]::WriteAllText('C:\MCP\mapping-0\readonly-junction\marker.txt','ESCAPED');$r.readonly_junction_write='ALLOWED'} catch {$r.readonly_junction_write='DENIED'}
+& cmd.exe /d /c 'mklink /H "C:\MCP\mapping-0\outside-link.txt" "__OUTSIDE__"' 2>$null | Out-Null
+$r.create_external_hardlink=if($LASTEXITCODE -eq 0){'ALLOWED'}else{'DENIED'}
+& cmd.exe /d /c 'mklink /J "C:\MCP\mapping-0\escape-junction" "__OUTSIDE_DIR__"' 2>$null | Out-Null
+try {[void][IO.File]::ReadAllText('C:\MCP\mapping-0\escape-junction\sentinel.txt');$r.junction='ALLOWED'} catch {$r.junction='DENIED'}
+$ErrorActionPreference='Stop'
+[IO.File]::WriteAllText((Join-Path $env:MCP_WORKSPACE 'allowed.txt'),'VM_ROOT_WRITE')
+if($r.python -ne 'NOT_DETECTED'){& python -I -B python-program.py; if($LASTEXITCODE -ne 0){throw 'Python file operation failed'}}
+if($r.node -ne 'NOT_DETECTED'){& node node-program.js; if($LASTEXITCODE -ne 0){throw 'Node file operation failed'}}
+if($r.git -ne 'NOT_DETECTED' -and __ALLOW_GIT_MUTATIONS__){
+& git -c init.defaultBranch=main init --quiet
+if($LASTEXITCODE -ne 0){throw 'Git init failed'}
+& git -c core.autocrlf=false add -- source.cs allowed.txt
+if($LASTEXITCODE -ne 0){throw 'Git add failed'}
+& git -c user.name=Fixture -c user.email=fixture@example.invalid commit --quiet -m fixture
+if($LASTEXITCODE -ne 0){throw 'Git commit failed'}
+$r.git_commit=(& git log -1 --format=%H | Out-String).Trim()
+}
+$compiler='C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe'
+& $compiler /nologo /out:compiled.exe source.cs | Out-Null
+if($LASTEXITCODE -ne 0){throw 'Compiler failed'}
+$r.compiler=(& .\compiled.exe | Out-String).Trim()
+Write-Output ('VM_REPORT:'+($r|ConvertTo-Json -Compress))
+'''.replace('__OUTSIDE__', outside_path).replace('__OUTSIDE_DIR__', str(outside).replace("'", "''")).replace('__STATE__', state_path).replace('__READONLY__', ro_guest).replace('__READONLY_DIR__', ro_guest.rsplit('\\', 1)[0]).replace('__ALLOW_GIT_MUTATIONS__', '$true' if allow_git_mutations else '$false')
+                started = await call('start_process', {'command': program, 'timeout_ms': 0, 'lifetime_seconds': 180})
+                last_session = started['session_id']
+                await call('interact_with_process', {'session_id': last_session, 'input': '中文🙂\n', 'close_stdin': True})
+                output = await wait(last_session)
+                lines = [line[len('VM_REPORT:'):] for line in output['output'].splitlines() if line.startswith('VM_REPORT:')]
+                assert len(lines) == 1, output
+                result = json.loads(lines[0])
+                for name in ('absolute', 'parent', 'credential', 'outside_write', 'cmd', 'python_child', 'readonly', 'create_readonly_hardlink', 'readonly_hardlink_write', 'readonly_junction_write', 'create_external_hardlink', 'junction'):
+                    assert result[name] == 'DENIED', result
+                assert result['environment'] and result['stdin'] == '中文🙂', result
+                assert all(result[name] for name in ('python', 'node', 'git')), result
+                assert result['compiler'] == 'COMPILED_OK', result
+                assert (root / 'allowed.txt').read_text() == 'VM_ROOT_WRITE'
+                if result['python'] != 'NOT_DETECTED':
+                    assert (root / 'python-output.txt').read_text() == 'PYTHON_FILE_OK'
+                if result['node'] != 'NOT_DETECTED':
+                    assert (root / 'node-output.txt').read_text() == 'NODE_FILE_OK'
+                if allow_git_mutations and result['git'] != 'NOT_DETECTED':
+                    assert len(result['git_commit']) == 40, result
+                assert hashlib.sha256(sentinel.read_bytes()).hexdigest() == digest
+                assert (readonly / 'marker.txt').read_text() == 'SYNTHETIC_READONLY_TOOL'
+                await call('export_session_file', {'session_id': last_session, 'path': 'allowed.txt', 'destination': 'export.txt'})
+                await call('close_session', {'session_id': last_session})
+                await call('read_process_output', {'session_id': last_session}, denied=True)
+                # Remove only the disposable fixture's junction itself, after VM teardown.
+                for name in ('escape-junction', 'readonly-junction'):
+                    junction = root / name
+                    if os.path.lexists(junction):
+                        assert junction.lstat().st_file_attributes & 0x400
+                        os.rmdir(junction)
+                results['execution_and_boundary'] = result
+                # Leave a parent with a live child; closing STDIO must stop the VM.
+                heartbeat = "while($true){[IO.File]::WriteAllText((Join-Path $env:MCP_WORKSPACE 'heartbeat.txt'),[DateTime]::UtcNow.Ticks.ToString());Start-Sleep -Milliseconds 200}"
+                import base64
+                child_command = base64.b64encode(heartbeat.encode('utf-16-le')).decode('ascii')
+                heartbeat_command = ("$child=Start-Process -FilePath 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe' "
+                    + "-ArgumentList @('-NoProfile','-EncodedCommand','" + child_command + "') -PassThru -WindowStyle Hidden; "
+                    + "Write-Output 'LIFECYCLE_READY'; Start-Sleep -Seconds 120")
+                started = await call('start_process', {'command': heartbeat_command, 'timeout_ms': 0, 'lifetime_seconds': 180})
+                last_session = started['session_id']
+                await wait(last_session, marker='LIFECYCLE_READY')
+                deadline = time.monotonic() + 10
+                while not (root / 'heartbeat.txt').exists() and time.monotonic() < deadline:
+                    await asyncio.sleep(.1)
+                assert (root / 'heartbeat.txt').exists()
+                stopped = await call('force_terminate', {'session_id': last_session})
+                assert stopped['completed'] and stopped['vm_stopped'], stopped
+                await call('interact_with_process', {'session_id': last_session, 'input': 'denied'}, denied=True)
+                await call('close_session', {'session_id': last_session})
+                (root / 'heartbeat.txt').unlink()
+                results['force_terminate_vm'] = 'PASS'
+                started = await call('start_process', {'command': heartbeat_command, 'timeout_ms': 0, 'lifetime_seconds': 180})
+                last_session = started['session_id']
+                await wait(last_session, marker='LIFECYCLE_READY')
+                deadline = time.monotonic() + 10
+                while not (root / 'heartbeat.txt').exists() and time.monotonic() < deadline:
+                    await asyncio.sleep(.1)
+                assert (root / 'heartbeat.txt').exists()
+        deadline = time.monotonic() + 90
+        while invoke_cli(executable, 'list')['WindowsSandboxEnvironments']:
+            if time.monotonic() >= deadline:
+                raise AssertionError('VM survived STDIO close')
+            await asyncio.sleep(.5)
+        before = (root / 'heartbeat.txt').read_bytes()
+        await asyncio.sleep(1)
+        assert (root / 'heartbeat.txt').read_bytes() == before
+        results['stdio_parent_child_shutdown'] = 'PASS'
+        async with stdio_client(parameters('developer_control', builtin=True)) as (read, write):
+            async with ClientSession(read, write) as session:
+                await session.initialize()
+                diagnostic = await session.call_tool('server_diagnostics', {})
+                diagnostic = json.loads(diagnostic.content[0].text)
+                assert diagnostic['mode_ready'] and diagnostic['developer_backend']['toolchain_count'] == 0
+                started = await session.call_tool('start_process', {'command': "[IO.File]::WriteAllText((Join-Path $env:MCP_WORKSPACE 'builtin.txt'),'BUILTIN_VM_OK')", 'timeout_ms': 0})
+                assert not started.isError, started
+                identifier = json.loads(started.content[0].text)['session_id']
+                deadline = time.monotonic() + 180
+                while True:
+                    response = await session.call_tool('read_process_output', {'session_id': identifier, 'wait_ms': 1000})
+                    output = json.loads(response.content[0].text)
+                    if output['completed']:
+                        assert output['exit_code'] == 0 and output['vm_stopped'], output
+                        break
+                    assert time.monotonic() < deadline, 'Built-in VM timed out'
+                closed = await session.call_tool('close_session', {'session_id': identifier})
+                assert not closed.isError, closed
+                assert (root / 'builtin.txt').read_text() == 'BUILTIN_VM_OK'
+                results['empty_detection_builtin_powershell'] = 'PASS'
+                plan = ET.fromstring(build_vm_mapping_plan([root], toolchains + [readonly]))
+                assert [node.text for node in plan.findall('MappedFolders/MappedFolder/ReadOnly')] == ['false'] + ['true'] * (len(toolchains) + 1)
+                results['automatic_toolchain_count'] = len(toolchains)
+                results['automatic_mappings_readonly'] = 'PASS'
+        async with stdio_client(parameters('read_only')) as (read, write):
+            async with ClientSession(read, write) as session:
+                await session.initialize()
+                tools = (await session.list_tools()).tools
+                verify_contract(tools)
+                assert len(tools) == 22
+                for name, args in [('start_process', {'command': 'denied'}), ('read_process_output', {'session_id': last_session}),
+                                   ('write_file', {'path': 'denied.txt', 'content': 'denied'})]:
+                    value = await session.call_tool(name, args)
+                    calls += 1
+                    assert value.isError
+        results['downgrade_to_readonly'] = 'PASS'
+        results['git_fixture_mutations'] = 'ENABLED' if allow_git_mutations else 'NOT_RUN_SCOPE_RESTRICTION'
+        succeeded = True
+        return {'status': 'PASS', 'service_version': SERVICE_VERSION, 'contract_version': CONTRACT_VERSION,
+                'tools': [34, 22], 'calls': calls, 'transport': 'real_stdio', 'backend': 'real_windows_sandbox',
+                'results': results, 'production': 'UNTOUCHED', 'remote_acceptance': 'NOT_RUN'}
+    finally:
+        # A failed cleanup retains the fixture; never remove a live VM's backing map.
+        if not succeeded and preserve_on_failure:
+            print('Failed acceptance fixture retained: ' + str(fixture), file=sys.stderr)
+        elif not invoke_cli(executable, 'list')['WindowsSandboxEnvironments']:
+            assert fixture.name.startswith('mcp-dev-stdio-') and fixture.parent == Path(tempfile.gettempdir()).resolve()
+            remove_owned_tree(fixture)
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--report', type=Path)
+    parser.add_argument('--no-git-mutations', action='store_true', help='不執行 fixture Git init／add／commit')
+    parser.add_argument('--preserve-on-failure', action='store_true', help='失敗時保留自有 fixture 供診斷')
+    args = parser.parse_args()
+    report = asyncio.run(verify(allow_git_mutations=not args.no_git_mutations,
+                               preserve_on_failure=args.preserve_on_failure))
+    if args.report:
+        args.report.write_text(json.dumps(report, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+    print(json.dumps(report))
+    return 0
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())

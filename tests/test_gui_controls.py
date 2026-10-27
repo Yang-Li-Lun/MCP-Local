@@ -7,9 +7,9 @@ import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-import autostart_windows as background
-from connection_settings import normalize_connection, save_settings, load_for_edit, SettingsError
-from local_files_gui import App
+from mcp_local import autostart_windows as background
+from mcp_local.connection_settings import normalize_connection, save_settings, load_for_edit, SettingsError
+from mcp_local.local_files_gui import App
 
 
 class GuiControlTests(unittest.TestCase):
@@ -19,8 +19,8 @@ class GuiControlTests(unittest.TestCase):
         self.target = Path(self.temp.name) / 'settings.json'
         self.settings = normalize_connection({'root': self.temp.name, 'tunnel': 'tunnel_fixture', 'settings_version': 3, 'roots': [{'id': 'main', 'path': self.temp.name}], 'default_root': 'main'})
         save_settings(self.settings, self.target)
-        for target, value in [('tray_windows.Tray', Mock()),
-                              ('local_files_gui.get_background_status', background.BackgroundStatus(False, False, False))]:
+        for target, value in [('mcp_local.tray_windows.Tray', Mock()),
+                              ('mcp_local.local_files_gui.get_background_status', background.BackgroundStatus(False, False, False))]:
             mocked = patch(target, return_value=value)
             mocked.start()
             self.addCleanup(mocked.stop)
@@ -78,7 +78,7 @@ class GuiControlTests(unittest.TestCase):
         self.assertIn('.dart', extensions)
 
     def test_tray_desktop_denied_preserves_connection_and_allows_retry(self):
-        from tray_windows import TrayDesktopUnavailable
+        from mcp_local.tray_windows import TrayDesktopUnavailable
 
         app = self.app
         app.running, app.state = True, 'RUNNING'
@@ -103,7 +103,7 @@ class GuiControlTests(unittest.TestCase):
             self.app.popup()
 
     def test_only_three_modes_and_no_manual_toolchain_controls(self):
-        from access_mode import MODE_LABELS
+        from mcp_local.access_mode import MODE_LABELS
         a = self.app
         permissions = a.tabs.nametowidget(a.tabs.tabs()[3])
         options = [widget for widget in permissions.winfo_children() if widget.winfo_class() == 'TRadiobutton']
@@ -114,20 +114,20 @@ class GuiControlTests(unittest.TestCase):
 
     def test_removed_mode_cannot_be_saved_from_gui(self):
         self.app.access_mode.set('full_control')
-        with patch('local_files_gui.messagebox.showerror'), patch('local_files_gui.save_settings') as save:
+        with patch('mcp_local.local_files_gui.messagebox.showerror'), patch('mcp_local.local_files_gui.save_settings') as save:
             self.assertFalse(self.app.save())
         save.assert_not_called()
 
     def test_access_mode_opt_in_persists_and_reload_uses_saved_mode(self):
         a = self.app
         a.access_mode.set('developer_control')
-        with patch('local_files_gui.messagebox.askyesno', return_value=True), patch(
-                'local_files_gui.save_settings', side_effect=lambda value, **kw: save_settings(value, self.target, **kw)):
+        with patch('mcp_local.local_files_gui.messagebox.askyesno', return_value=True), patch(
+                'mcp_local.local_files_gui.save_settings', side_effect=lambda value, **kw: save_settings(value, self.target, **kw)):
             self.assertTrue(a.save())
             self.poll()
         self.assertEqual(load_for_edit(self.target).settings['access_mode'], 'developer_control')
         a.access_mode.set('read_only')
-        with patch('local_files_gui.load_for_edit', lambda: load_for_edit(self.target)):
+        with patch('mcp_local.local_files_gui.load_for_edit', lambda: load_for_edit(self.target)):
             a.reload_settings()
         self.assertEqual(a.access_mode.get(), 'developer_control')
         self.assertFalse(a.dirty)
@@ -140,7 +140,7 @@ class GuiControlTests(unittest.TestCase):
     def test_access_mode_opt_in_can_be_cancelled(self):
         a = self.app
         a.access_mode.set('developer_control')
-        with patch('local_files_gui.messagebox.askyesno', return_value=False), patch('local_files_gui.save_settings') as save:
+        with patch('mcp_local.local_files_gui.messagebox.askyesno', return_value=False), patch('mcp_local.local_files_gui.save_settings') as save:
             self.assertFalse(a.save())
         save.assert_not_called()
         self.assertEqual(load_for_edit(self.target).settings['access_mode'], 'read_only')
@@ -149,8 +149,8 @@ class GuiControlTests(unittest.TestCase):
         for mode in ('host_control', 'developer_control'):
             with self.subTest(mode=mode):
                 self.app.access_mode.set(mode)
-                with patch('local_files_gui.messagebox.askyesno', return_value=True) as confirmation, patch(
-                        'local_files_gui.save_settings', side_effect=lambda value, **kw: save_settings(value, self.target, **kw)):
+                with patch('mcp_local.local_files_gui.messagebox.askyesno', return_value=True) as confirmation, patch(
+                        'mcp_local.local_files_gui.save_settings', side_effect=lambda value, **kw: save_settings(value, self.target, **kw)):
                     self.assertTrue(self.app.save())
                     self.poll()
                 confirmation.assert_called_once()
@@ -163,7 +163,7 @@ class GuiControlTests(unittest.TestCase):
 
     def test_host_confirmation_cancellation_preserves_saved_mode(self):
         self.app.access_mode.set('host_control')
-        with patch('local_files_gui.messagebox.askyesno', return_value=False), patch('local_files_gui.save_settings') as save:
+        with patch('mcp_local.local_files_gui.messagebox.askyesno', return_value=False), patch('mcp_local.local_files_gui.save_settings') as save:
             self.assertFalse(self.app.save())
         save.assert_not_called()
         self.assertEqual(load_for_edit(self.target).settings['access_mode'], 'read_only')
@@ -172,8 +172,8 @@ class GuiControlTests(unittest.TestCase):
         self.app.settings['access_mode'] = 'host_control'
         self.app.running, self.app.state = True, 'RUNNING'
         self.app.access_mode.set('read_only')
-        with patch('local_files_gui.messagebox.askyesno') as confirmation, patch(
-                'local_files_gui.save_settings', side_effect=lambda value, **kw: save_settings(value, self.target, **kw)):
+        with patch('mcp_local.local_files_gui.messagebox.askyesno') as confirmation, patch(
+                'mcp_local.local_files_gui.save_settings', side_effect=lambda value, **kw: save_settings(value, self.target, **kw)):
             self.assertTrue(self.app.save())
             self.poll()
         confirmation.assert_not_called()
@@ -184,8 +184,8 @@ class GuiControlTests(unittest.TestCase):
         a = self.app
         a.running, a.state = True, 'RUNNING'
         a.access_mode.set('developer_control')
-        with patch('local_files_gui.messagebox.askyesno', return_value=True), patch(
-                'local_files_gui.save_settings', side_effect=lambda value, **kw: save_settings(value, self.target, **kw)):
+        with patch('mcp_local.local_files_gui.messagebox.askyesno', return_value=True), patch(
+                'mcp_local.local_files_gui.save_settings', side_effect=lambda value, **kw: save_settings(value, self.target, **kw)):
             self.assertTrue(a.save())
             self.assertFalse(a.connection.cancel.is_set())
             self.poll()
@@ -203,8 +203,8 @@ class GuiControlTests(unittest.TestCase):
         a.settings['access_mode'] = 'developer_control'
         a.running, a.state = True, 'RUNNING'
         a.access_mode.set('read_only')
-        with patch('local_files_gui.messagebox.askyesno') as confirmation, patch(
-                'local_files_gui.save_settings', side_effect=lambda value, **kw: save_settings(value, self.target, **kw)):
+        with patch('mcp_local.local_files_gui.messagebox.askyesno') as confirmation, patch(
+                'mcp_local.local_files_gui.save_settings', side_effect=lambda value, **kw: save_settings(value, self.target, **kw)):
             self.assertTrue(a.save())
             self.poll()
         confirmation.assert_not_called()
@@ -213,7 +213,7 @@ class GuiControlTests(unittest.TestCase):
         self.assertEqual(load_for_edit(self.target).settings['access_mode'], 'read_only')
 
     def test_failed_cleanup_blocks_mode_downgrade_relaunch(self):
-        from connection_runtime import ConnectionErrorKind
+        from mcp_local.connection_runtime import ConnectionErrorKind
         a = self.app
         a.running, a.state = True, 'RESTARTING'
         a.active_access_mode = 'host_control'
@@ -223,7 +223,7 @@ class GuiControlTests(unittest.TestCase):
         a.connection.error_kind = ConnectionErrorKind.RESOURCE_CLEANUP_FAILED
         a.connection.events.put(('error', 'RESOURCE_CLEANUP_FAILED'))
         a.connection.events.put(('done', '清理失敗，請檢查本次程序'))
-        with patch('local_files_gui.messagebox.showerror'), patch.object(a, 'reload_and_launch') as launch:
+        with patch('mcp_local.local_files_gui.messagebox.showerror'), patch.object(a, 'reload_and_launch') as launch:
             a.tick()
             launch.assert_not_called()
         self.assertFalse(a.restart_pending)
@@ -232,7 +232,7 @@ class GuiControlTests(unittest.TestCase):
         self.assertFalse(a.control_states()['start'])
         self.assertIn('停止未確認', a.access_mode_status.get())
         self.assertEqual(a.active_access_mode, 'host_control')
-        with patch('local_files_gui.Connection') as replacement:
+        with patch('mcp_local.local_files_gui.Connection') as replacement:
             a.launch()
             replacement.assert_not_called()
 
@@ -240,8 +240,8 @@ class GuiControlTests(unittest.TestCase):
         a = self.app
         a.running, a.state = True, 'RUNNING'
         a.access_mode.set('developer_control')
-        with patch('local_files_gui.messagebox.askyesno', return_value=True), patch(
-                'local_files_gui.save_settings', side_effect=OSError('fixture')), patch('local_files_gui.messagebox.showerror'):
+        with patch('mcp_local.local_files_gui.messagebox.askyesno', return_value=True), patch(
+                'mcp_local.local_files_gui.save_settings', side_effect=OSError('fixture')), patch('mcp_local.local_files_gui.messagebox.showerror'):
             self.assertTrue(a.save())
             self.poll()
         self.assertFalse(a.connection.cancel.is_set())
@@ -251,9 +251,9 @@ class GuiControlTests(unittest.TestCase):
     def test_unknown_background_mode_switch_refused_before_saving(self):
         a = self.app
         a.access_mode.set('developer_control')
-        with patch('local_files_gui.messagebox.askyesno', return_value=True), patch(
-                'local_files_gui.get_background_status', return_value=background.BackgroundStatus(False, False, False, 'UNKNOWN')), patch(
-                'local_files_gui.save_settings') as save, patch('local_files_gui.messagebox.showerror'):
+        with patch('mcp_local.local_files_gui.messagebox.askyesno', return_value=True), patch(
+                'mcp_local.local_files_gui.get_background_status', return_value=background.BackgroundStatus(False, False, False, 'UNKNOWN')), patch(
+                'mcp_local.local_files_gui.save_settings') as save, patch('mcp_local.local_files_gui.messagebox.showerror'):
             self.assertTrue(a.save())
             self.poll()
         save.assert_not_called()
@@ -264,13 +264,13 @@ class GuiControlTests(unittest.TestCase):
         a.icon_style.set('folder_link')
         self.assertTrue(a.dirty)
         a.tray.set_icon.assert_not_called()
-        with patch('local_files_gui.save_settings', side_effect=lambda value, **kw: save_settings(value, self.target, **kw)):
+        with patch('mcp_local.local_files_gui.save_settings', side_effect=lambda value, **kw: save_settings(value, self.target, **kw)):
             self.assertTrue(a.save())
             self.poll()
         self.assertEqual(load_for_edit(self.target).settings['icon_style'], 'folder_link')
         a.tray.set_icon.assert_called_with('folder_link')
         a.icon_style.set('classic')
-        with patch('local_files_gui.load_for_edit', lambda: load_for_edit(self.target)):
+        with patch('mcp_local.local_files_gui.load_for_edit', lambda: load_for_edit(self.target)):
             a.reload_settings()
         self.assertEqual(a.icon_style.get(), 'folder_link')
         self.assertFalse(a.dirty)
@@ -278,8 +278,8 @@ class GuiControlTests(unittest.TestCase):
     def test_failed_icon_save_does_not_apply(self):
         a = self.app
         a.icon_style.set('folder_link')
-        with patch('local_files_gui.save_settings', side_effect=OSError('fixture')), patch(
-                'local_files_gui.messagebox.showerror'):
+        with patch('mcp_local.local_files_gui.save_settings', side_effect=OSError('fixture')), patch(
+                'mcp_local.local_files_gui.messagebox.showerror'):
             self.assertTrue(a.save())
             self.poll()
         a.tray.set_icon.assert_not_called()
@@ -308,7 +308,7 @@ class GuiControlTests(unittest.TestCase):
         a.refresh_controls()
         self.assertFalse(a.control_states()['start'])
         self.assertTrue(a.control_states()['stop'])
-        with patch('local_files_gui.stop_background') as stop:
+        with patch('mcp_local.local_files_gui.stop_background') as stop:
             a.stop_button.invoke()
             self.poll()
             stop.assert_called_once()
@@ -316,7 +316,7 @@ class GuiControlTests(unittest.TestCase):
             self.assertFalse(hasattr(a, name))
 
     def test_status_query_error_is_visible_and_retryable(self):
-        with patch('local_files_gui.get_background_status', side_effect=OSError('fixture')):
+        with patch('mcp_local.local_files_gui.get_background_status', side_effect=OSError('fixture')):
             self.app.check_background()
             self.poll()
         self.assertIn('無法查詢', self.app.auto_start_status.get())
@@ -334,7 +334,7 @@ class GuiControlTests(unittest.TestCase):
         self.assertFalse(self.app.hidden.get())
 
     def test_startup_retry_is_cancelled_by_stop(self):
-        from connection_runtime import ConnectionErrorKind
+        from mcp_local.connection_runtime import ConnectionErrorKind
         a = self.app
         a.retry_enabled = True
         a.connection.error_kind = ConnectionErrorKind.DOCTOR_FAILED
@@ -376,7 +376,7 @@ class GuiControlTests(unittest.TestCase):
             launch.assert_called_once()
 
     def test_permanent_failure_does_not_retry(self):
-        from connection_runtime import ConnectionErrorKind
+        from mcp_local.connection_runtime import ConnectionErrorKind
         a = self.app
         a.retry_enabled = True
         a.connection.error_kind = ConnectionErrorKind.AUTH_FAILED
@@ -415,7 +415,7 @@ class GuiControlTests(unittest.TestCase):
         def save(value, **kwargs):
             gate.wait(2)
             save_settings(value, self.target, **kwargs)
-        with patch('local_files_gui.save_settings', save):
+        with patch('mcp_local.local_files_gui.save_settings', save):
             self.assertTrue(a.save())
             self.assertTrue(a.dirty)
             self.assertFalse(any(value for key, value in a.control_states().items() if key != 'hide'))
@@ -433,7 +433,7 @@ class GuiControlTests(unittest.TestCase):
         def save(value, **kwargs):
             gate.wait(2)
             save_settings(value, self.target, **kwargs)
-        with patch('local_files_gui.save_settings', save):
+        with patch('mcp_local.local_files_gui.save_settings', save):
             a.save(after=launched)
             a.tunnel.set('tunnel_second')
             gate.set()
@@ -446,8 +446,8 @@ class GuiControlTests(unittest.TestCase):
         a = self.app
         save_settings(dict(self.settings, tunnel='tunnel_external'), self.target)
         launched = Mock()
-        with patch('local_files_gui.load_for_edit', lambda: load_for_edit(self.target)), patch(
-                'local_files_gui.save_settings', side_effect=lambda value, **kw: save_settings(value, self.target, **kw)) as save:
+        with patch('mcp_local.local_files_gui.load_for_edit', lambda: load_for_edit(self.target)), patch(
+                'mcp_local.local_files_gui.save_settings', side_effect=lambda value, **kw: save_settings(value, self.target, **kw)) as save:
             a.save(after=launched)
             self.poll()
         self.assertEqual(save.call_count, 2)
@@ -456,9 +456,9 @@ class GuiControlTests(unittest.TestCase):
 
     def test_repeated_conflict_is_bounded(self):
         a = self.app
-        with patch('local_files_gui.load_for_edit', lambda: load_for_edit(self.target)), patch(
-                'local_files_gui.save_settings', side_effect=SettingsError('SETTINGS_CONFLICT', 'conflict')) as save, patch(
-                'local_files_gui.messagebox.showerror'):
+        with patch('mcp_local.local_files_gui.load_for_edit', lambda: load_for_edit(self.target)), patch(
+                'mcp_local.local_files_gui.save_settings', side_effect=SettingsError('SETTINGS_CONFLICT', 'conflict')) as save, patch(
+                'mcp_local.local_files_gui.messagebox.showerror'):
             a.save()
             self.poll()
         self.assertEqual(save.call_count, 2)
@@ -473,9 +473,9 @@ class GuiControlTests(unittest.TestCase):
                 save_settings(dict(self.settings, tunnel='tunnel_external' + str(reload)), self.target)
                 original = self.target.read_bytes()
                 launched = Mock()
-                with patch('local_files_gui.load_for_edit', lambda: load_for_edit(self.target)), patch(
-                        'local_files_gui.save_settings', side_effect=lambda value, **kw: save_settings(value, self.target, **kw)), patch(
-                        'local_files_gui.messagebox.askyesno', return_value=reload):
+                with patch('mcp_local.local_files_gui.load_for_edit', lambda: load_for_edit(self.target)), patch(
+                        'mcp_local.local_files_gui.save_settings', side_effect=lambda value, **kw: save_settings(value, self.target, **kw)), patch(
+                        'mcp_local.local_files_gui.messagebox.askyesno', return_value=reload):
                     a.save(after=launched)
                     self.poll()
                 launched.assert_not_called()

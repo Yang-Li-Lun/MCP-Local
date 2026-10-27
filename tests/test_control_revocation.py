@@ -5,8 +5,8 @@ import threading
 import unittest
 from unittest.mock import patch
 
-from full_control import FullControl
-from workspace_reader import WorkspaceReader
+from mcp_local.full_control import FullControl
+from mcp_local.workspace_reader import WorkspaceReader
 
 
 class ControlRevocationTests(unittest.TestCase):

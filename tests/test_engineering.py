@@ -12,21 +12,21 @@ import time
 import unittest
 from unittest.mock import Mock, patch
 
-from connection_settings import (load_for_edit, load_settings, save_settings,
+from mcp_local.connection_settings import (load_for_edit, load_settings, save_settings,
                                  normalize_connection, read_settings_data, SettingsError)
-from local_files_mcp import FileReader, create_server
-from workspace_reader import WorkspaceReader, TOOLS
-from operation_budget import Budget, OperationError, operation, checkpoint, asynchronous, SLOTS
-from snapshot_cache import SnapshotCache
-from connection_runtime import START_WRAPPER
-from gui_tasks import GuiTasks
-import autostart_windows as tasks
+from mcp_local.local_files_mcp import FileReader, create_server
+from mcp_local.workspace_reader import WorkspaceReader, TOOLS
+from mcp_local.operation_budget import Budget, OperationError, operation, checkpoint, asynchronous, SLOTS
+from mcp_local.snapshot_cache import SnapshotCache
+from mcp_local.connection_runtime import START_WRAPPER
+from mcp_local.gui_tasks import GuiTasks
+from mcp_local import autostart_windows as tasks
 
 
 class EngineeringTests(unittest.TestCase):
     def setUp(self):
-        from autostart_windows import BackgroundStatus
-        status = patch('local_files_gui.get_background_status',
+        from mcp_local.autostart_windows import BackgroundStatus
+        status = patch('mcp_local.local_files_gui.get_background_status',
                        return_value=BackgroundStatus(False, False, False))
         status.start()
         self.addCleanup(status.stop)
@@ -101,7 +101,7 @@ class EngineeringTests(unittest.TestCase):
         state.mkdir()
         child = state / 'child'
         child.mkdir()
-        with patch('security_policy.STATE_DIR', state):
+        with patch('mcp_local.security_policy.STATE_DIR', state):
             for root in (self.root, state, child):
                 with self.assertRaises(ValueError):
                     FileReader(root)
@@ -264,7 +264,7 @@ class EngineeringTests(unittest.TestCase):
             entry['rows'][0]['path'] = 'changed'
         entry['status']['truncated'] = True
         self.assertEqual(cache.get(key, 'a', 'f')['rows'][0]['path'], 'first')
-        with patch('snapshot_cache.SNAPSHOT_BYTES', 2000):
+        with patch('mcp_local.snapshot_cache.SNAPSHOT_BYTES', 2000):
             key = cache.put('a', 'f', [{'path': 'x' * 10000}], status)
         self.assertTrue(cache.get(key, 'a', 'f')['status']['truncated'])
 
@@ -315,11 +315,11 @@ class EngineeringTests(unittest.TestCase):
 
     def test_gui_repair_slow_save_keeps_ui_responsive_and_stop_cancels_start(self):
         import tkinter as tk
-        from local_files_gui import App
+        from mcp_local.local_files_gui import App
         settings = normalize_connection(self.settings)
         window = tk.Tk()
         window.withdraw()
-        with patch('tray_windows.Tray'):
+        with patch('mcp_local.tray_windows.Tray'):
             app = App(window, settings, Mock(load=Mock(return_value='fake-key')))
         gate = threading.Event()
         launched = []
@@ -331,7 +331,7 @@ class EngineeringTests(unittest.TestCase):
             def save(value):
                 gate.wait(2)
                 save_settings(value, self.target)
-            with patch('local_files_gui.save_settings', save):
+            with patch('mcp_local.local_files_gui.save_settings', save):
                 self.assertTrue(app.save(after=lambda: launched.append(True)))
                 self.assertFalse(app.save())
                 painted = []
@@ -353,12 +353,12 @@ class EngineeringTests(unittest.TestCase):
             app.quit()
 
     def test_cleanup_failure_still_notifies_done(self):
-        from connection_runtime import Connection, ConnectionErrorKind
+        from mcp_local.connection_runtime import Connection, ConnectionErrorKind
         import uuid
         connection = Connection()
         fake_job = Mock()
         fake_job.close.side_effect = OSError('private detail')
-        with patch('connection_runtime.CONNECTION_MUTEX', 'Local\\MCP_Test_' + uuid.uuid4().hex), patch('connection_runtime.existing_tunnel', return_value=False), patch('connection_runtime.build_commands', return_value=[]), patch('tray_windows.Job', return_value=fake_job):
+        with patch('mcp_local.connection_runtime.CONNECTION_MUTEX', 'Local\\MCP_Test_' + uuid.uuid4().hex), patch('mcp_local.connection_runtime.existing_tunnel', return_value=False), patch('mcp_local.connection_runtime.build_commands', return_value=[]), patch('mcp_local.tray_windows.Job', return_value=fake_job):
             connection.start({'settings_version': 3}, 'fake-key')
             connection.thread.join(timeout=5)
         self.assertFalse(connection.thread.is_alive())
@@ -372,14 +372,14 @@ class EngineeringTests(unittest.TestCase):
             connection.start({'settings_version': 3}, 'fake-key')
 
     def test_job_assignment_failure_never_starts_child(self):
-        from connection_runtime import Connection
+        from mcp_local.connection_runtime import Connection
         import uuid
         marker = self.base / 'never-started'
         command = [sys.executable, '-c', 'from pathlib import Path; import sys; Path(sys.argv[1]).touch()', str(marker)]
         connection = Connection()
         fake_job = Mock()
         fake_job.assign.side_effect = OSError('injected')
-        with patch('connection_runtime.CONNECTION_MUTEX', 'Local\\MCP_Test_' + uuid.uuid4().hex), patch('connection_runtime.existing_tunnel', return_value=False), patch('connection_runtime.build_commands', return_value=[command]), patch('tray_windows.Job', return_value=fake_job):
+        with patch('mcp_local.connection_runtime.CONNECTION_MUTEX', 'Local\\MCP_Test_' + uuid.uuid4().hex), patch('mcp_local.connection_runtime.existing_tunnel', return_value=False), patch('mcp_local.connection_runtime.build_commands', return_value=[command]), patch('mcp_local.tray_windows.Job', return_value=fake_job):
             connection.start({'settings_version': 3}, 'fake-key')
             connection.thread.join(timeout=5)
         self.assertFalse(marker.exists())
@@ -389,7 +389,7 @@ class EngineeringTests(unittest.TestCase):
     def test_rotation_failure_preserves_original(self):
         save_settings(self.settings, self.target)
         original = self.target.read_bytes()
-        with patch('connection_settings.rotate_backups', side_effect=OSError('injected')), self.assertRaises(OSError):
+        with patch('mcp_local.connection_settings.rotate_backups', side_effect=OSError('injected')), self.assertRaises(OSError):
             save_settings(dict(self.settings, recent=['change']), self.target)
         self.assertEqual(self.target.read_bytes(), original)
 

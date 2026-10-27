@@ -4,24 +4,24 @@
 
 本專案是預設唯讀的檔案 MCP 服務；公開模式僅有唯讀、開發控制與主機控制；既有 AppContainer 實作保留供內部共用與回歸。主機模式明確信任主機命令，檔案 API 與環境清理持續保護；開發模式使用 Windows Sandbox VM 與自動偵測的安全唯讀工具鏈，前置條件或隔離檢查不符必須拒絕命令，不得 fallback。唯讀模式不得修改來源或執行命令。
 
-可辨識模組與責任：
+執行模組集中於 `mcp_local/`；根目錄保留相容啟動入口。完整分類見 `docs/PROJECT_LAYOUT.md`。可辨識模組與責任：
 
 - `local_files_mcp.py`：MCP 伺服器進入點、路徑驗證、掃描限制、工具註冊與原生圖片回應（含 STDIO 介面）
-- `image_reader.py`：PNG/JPEG/WebP/GIF/BMP/TIFF/ICO/PNM 與可用 AVIF 靜態安全解碼、記憶體縮圖與原生 ImageContent；來源完全唯讀
-- `format_reader.py` / `format_worker.py`：通用 metadata／raw、固定解析程序與資源限制
-- `format_parsers.py` / `media_parser.py`：有界文件、壓縮檔與影音 metadata；僅接收記憶體快照
-- `structured_parser.py` / `document_extras.py`：有界結構化資料、SQLite 記憶體快照、OpenDocument、EPUB、郵件與外掛字幕；共用固定隔離 worker，不接受 SQL／路徑／外部資源
-- `workspace_reader.py`：最多八個具名根的唯讀讀取工具；GUI 自動管理識別碼與第一筆預設根
-- `access_mode.py` / `full_control.py` / `control_files.py` / `control_edit.py`：模式驗證與有界共享根寫入；保留原唯讀契約
-- `sandbox_windows.py` / `control_sessions.py`：無網路 AppContainer、專用副本、Job 與 session 清理；禁止主機權限 fallback
-- `host_windows.py` / `host_files.py` / `host_control.py`：目前未提升使用者的受信任主機命令、跨 root 的受保護檔案 API；不宣稱命令憑證隔離
-- `developer_toolchains.py` / `developer_control.py` / `developer_vm.py` / `developer_guest.ps1`：開發 VM 映射、工具鏈、guest I/O；拒絕向外硬連結／重新解析點，回傳檔案仍視為不受信任輸入
-- `developer_vm_guard.py` / `developer_vm_client.py`：本機認證 pipe 與獨立 VM 生命週期 guard；由 APP 在 Connection Job 前啟動，不接收通道金鑰，停止失敗禁止重連
-- `connection_settings.py`：連線設定、遷移、備份、啟動指令管理
+- `mcp_local/image_reader.py`：PNG/JPEG/WebP/GIF/BMP/TIFF/ICO/PNM 與可用 AVIF 靜態安全解碼、記憶體縮圖與原生 ImageContent；來源完全唯讀
+- `mcp_local/format_reader.py` / `mcp_local/format_worker.py`：通用 metadata／raw、固定解析程序與資源限制
+- `mcp_local/format_parsers.py` / `mcp_local/media_parser.py`：有界文件、壓縮檔與影音 metadata；僅接收記憶體快照
+- `mcp_local/structured_parser.py` / `mcp_local/document_extras.py`：有界結構化資料、SQLite 記憶體快照、OpenDocument、EPUB、郵件與外掛字幕；共用固定隔離 worker，不接受 SQL／路徑／外部資源
+- `mcp_local/workspace_reader.py`：最多八個具名根的唯讀讀取工具；GUI 自動管理識別碼與第一筆預設根
+- `mcp_local/access_mode.py` / `mcp_local/full_control.py` / `mcp_local/control_files.py` / `mcp_local/control_edit.py`：模式驗證與有界共享根寫入；保留原唯讀契約
+- `mcp_local/sandbox_windows.py` / `mcp_local/control_sessions.py`：無網路 AppContainer、專用副本、Job 與 session 清理；禁止主機權限 fallback
+- `mcp_local/host_windows.py` / `mcp_local/host_files.py` / `mcp_local/host_control.py`：目前未提升使用者的受信任主機命令、跨 root 的受保護檔案 API；不宣稱命令憑證隔離
+- `mcp_local/developer_toolchains.py` / `mcp_local/developer_control.py` / `mcp_local/developer_vm.py` / `mcp_local/developer_guest.ps1`：開發 VM 映射、工具鏈、guest I/O；拒絕向外硬連結／重新解析點，回傳檔案仍視為不受信任輸入
+- `mcp_local/developer_vm_guard.py` / `mcp_local/developer_vm_client.py`：本機認證 pipe 與獨立 VM 生命週期 guard；由 APP 在 Connection Job 前啟動，不接收通道金鑰，停止失敗禁止重連
+- `mcp_local/connection_settings.py`：連線設定、遷移、備份、啟動指令管理
 - `connection_cli.py` / `start-local-files-tunnel.ps1`：CLI 與 Tunnel 啟動流程（共用 `Connection` 管理）
-- `reader_settings.py`：讀取設定驗證
-- `key_store.py`：DPAPI 憑證存放邏輯
-- `tray_windows.py`：系統匣與程序 Job 管理
+- `mcp_local/reader_settings.py`：讀取設定驗證
+- `mcp_local/key_store.py`：DPAPI 憑證存放邏輯
+- `mcp_local/tray_windows.py`：系統匣與程序 Job 管理
 - `shared/`：僅放授權與預先約定的 UTF-8／非敏感圖片範例；`shared/README.md` 為固定文字煙霧測試檔，`shared/image-acceptance.png` 為視覺驗收圖
 - `requirements-lock.txt`：完整且已驗證的套件版本快照
 
@@ -42,11 +42,11 @@ py -3.13 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements-lock.txt
 .\.venv\Scripts\python.exe -m pip check
 .\.venv\Scripts\python.exe -m py_compile local_files_mcp.py
-.\.venv\Scripts\python.exe -B verify_isolated.py
+.\.venv\Scripts\python.exe -B tools/verification/verify_isolated.py
 ```
 
 - `py_compile` 是最低語法檢查。
-- `verify_isolated.py` 為回歸前優先執行的隔離測試（正式設定、金鑰、排程、正式通道不要納入此命令）。
+- `tools/verification/verify_isolated.py` 為回歸前優先執行的隔離測試（正式設定、金鑰、排程、正式通道不要納入此命令）。
 - 直接執行 `local_files_mcp.py --root .\shared` 時，會啟動 MCP 的本機 STDIO 介面。
 - 只有在遠端連線已配置完成後，才啟動 `.\start-local-files-tunnel.ps1`。
 - 每個長跑程序請用 `Ctrl+C` 停止。
@@ -59,13 +59,13 @@ Python 3.10+ 保留相容性；完整 TOML／SQLite 解析需要 Python 3.11+、
 
 - `.\.venv\Scripts\python.exe -m py_compile local_files_mcp.py`
 - `.\.venv\Scripts\python.exe -B -m unittest discover -s tests -v`
-- `.\.venv\Scripts\python.exe -B verify_isolated.py`
-- `.\.venv\Scripts\python.exe -B verify_release_stdio.py`：隔離 fixture、真實 STDIO 22 工具與重要拒絕路徑。
-- `.\.venv\Scripts\python.exe -B verify_full_control_stdio.py`：內部測試 server 與 Windows AppContainer 的真實 STDIO 回歸；非公開模式。
-- `.\.venv\Scripts\python.exe -B verify_access_modes_stdio.py`：三模式 discovery、模擬後端不可用時拒絕命令與受信任主機 fixture；不能代替 VM 驗收。
-- `.\.venv\Scripts\python.exe -B verify_developer_control_stdio.py`：真實 Windows Sandbox、唯讀工具鏈、root 寫入、逃逸拒絕、STDIO 關閉與降權驗收；需互動式桌面及已安裝工具，缺少前置條件不得宣稱通過。
+- `.\.venv\Scripts\python.exe -B tools/verification/verify_isolated.py`
+- `.\.venv\Scripts\python.exe -B tools/verification/verify_release_stdio.py --report <本次報告.json>`：隔離 fixture、真實 STDIO 22 工具與重要拒絕路徑。
+- `.\.venv\Scripts\python.exe -B tools/verification/verify_full_control_stdio.py`：內部測試 server 與 Windows AppContainer 的真實 STDIO 回歸；非公開模式。
+- `.\.venv\Scripts\python.exe -B tools/verification/verify_access_modes_stdio.py`：三模式 discovery、模擬後端不可用時拒絕命令與受信任主機 fixture；不能代替 VM 驗收。
+- `.\.venv\Scripts\python.exe -B tools/verification/verify_developer_control_stdio.py`：真實 Windows Sandbox、唯讀工具鏈、root 寫入、逃逸拒絕、STDIO 關閉與降權驗收；需互動式桌面及已安裝工具，缺少前置條件不得宣稱通過。
 - 本機封裝與 clean-clone 步驟見 `RELEASE.md`；`build_release.py` 僅依固定白名單封裝，不自動發布。
-- 變更 MCP schema 時：同步檢查 `tool-contract.json`、`tool-contract-full-control.json`、`tool-contract-developer-control.json`、`tool-contract-host-control.json`；原唯讀工具 schema 不可因控制模式功能改變，並以 MCP 1.30.0 介面條件進行檢核。
+- 變更 MCP schema 時：同步檢查 `contracts/tool-contract.json`、`contracts/tool-contract-full-control.json`、`contracts/tool-contract-developer-control.json`、`contracts/tool-contract-host-control.json`；原唯讀工具 schema 不可因控制模式功能改變，並以 MCP 1.30.0 介面條件進行檢核。
 
 環境不支援時可記錄 skip 原因；不得將「本機成功」當作遠端驗收完成。
 
@@ -103,8 +103,8 @@ Python 3.10+ 保留相容性；完整 TOML／SQLite 解析需要 Python 3.11+、
 
 ## 電源功能隔離
 
-- `power_policy.py` / `power_windows.py` / `power_restore_guard.py` 管理雙模式電源、原生事件與 crash 回復；預設 OFF。
+- `mcp_local/power_policy.py` / `mcp_local/power_windows.py` / `mcp_local/power_restore_guard.py` 管理雙模式電源、原生事件與 crash 回復；預設 OFF。
 - 一般測試必須 mock Power Scheme、Process QoS、Power Request 與 Windows 使用者電源模式；不得切換正式系統電源方案。
-- 真實整合測試需 `MCP_LOCAL_ALLOW_POWER_INTEGRATION_TEST=1` 與明確使用者授權；benchmark_power.py 另要求 `--allow-system-power-changes`。
+- 真實整合測試需 `MCP_LOCAL_ALLOW_POWER_INTEGRATION_TEST=1` 與明確使用者授權；tools/benchmarks/benchmark_power.py 另要求 `--allow-system-power-changes`。
 - 設定版本 8，MCP 契約為 13（服務 2026.10.06.1；唯讀 22／開發控制 34／主機控制 36 個註冊工具）；不保存 `developer_toolchains`；從可信安裝子目錄與實際 executable 自動偵測，工具鏈唯讀，無額外工具仍可用 VM 內建 PowerShell。舊個別排除不可因 GUI 簡化而刪除。
 - Restore guard 不接收金鑰、不加入 Connection Job；回復失敗需保留日誌，不能宣稱已還原。

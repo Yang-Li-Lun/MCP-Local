@@ -1,6 +1,6 @@
 import asyncio
 import unittest
-from verify_full_control_stdio import verify
+from tools.verification.verify_full_control_stdio import verify
 
 
 class FullControlStdioTests(unittest.TestCase):

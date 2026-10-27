@@ -11,10 +11,13 @@ __pycache__/
 .env
 .env.*
 settings.json
+settings.json.*
 local-files-gui.json
+local-files-gui.json.*
 *.key
 *.pem
 *.p12
+*.pfx
 
 # Local backups and benchmark/test outputs
 /engineering-backup-*/
@@ -39,3 +42,19 @@ local-files-gui.json.*.bak
 /profiles/
 /control-plane*.json
 /codex-clipboard-*
+
+# Generated validation runs and recovery snapshots stay local.
+/reports/validation/
+/reports/performance/runs/
+/reports/engineering/legacy-root/
+/reports/performance/legacy-root/
+/reports/engineering/worktree-layout-20261026/source-before.zip
+/reports/engineering/worktree-layout-20261026/link-documents-before.zip
+/reports/engineering/worktree-layout-20261026/fixtures/
+/reports/engineering/worktree-layout-20261026/packages/
+/reports/engineering/worktree-layout-20261026/deployed/
+
+# Local evidence and retained backups are not public source delivery.
+/archive/
+/reports/
+/NVIDIA Corporation/

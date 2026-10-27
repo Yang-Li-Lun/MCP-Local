@@ -1,5 +1,7 @@
 """VM guard、來源別名與 guest 回傳檔防護；此單元套件不啟動真實 VM。"""
 import json
+import base64
+from contextlib import nullcontext
 import os
 from pathlib import Path
 import subprocess
@@ -10,26 +12,79 @@ import unittest
 from unittest.mock import Mock, patch
 import uuid
 
-from connection_runtime import Connection, ConnectionErrorKind
-from control_files import ControlledFiles
-from developer_vm import VMProcess, remove_owned_tree
-from developer_vm_guard import Lifecycle, find_cli
-from developer_vm_client import guard_environment
-from workspace_reader import WorkspaceReader
+from mcp_local.connection_runtime import Connection, ConnectionErrorKind
+from mcp_local.control_files import ControlledFiles
+from mcp_local.developer_vm import VMProcess, remove_owned_tree
+from mcp_local.developer_vm_guard import Lifecycle, find_cli
+from mcp_local.developer_vm_client import guard_environment
+from mcp_local.workspace_reader import WorkspaceReader
 
 
 class DeveloperVMTests(unittest.TestCase):
+    def test_guest_message_publication_and_existing_message_preservation(self):
+        # Execute only the publisher extracted by PowerShell's parser, never the
+        # guest bootstrap, commands, environment setup or a native VM.
+        with tempfile.TemporaryDirectory() as temporary:
+            spool = Path(temporary).resolve()
+            guest = Path(__file__).resolve().parents[1] / 'mcp_local/developer_guest.ps1'
+            quote = lambda value: "'" + str(value).replace("'", "''") + "'"
+            script = ('$McpSpool=' + quote(spool) + '; $source=' + quote(guest) + ';\n' + r'''
+Set-StrictMode -Version Latest
+$ErrorActionPreference='Stop'
+$utf8=[Text.UTF8Encoding]::new($false)
+$tokens=$null; $errors=$null
+$ast=[Management.Automation.Language.Parser]::ParseFile($source,[ref]$tokens,[ref]$errors)
+if($errors.Count){throw 'Guest parse error'}
+$functions=@($ast.FindAll({param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Publish-McpMessage'},$true))
+if($functions.Count -ne 1){throw 'Publisher missing or ambiguous'}
+. ([scriptblock]::Create($functions[0].Extent.Text))
+Publish-McpMessage 'ready.json' '{"ready":true}'
+Publish-McpMessage 'result.json' '{"exit_code":0,"text":"\u4e2d\u6587"}'
+$refused=$false
+try { Publish-McpMessage 'ready.json' '{"ready":false}' } catch { $refused=$true }
+if(-not $refused){throw 'Existing control message overwritten'}
+''')
+            powershell = Path(os.environ['SystemRoot']) / 'System32/WindowsPowerShell/v1.0/powershell.exe'
+            completed = subprocess.run([str(powershell), '-NoLogo', '-NoProfile', '-NonInteractive',
+                '-EncodedCommand', base64.b64encode(script.encode('utf-16-le')).decode('ascii')],
+                capture_output=True, timeout=20, creationflags=subprocess.CREATE_NO_WINDOW,
+                env=guard_environment())
+            self.assertEqual(completed.returncode, 0, completed.stderr.decode('utf-8', errors='replace'))
+            self.assertEqual(json.loads((spool / 'ready.json').read_bytes()), {'ready': True})
+            self.assertEqual(json.loads((spool / 'result.json').read_bytes()), {'exit_code': 0, 'text': '中文'})
+
+    def test_incomplete_guest_ready_still_fails_closed_and_stops_owned_vm(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            files = ControlledFiles(WorkspaceReader([{'id': 'fixture', 'path': str(root)}], 'fixture'), 'full_control')
+            process = VMProcess(files, 'fixture', None, [], 60)
+            process.spool.mkdir()
+            from mcp_local.local_files_mcp import FileReader
+            process.spool_reader = FileReader(process.spool)
+            (process.spool / 'ready.json').write_bytes(b'')
+            client = Mock()
+            client.request.side_effect = [{'vm_id': 'synthetic-owned-vm'}, {}]
+            with patch('mcp_local.developer_vm.locked_path', side_effect=lambda *args, **kwargs: nullcontext()), patch.dict(
+                    os.environ, {'MCP_LOCAL_VM_GUARD': 'synthetic-unused'}), patch(
+                    'mcp_local.developer_vm.GuardClient', return_value=client), patch.object(process, 'publish') as publish:
+                process._run('NOT_EXECUTED', '<Configuration/>')
+            self.assertEqual(process.poll(), 1)
+            self.assertIsNone(process.vm_id)
+            self.assertIn('Expecting value', process.error)
+            self.assertEqual([call.args[0]['op'] for call in client.request.call_args_list], ['start', 'stop'])
+            publish.assert_not_called()
+
     def test_stop_only_owned_id_and_requires_absence_proof(self):
         lifecycle = Lifecycle(Path('fixture-wsb.exe'))
         own, foreign = str(uuid.uuid4()), str(uuid.uuid4())
         lifecycle.identifier = own
         with patch.object(lifecycle, 'ids', side_effect=[{own, foreign}, {foreign}]), patch(
-                'developer_vm_guard.invoke_cli') as invoke:
+                'mcp_local.developer_vm_guard.invoke_cli') as invoke:
             lifecycle.stop()
         invoke.assert_called_once_with(lifecycle.executable, 'stop', '--id', own)
         self.assertIsNone(lifecycle.identifier)
         lifecycle.identifier = own
-        with patch.object(lifecycle, 'ids', return_value={own}), patch('developer_vm_guard.invoke_cli'):
+        with patch.object(lifecycle, 'ids', return_value={own}), patch('mcp_local.developer_vm_guard.invoke_cli'):
             with self.assertRaisesRegex(ValueError, 'VM_STOP_UNCONFIRMED'):
                 lifecycle.stop()
         self.assertEqual(lifecycle.identifier, own)
@@ -37,7 +92,7 @@ class DeveloperVMTests(unittest.TestCase):
     def test_start_refuses_foreign_vm_without_mutation(self):
         lifecycle = Lifecycle(Path('fixture-wsb.exe'))
         with patch.object(lifecycle, 'ids', return_value={str(uuid.uuid4())}), patch(
-                'developer_vm_guard.invoke_cli') as invoke:
+                'mcp_local.developer_vm_guard.invoke_cli') as invoke:
             with self.assertRaisesRegex(ValueError, 'VM_BUSY'):
                 lifecycle.start('<Configuration/>', threading.Event())
         invoke.assert_not_called()
@@ -52,7 +107,7 @@ class DeveloperVMTests(unittest.TestCase):
                                  'InstallLocation': str(package), 'ProgramFiles': str(base)}).encode()
             completed = subprocess.CompletedProcess([], 0, stdout=output, stderr=b'')
             with patch.dict(os.environ, {'ProgramFiles': 'Z:\\incorrect'}), patch(
-                    'developer_vm_guard.subprocess.run', return_value=completed):
+                    'mcp_local.developer_vm_guard.subprocess.run', return_value=completed):
                 self.assertEqual(find_cli(), package / 'wsb.exe')
         with patch.dict(os.environ, {'PATH': 'C:\\untrusted-root', 'PSModulePath': 'C:\\untrusted-modules',
                                      'PYTHONPATH': 'C:\\untrusted-python', 'CONTROL_PLANE_API_KEY': 'synthetic'}):
@@ -75,10 +130,10 @@ class DeveloperVMTests(unittest.TestCase):
             events.append('job-create')
             return job
         connection = Connection()
-        with patch('connection_runtime.CONNECTION_MUTEX', 'Local\\MCP_Test_' + uuid.uuid4().hex), patch(
-                'connection_runtime.existing_tunnel', return_value=False), patch(
-                'connection_runtime.build_commands', return_value=[]), patch(
-                'developer_vm_client.GuardOwner', side_effect=create_guard), patch('tray_windows.Job', side_effect=create_job):
+        with patch('mcp_local.connection_runtime.CONNECTION_MUTEX', 'Local\\MCP_Test_' + uuid.uuid4().hex), patch(
+                'mcp_local.connection_runtime.existing_tunnel', return_value=False), patch(
+                'mcp_local.connection_runtime.build_commands', return_value=[]), patch(
+                'mcp_local.developer_vm_client.GuardOwner', side_effect=create_guard), patch('mcp_local.tray_windows.Job', side_effect=create_job):
             connection.start({'settings_version': 7, 'access_mode': 'developer_control',
                               'developer_toolchains': []}, 'synthetic-key')
             connection.thread.join(5)
@@ -90,10 +145,10 @@ class DeveloperVMTests(unittest.TestCase):
         guard = Mock(encode=Mock(return_value='synthetic'))
         guard.close.side_effect = ValueError('VM_STOP_UNCONFIRMED')
         connection = Connection()
-        with patch('connection_runtime.CONNECTION_MUTEX', 'Local\\MCP_Test_' + uuid.uuid4().hex), patch(
-                'connection_runtime.existing_tunnel', return_value=False), patch(
-                'connection_runtime.build_commands', return_value=[]), patch(
-                'developer_vm_client.GuardOwner', return_value=guard), patch('tray_windows.Job'):
+        with patch('mcp_local.connection_runtime.CONNECTION_MUTEX', 'Local\\MCP_Test_' + uuid.uuid4().hex), patch(
+                'mcp_local.connection_runtime.existing_tunnel', return_value=False), patch(
+                'mcp_local.connection_runtime.build_commands', return_value=[]), patch(
+                'mcp_local.developer_vm_client.GuardOwner', return_value=guard), patch('mcp_local.tray_windows.Job'):
             connection.start({'settings_version': 7, 'access_mode': 'developer_control',
                               'developer_toolchains': []}, 'synthetic-key')
             connection.thread.join(5)
@@ -111,7 +166,7 @@ class DeveloperVMTests(unittest.TestCase):
             files = ControlledFiles(workspace, 'full_control')
             process = VMProcess(files, 'main', None, [], 60)
             process.spool.mkdir()
-            from local_files_mcp import FileReader
+            from mcp_local.local_files_mcp import FileReader
             process.spool_reader = FileReader(process.spool)
             external = base / 'synthetic-private.txt'
             external.write_text('MUST_NOT_READ', encoding='utf-8')

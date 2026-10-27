@@ -1,5 +1,7 @@
 # MCP-Local 本機檔案工具
 
+[文件總索引](docs/INDEX.md) · [專案結構與開發入口](docs/PROJECT_LAYOUT.md)
+
 限定使用者明確授權的資料夾或磁碟範圍內的一般檔案探索，以及文字、文件、圖片、媒體與封存讀取；提供二十二個唯讀工具：`list_directory`、`list_files`、`read_file`、`search_text`、`workspace_info`、`list_projects`、`project_context`、`read_files`、`search_texts`、`find_files`、`read_file_ranges`、`hash_files`、`compare_paths`、`project_status`、`server_diagnostics`、`read_image`、`file_info`、`read_document`、`inspect_media`、`inspect_archive`、`read_binary`、`query_files`。預設唯讀模式不提供寫入、刪除或指令執行能力。
 
 ## 權限模式與目前可用性
@@ -17,7 +19,7 @@
 開發模式需要 Windows Sandbox 與新版 `wsb` CLI；安全工具鏈自動偵測並唯讀映射。後端不可用時 `mode_ready=false` 並拒絕命令；沒有額外工具鏈仍可使用 VM 內建 PowerShell。
 VM 網路與剪貼簿關閉，不繼承主機 profile／憑證；不會 fallback 到主機。工具註冊數不代表所有 CLI 工作流程均已驗證。
 v1–v6 設定遷移為唯讀；所有 `full_control` 設定降為 `read_only`。v7 已明確授權的開發／主機模式保留；舊手動工具鏈欄位移除。
-詳細限制、CLI 與驗收方式見 [權限模式說明](完整控制模式.md)。
+詳細限制、CLI 與驗收方式見 [權限模式說明](docs/architecture/完整控制模式.md)。
 
 ## 環境與啟動
 
@@ -29,9 +31,9 @@ py -3.13 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements-lock.txt
 .\.venv\Scripts\python.exe -m pip check
 .\.venv\Scripts\python.exe -B -m unittest discover -s tests -v
-.\.venv\Scripts\python.exe -m py_compile local_files_mcp.py connection_settings.py connection_cli.py local_files_gui.py reader_settings.py key_store.py tray_windows.py workspace_settings.py workspace_reader.py
-.\.venv\Scripts\python.exe -B verify_isolated.py
-.\.venv\Scripts\python.exe -B verify_release_stdio.py
+.\.venv\Scripts\python.exe -m py_compile local_files_mcp.py mcp_local/connection_settings.py connection_cli.py local_files_gui.py mcp_local/reader_settings.py mcp_local/key_store.py mcp_local/tray_windows.py mcp_local/workspace_settings.py mcp_local/workspace_reader.py
+.\.venv\Scripts\python.exe -B tools/verification/verify_isolated.py
+.\.venv\Scripts\python.exe -B tools/verification/verify_release_stdio.py --report <本次報告.json>
 ```
 
 沒有 `py` launcher 時，可改用完整 Python 路徑執行 `-m venv .venv`。既有 `.venv` 不會隨系統 Python 升級；重建前停止 MCP 並備份舊環境，新環境驗證失敗時可回復。保留 `%LOCALAPPDATA%\MCP-Local` 的正式設定、DPAPI 金鑰及共享根。GUI、CLI 與正式 MCP 子程序使用專案 `.venv`，須檢查此環境並實際呼叫 `read_document`。
@@ -40,9 +42,9 @@ py -3.13 -m venv .venv
 
 本機 STDIO：`.\.venv\Scripts\python.exe local_files_mcp.py --root .\shared`。預設根目錄為程式旁的 shared；不會自動使用 GUI 設定。
 
-遠端通道：雙擊 `開啟連線設定.vbs` 或執行 `.\start-local-files-tunnel.ps1`。兩者共用相同設定、指令建立與程序管理。需已有經驗證的官方 `tunnel-client.exe` 及具有所選通道使用權限的金鑰；不變更供應商成品。
+遠端通道：雙擊 `開啟連線設定.vbs` 或執行 `.\start-local-files-tunnel.ps1`。兩者共用相同設定、指令建立與程序管理。需已有經驗證的官方 `third_party/tunnel-client/tunnel-client.exe` 及具有所選通道使用權限的金鑰；不變更供應商成品。
 
-首次遷移必須在 GUI 選定實際分享目錄與通道，按「儲存設定」確認兩個入口今後採用的值。未確認前，PowerShell 與連線流程均拒絕啟動。保存前備份原一般設定；不更動既有加密金鑰。詳見 [介面使用說明](介面使用說明.md)。
+首次遷移必須在 GUI 選定實際分享目錄與通道，按「儲存設定」確認兩個入口今後採用的值。未確認前，PowerShell 與連線流程均拒絕啟動。保存前備份原一般設定；不更動既有加密金鑰。詳見 [介面使用說明](docs/guides/介面使用說明.md)。
 
 ## 大量檔案讀取
 
@@ -77,24 +79,24 @@ py -3.13 -m venv .venv
 
 搜尋預算計入實際讀取 bytes，包含無效 UTF-8、NUL 與超限探測。探測最多讀取單檔上限加 1 byte，仍受剩餘搜尋預算約束；耗盡即 truncated=true。部分讀取檔案不納入 matches 或 scanned_files，並增加 skipped_entries。scanned_bytes 可用於核對容量。恰好用滿預算仍標記截斷，避免聲稱後續已檢查完畢。
 
-read_file 每次最多 400 行，content（含行號、冒號、空白及換行）嚴格不超過 24,000 字元，仍須整檔在單檔容量限制內。`read_file` 等文字工具不解析 PDF、Office、圖片或壓縮檔；圖片應使用 `read_image`，目前支援靜態 PNG、JPEG、WebP、GIF、BMP、TIFF、ICO、PNM，以及目前 Pillow build 可用時的 AVIF。
+read_file 每次最多 400 行，公開回傳的 `text`（含行號、冒號、空白及換行）嚴格不超過 24,000 字元，仍須整檔在單檔容量限制內。`path`、`start_line`、`next_start_line`、`total_lines` 保留；批次與多區段結果仍使用 `content`。`read_file` 等文字工具不解析 PDF、Office、圖片或壓縮檔；圖片應使用 `read_image`，目前支援靜態 PNG、JPEG、WebP、GIF、BMP、TIFF、ICO、PNM，以及目前 Pillow build 可用時的 AVIF。
 
-原有 22 個 root-based 唯讀工具拒絕點號名稱、Windows Hidden 屬性（含共享根目錄與沿途資料夾）、符號連結、重新解析點、多重硬連結、絕對路徑及向上跳脫。`host_control` 的 `read_host_file`、`list_host_directory` 與主機檔案寫入工具可接受受保護的本機絕對路徑，但仍拒絕 UNC、裝置路徑、磁碟相對路徑、`..`、Hidden、連結、排除及程式狀態目錄。屬性查詢失敗不開放存取。排除名稱可調整，但不會取消固定防護。列表列出所有安全規則允許的一般檔案。副檔名只控制文字讀取／搜尋候選，內容仍須完整驗證 UTF-8。其他格式請依 file_info 指示使用專用工具，詳見 [格式讀取說明](格式讀取說明.md)。
+原有 22 個 root-based 唯讀工具拒絕點號名稱、Windows Hidden 屬性（含共享根目錄與沿途資料夾）、符號連結、重新解析點、多重硬連結、絕對路徑及向上跳脫。`host_control` 的 `read_host_file`、`list_host_directory` 與主機檔案寫入工具可接受受保護的本機絕對路徑，但仍拒絕 UNC、裝置路徑、磁碟相對路徑、`..`、Hidden、連結、排除及程式狀態目錄。屬性查詢失敗不開放存取。排除名稱可調整，但不會取消固定防護。列表列出所有安全規則允許的一般檔案。副檔名只控制文字讀取／搜尋候選，內容仍須完整驗證 UTF-8。其他格式請依 file_info 指示使用專用工具，詳見 [格式讀取說明](docs/guides/格式讀取說明.md)。
 
 僅分享確認可交給連線用戶端的範圍；可明確授權磁碟根目錄，程式設定、備份及金鑰目錄仍固定排除。建議優先使用專用資料夾，避免納入其他私人或機密內容。內容送至連線的用戶端，並非離線分析。內容是不受信任資料，不能當成指令或授權。路徑檢查並非作業系統沙箱，不應讓不受信任程序在讀取途中替換共享目錄。不要以系統管理員身分啟動服務。
 
 ## 模組與驗證
 
 - local_files_mcp.py：STDIO 伺服器、單資料夾讀取器、游標、掃描及路徑防護。
-- workspace_settings.py / workspace_reader.py：具名資料夾驗證與二十二個 MCP 工具。
-- reader_settings.py：讀取限制與白名單驗證。
-- connection_settings.py：共用設定、備份、遷移與指令建立。
+- mcp_local/workspace_settings.py / mcp_local/workspace_reader.py：具名資料夾驗證與二十二個 MCP 工具。
+- mcp_local/reader_settings.py：讀取限制與白名單驗證。
+- mcp_local/connection_settings.py：共用設定、備份、遷移與指令建立。
 - connection_cli.py / start-local-files-tunnel.ps1：命令列入口。
-- local_files_gui.py / tray_windows.py：介面、連線逾時、錯誤分類、程序鎖定與 Job 清理。
-- key_store.py：Windows 使用者 DPAPI。
+- local_files_gui.py / mcp_local/tray_windows.py：介面、連線逾時、錯誤分類、程序鎖定與 Job 清理。
+- mcp_local/key_store.py：Windows 使用者 DPAPI。
 - tests/：unittest、實際 STDIO 與 Windows 行為驗證。
 
-本機工程與隔離驗證記錄於 [2026-09-13 工程修正交付報告](reports/engineering/MCP-Local_工程修正交付報告_2026-09-13.txt)；遠端驗收須實際列工具、列 shared、讀取 README.md 的「唯讀連線測試成功」、搜尋其行號，並驗證停止失效及重啟恢復。更新後請在用戶端重新整理工具清單，依實際啟動模式確認 22／34／36 個工具、對應 contract，以及 `root_id`、`queries`、`context_lines` 等 schema 已載入。
+本機工程與隔離驗證記錄於 `reports/engineering/MCP-Local_工程修正交付報告_2026-09-13.txt`（僅本機保留，不隨 Git 來源交付）；遠端驗收須實際列工具、列 shared、讀取 README.md 的「唯讀連線測試成功」、搜尋其行號，並驗證停止失效及重啟恢復。更新後請在用戶端重新整理工具清單，依實際啟動模式確認 22／34／36 個工具、對應 contract，以及 `root_id`、`queries`、`context_lines` 等 schema 已載入。
 
 ## 具名多資料夾與專案入口
 
@@ -121,7 +123,7 @@ GUI 與 PowerShell/CLI 共用 v8 設定。已確認的舊設定載入時先驗�
 
 ## 2026-09-13 工程修正與批次搜尋
 
-目前服務版本為 `2026.10.06.1`、契約版本 13，共提供二十二個唯讀工具。新增的 `search_texts` 可一次搜尋 1 至 10 個字面查詢，共用目錄掃描與每檔讀取，並沿用完整 UTF-8／NUL 驗證及搜尋容量限制。省略 `root_id` 時仍只使用明確設定的預設根；完整輸入結構及唯讀標記保存在 `tool-contract.json`。MCP 1.30.0 的同步方法使用最多四個工作執行緒、無等待佇列，合作式期限為 30 秒；每個操作另有 1 GiB 累計讀取與 300,000 項目硬上限，各工具較低設定仍優先。忙碌、取消及期限分別回報 RESOURCE_BUSY、OPERATION_CANCELLED、OPERATION_TIMEOUT。網路磁碟不承諾有界底層 I/O；部署以可信使用者的本機專用資料夾為前提。
+目前服務版本為 `2026.10.06.1`、契約版本 13，共提供二十二個唯讀工具。新增的 `search_texts` 可一次搜尋 1 至 10 個字面查詢，共用目錄掃描與每檔讀取，並沿用完整 UTF-8／NUL 驗證及搜尋容量限制。省略 `root_id` 時仍只使用明確設定的預設根；完整輸入結構及唯讀標記保存在 `contracts/tool-contract.json`。MCP 1.30.0 的同步方法使用最多四個工作執行緒、無等待佇列，合作式期限為 30 秒；每個操作另有 1 GiB 累計讀取與 300,000 項目硬上限，各工具較低設定仍優先。忙碌、取消及期限分別回報 RESOURCE_BUSY、OPERATION_CANCELLED、OPERATION_TIMEOUT。網路磁碟不承諾有界底層 I/O；部署以可信使用者的本機專用資料夾為前提。
 
 所有工具返回資料 JSON（ensure_ascii=False、indent=2 的 UTF-8 編碼，不含 MCP 文字／結構化重複封套）最高 2 MiB；超限拒絕。批次仍最高 512 KiB、專案入口 64 KiB。搜尋命中物件累計 100,000 字元；空白或含換行的查詢不支援。長行增加 `match_snippet`，格式為 casefolded_text，沒有宣稱原文字元偏移。已達命中上限即保守截斷，不再為尋找額外命中讀完整工作區。
 
@@ -139,7 +141,7 @@ GUI 儲存與背景控制透過單一工作佇列完成，儲存中重複提交�
 
 開檔前後核對根與檔案身分、link count、屬性和變動，使用同一控制代碼讀取；本版沒有完成 Windows 最終控制代碼路徑與全祖先鎖定方案，因此**不抵禦不受信任本機寫入者持續替換路徑**。不可將測試通過解讀為敵對多使用者隔離。
 
-驗證：`.\.venv\Scripts\python.exe -B verify_isolated.py`。這會進行語法、pip check 及完整測試，主測試程序以 audit guard 禁止開啟正式狀態檔及啟動正式通道／排程命令；子程序是經審閱的隔離 STDIO、GUI、DPAPI 與 Job fixtures。測試輸出為 engineering-results.json 與 engineering-tests.txt。遠端腳本只應在另外授權的測試端點執行，最終用戶端仍需刷新工具清單並比對目前模式對應的 contract。
+驗證：`.\.venv\Scripts\python.exe -B tools/verification/verify_isolated.py`。這會進行語法、pip check 及完整測試，主測試程序以 audit guard 禁止開啟正式狀態檔及啟動正式通道／排程命令；子程序是經審閱的隔離 STDIO、GUI、DPAPI 與 Job fixtures。測試預設輸出於 `reports/validation/isolated-<時間>/`，包含 engineering-results.json 與 engineering-tests.txt。遠端腳本只應在另外授權的測試端點執行，最終用戶端仍需刷新工具清單並比對目前模式對應的 contract。
 
 ## 系統匣自啟動
 
@@ -157,7 +159,7 @@ GUI 儲存與背景控制透過單一工作佇列完成，儲存中重複提交�
 
 EXTREME 複製原電源方案，禁止閒置睡眠；連線存活期間建立 SystemRequired，不要求顯示器持續點亮。正常退出先停止連線再還原。獨立還原程序透過匿名 pipe EOF 偵測 GUI/CLI 終止，沒有定時輪詢；執行期 journal v2 保存方案 GUID、AC/DC 使用者電源模式原值與程序身分。若使用者自行改選其他電源方案，退出會保留該選擇並刪除本程式臨時方案。
 
-Windows 原生電源能力不足時顯示固定錯誤碼或降級警告。實機 AC/DC、功耗、雙模式延遲及 8/24 小時遠端穩定性仍需另行驗收；隔離測試不代表這些門檻已通過。詳見 [低功耗模式工程設計](低功耗模式工程設計.md)。
+Windows 原生電源能力不足時顯示固定錯誤碼或降級警告。實機 AC/DC、功耗、雙模式延遲及 8/24 小時遠端穩定性仍需另行驗收；隔離測試不代表這些門檻已通過。詳見 [低功耗模式工程設計](docs/history/低功耗模式工程設計.md)。
 
 Windows 11 支援時，極致節能會設定 AC/DC「最佳電源效率」；API 不可用或失敗時顯示警告，其餘策略繼續。此功能不強制開啟 Windows 節能器。退出時僅在目前值仍為本程式套用值時還原；使用者中途改選其他模式會被保留。設定 v4 的 low 遷移為 off，extreme 保留；v5 拒絕 low。manage_windows_power_mode 預設 true，可在一般設定停用。舊 journal v1 僅用於復原，不能進入 low 執行狀態。
 
@@ -166,10 +168,10 @@ Windows 11 支援時，極致節能會設定 AC/DC「最佳電源效率」；API
 服務版本 `2026.10.06.1`，共 22 個唯讀工具；設定版本為 8。
 
 - 已知專案先用 `project_context`；定位檔名用 `find_files`。它以相對路徑做不分大小寫字面包含比對，最多 10 詞、每詞 50 筆、合計 200 筆與 100 KiB；達上限即停，不保證完整清冊。
-- 多個已知檔案使用 `read_files`，每次最多 32 檔、總回傳仍為 512 KiB。
+- 多個已知檔案直接使用 `read_files`，不必先掃描定位；每次最多 32 檔、總回傳仍為 512 KiB。多個名稱合併於一次 `find_files`，多詞合併於一次 `search_texts`；需要少量前後文時用 `context_lines`，片段足夠就不再讀取。
 - 同檔多區段使用 `read_file_ranges(path, ranges, root_id)`；每區段指定 `start_line`、`line_count`，最多 16 區段，每區段 400 行及 24,000 字元，總回傳最多 512 KiB。原始順序、重疊與重複區段均保留；只開檔一次但仍驗證到 EOF。
 - `read_file_ranges.truncated` 表示文字或總容量截斷；因總容量未納入的區段回傳空內容及可重試的 `next_start_line`。總容量包含保守封套預留；`next_start_line` 與單段讀取相同，不等同截斷旗標。
-- 探索先用 `list_directory`，多詞內容搜尋用 `search_texts` 並指定最小目錄；完整且全域排序清冊才用 `list_files`。
+- 探索先用 `list_directory`，內容搜尋指定最小目錄；完整清冊用 `list_files`，完整 metadata 篩選／全域排序用 `query_files`。`query_files.limit` 只限制回傳頁，仍須完整掃描；續頁沿用條件與 `next_cursor`。
 
 維持 4 worker、30 秒期限、1 GiB／300,000 項硬預算。文字搜尋未加入平行檔案搜尋、內容索引或驗證快取；增量基準的 metadata／雜湊快取另述於下節。更新後需在 MCP 用戶端重新整理工具契約；本機測試成功不代表遠端用戶端已接受更新。性能測試方式及本次實測見 `性能優化交付報告.md`。
 
@@ -180,16 +182,16 @@ Windows 11 支援時，極致節能會設定 AC/DC「最佳電源效率」；API
 
 雜湊涵蓋一般檔案的原始位元組，保留 Hidden、link、排除名稱、共享根及容量限制。增量基準僅存在 MCP 程序記憶體，最長 24 小時，每個 workspace 最多 8 份；重啟或淘汰後須重新建立。只快取 metadata 與雜湊，文字讀取仍完整驗證。
 
-更新服務後，用 `server_diagnostics` 核對實際註冊，再從用戶端 `tools/list` 確認工具可見；server 無法自行證明 ChatGPT 已取得工具。完整參數、界線與示例見 [增量與診斷工具說明](增量與診斷工具說明.md)。
+更新服務後，用 `server_diagnostics` 核對實際註冊，再從用戶端 `tools/list` 確認工具可見；server 無法自行證明 ChatGPT 已取得工具。完整參數、界線與示例見 [增量與診斷工具說明](docs/guides/增量與診斷工具說明.md)。
 
 ## 原生圖片讀取（契約 13）
 
-新增 `read_image(path, root_id?)`，以原生 MCP `ImageContent` 傳回 PNG 圖片，既有工具皆保留，目前共 22 個唯讀工具。支援靜態 PNG、JPEG、WebP、GIF、BMP、TIFF、ICO、PNM 與可用 build 的 AVIF；僅使用既有授權根，檔案須通過路徑、Hidden、link、排除名稱、狀態目錄及檔案身分檢查。詳見 [圖片讀取說明](圖片讀取說明.md)。
+新增 `read_image(path, root_id?)`，以原生 MCP `ImageContent` 傳回 PNG 圖片，既有工具皆保留，目前共 22 個唯讀工具。支援靜態 PNG、JPEG、WebP、GIF、BMP、TIFF、ICO、PNM 與可用 build 的 AVIF；僅使用既有授權根，檔案須通過路徑、Hidden、link、排除名稱、狀態目錄及檔案身分檢查。詳見 [圖片讀取說明](docs/guides/圖片讀取說明.md)。
 
 ## 契約 13 格式擴充
 
-保留 22 工具，在 read_document 加入 format_hint/table/expected_sha256，在 inspect_archive 加入 member_path/offset/length/expected_sha256。支援結構化資料、OpenDocument、EPUB、郵件、外掛字幕與更多圖片／媒體 metadata；來源唯讀與原有安全上限保留。詳見 [格式讀取說明](格式讀取說明.md)。
+保留 22 工具，在 read_document 加入 format_hint/table/expected_sha256，在 inspect_archive 加入 member_path/offset/length/expected_sha256。支援結構化資料、OpenDocument、EPUB、郵件、外掛字幕與更多圖片／媒體 metadata；來源唯讀與原有安全上限保留。詳見 [格式讀取說明](docs/guides/格式讀取說明.md)。
 
 ## 批次 metadata 查詢（契約 13）
 
-新增單一 `query_files`，保留原有 21 個工具輸入契約。先完整掃描再篩選、排序與分頁；預設只查 metadata，不讀取檔案內容。`sort_by="created_time", order="asc", limit=1` 查詢整個安全範圍最早建立的檔案。Windows 使用真正 creation time。格式、能力與 SHA-256 僅 opt-in，且只處理本頁。參數、游標及資源限制見 [格式讀取說明](格式讀取說明.md#query_files-批次-metadata-查詢)。
+新增單一 `query_files`，保留原有 21 個工具輸入契約。先完整掃描再篩選、排序與分頁；預設只查 metadata，不讀取檔案內容。`sort_by="created_time", order="asc", limit=1` 查詢整個安全範圍最早建立的檔案。Windows 使用真正 creation time。格式、能力與 SHA-256 僅 opt-in，且只處理本頁。參數、游標及資源限制見 [格式讀取說明](docs/guides/格式讀取說明.md#query_files-批次-metadata-查詢)。

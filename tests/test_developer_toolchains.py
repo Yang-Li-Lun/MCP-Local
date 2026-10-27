@@ -6,8 +6,8 @@ import unittest
 from unittest.mock import patch
 import xml.etree.ElementTree as ET
 
-from developer_control import build_vm_mapping_plan
-from developer_toolchains import discover_toolchains, validate_toolchain_boundary
+from mcp_local.developer_control import build_vm_mapping_plan
+from mcp_local.developer_toolchains import discover_toolchains, validate_toolchain_boundary
 
 
 class DeveloperToolchainTests(unittest.TestCase):
@@ -23,9 +23,9 @@ class DeveloperToolchainTests(unittest.TestCase):
         self.state.mkdir()
         self.root = self.base / 'authorized'
         self.root.mkdir()
-        for target, value in (('developer_toolchains.known_folders', self.folders),
-                              ('developer_control.security_policy.STATE_DIR', self.state),
-                              ('developer_toolchains.sys.base_prefix', str(self.base / 'fixture-runtime'))):
+        for target, value in (('mcp_local.developer_toolchains.known_folders', self.folders),
+                              ('mcp_local.developer_control.security_policy.STATE_DIR', self.state),
+                              ('mcp_local.developer_toolchains.sys.base_prefix', str(self.base / 'fixture-runtime'))):
             mock = patch(target, return_value=value) if 'known_folders' in target else patch(target, value)
             mock.start()
             self.addCleanup(mock.stop)
@@ -54,7 +54,7 @@ class DeveloperToolchainTests(unittest.TestCase):
 
     def test_path_and_environment_do_not_authorize_arbitrary_folders(self):
         untrusted = self.executable('untrusted/python.exe')
-        with patch('developer_toolchains.shutil.which', return_value=str(untrusted)), patch.dict(
+        with patch('mcp_local.developer_toolchains.shutil.which', return_value=str(untrusted)), patch.dict(
                 os.environ, {'ProgramFiles': str(untrusted.parent), 'CARGO_HOME': str(self.base)}):
             self.assertEqual(discover_toolchains([self.root]), [])
 

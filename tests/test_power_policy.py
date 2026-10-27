@@ -6,9 +6,9 @@ import tempfile
 import unittest
 from unittest.mock import Mock, patch
 import uuid
-from power_policy import (PowerPolicyManager, PowerSchemeManager, PowerMode, PowerError,
+from mcp_local.power_policy import (PowerPolicyManager, PowerSchemeManager, PowerMode, PowerError,
                           normalize_power, tick_interval, SLEEP, DISPLAY, EPP, MAXIMUM, BOOST)
-from power_restore_guard import serve
+from mcp_local.power_restore_guard import serve
 
 
 class FakePower:
@@ -285,7 +285,7 @@ class PowerPolicyTests(unittest.TestCase):
 class PowerApiBoundaryTests(unittest.TestCase):
     def test_request_uses_system_only_and_balances_clear(self):
         import ctypes
-        from power_windows import WindowsPower, Reason
+        from mcp_local.power_windows import WindowsPower, Reason
         api = WindowsPower()
         api.create_request = Mock(return_value=987)
         api.set_request = Mock(return_value=True)
@@ -300,7 +300,7 @@ class PowerApiBoundaryTests(unittest.TestCase):
         api.close.assert_called_once_with(987)
 
     def test_request_failure_closes_handle_without_false_success(self):
-        from power_windows import WindowsPower
+        from mcp_local.power_windows import WindowsPower
         api = WindowsPower()
         api.create_request = Mock(return_value=987)
         api.set_request = Mock(return_value=False)
@@ -311,7 +311,7 @@ class PowerApiBoundaryTests(unittest.TestCase):
 
     def test_qos_off_returns_to_system_management(self):
         import ctypes
-        from power_windows import WindowsPower, Throttling
+        from mcp_local.power_windows import WindowsPower, Throttling
         api = WindowsPower()
         seen = []
         def capture(handle, kind, pointer, size):
@@ -324,7 +324,7 @@ class PowerApiBoundaryTests(unittest.TestCase):
         self.assertEqual(seen, [(4, 1, 1, 1), (4, 1, 0, 0)])
 
     def test_mode_broadcast_resets_other_states(self):
-        from power_windows import ModeChannel
+        from mcp_local.power_windows import ModeChannel
         api = Mock()
         api.create_event.side_effect = [11, 12]
         channel = ModeChannel(api, 'off')
@@ -336,10 +336,10 @@ class PowerApiBoundaryTests(unittest.TestCase):
 
     def test_guard_environment_excludes_credentials(self):
         import os
-        from power_policy import PowerRestoreGuardClient
+        from mcp_local.power_policy import PowerRestoreGuardClient
         process = Mock(stdin=io.StringIO(), stdout=io.StringIO('{"ok":true}\n'))
         with patch.dict(os.environ, {'CONTROL_PLANE_API_KEY': 'FAKE_DO_NOT_INHERIT', 'OPENAI_API_KEY': 'FAKE'}), \
-             patch('power_policy.subprocess.Popen', return_value=process) as spawn:
+             patch('mcp_local.power_policy.subprocess.Popen', return_value=process) as spawn:
             guard = PowerRestoreGuardClient(Path('unused-power-test.json'))
             guard.start()
         environment = spawn.call_args.kwargs['env']

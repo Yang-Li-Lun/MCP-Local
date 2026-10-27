@@ -6,12 +6,12 @@ import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
-from local_files_mcp import FileReader, create_server
-from workspace_reader import WorkspaceReader
-from operation_budget import ACTIVE, Budget, OperationError, asynchronous
-import operation_budget
-from stream_read import read_ranges, read_window
-from snapshot_cache import SnapshotBuilder, SnapshotCache
+from mcp_local.local_files_mcp import FileReader, create_server
+from mcp_local.workspace_reader import WorkspaceReader
+from mcp_local.operation_budget import ACTIVE, Budget, OperationError, asynchronous
+from mcp_local import operation_budget
+from mcp_local.stream_read import read_ranges, read_window
+from mcp_local.snapshot_cache import SnapshotBuilder, SnapshotCache
 
 
 class PerformanceV4Tests(unittest.TestCase):
@@ -95,7 +95,7 @@ class PerformanceV4Tests(unittest.TestCase):
     def test_find_early_stop_and_no_content_reads(self):
         for i in range(200):
             (self.root / f'{i:03}.txt').touch()
-        with patch.object(self.reader, 'open_checked') as opened, patch('local_files_mcp.CACHE.put') as cached:
+        with patch.object(self.reader, 'open_checked') as opened, patch('mcp_local.local_files_mcp.CACHE.put') as cached:
             result = self.reader.find_files(['000'], limit_per_query=1)
         self.assertEqual(result['scanned_entries'], 1)
         self.assertTrue(result['truncated'])
@@ -124,14 +124,14 @@ class PerformanceV4Tests(unittest.TestCase):
         (self.root / 'a.txt').write_text('ok')
         for call in [lambda: self.reader.read_file('a.txt'), lambda: self.workspace.read_file('a.txt'),
                      lambda: asyncio.run(asynchronous(self.workspace.read_file)('a.txt'))]:
-            with patch('operation_budget.ensure_output_limit', wraps=operation_budget.ensure_output_limit) as checked:
+            with patch('mcp_local.operation_budget.ensure_output_limit', wraps=operation_budget.ensure_output_limit) as checked:
                 call()
                 self.assertEqual(checked.call_count, 1)
 
     def test_checkpoint_count_and_exact_entry_budget(self):
         for i in range(1000):
             (self.root / f'{i}.txt').touch()
-        with patch('local_files_mcp.checkpoint', wraps=operation_budget.checkpoint) as checked:
+        with patch('mcp_local.local_files_mcp.checkpoint', wraps=operation_budget.checkpoint) as checked:
             self.reader.list_files()
         self.assertLess(checked.call_count, 300)
         budget = Budget()
@@ -163,7 +163,7 @@ class PerformanceV4Tests(unittest.TestCase):
         row['path'] = 'changed'
         status = {'truncated': False}
         cache = SnapshotCache()
-        with patch('snapshot_cache.estimated_bytes', side_effect=AssertionError('recount')):
+        with patch('mcp_local.snapshot_cache.estimated_bytes', side_effect=AssertionError('recount')):
             key = cache.put('o', 'f', builder, status)
         status['truncated'] = True
         result = cache.get(key, 'o', 'f')
@@ -198,10 +198,10 @@ class PerformanceV4Tests(unittest.TestCase):
         budget = Budget()
         token = ACTIVE.set(budget)
         try:
-            with patch('local_files_mcp.os.scandir', side_effect=scan), patch.object(
+            with patch('mcp_local.local_files_mcp.os.scandir', side_effect=scan), patch.object(
                     self.reader, 'checked', side_effect=lambda p: self.root / p), patch.object(
                     self.reader, '_entry_info', side_effect=info), patch(
-                    'local_files_mcp.checkpoint', wraps=operation_budget.checkpoint) as checked:
+                    'mcp_local.local_files_mcp.checkpoint', wraps=operation_budget.checkpoint) as checked:
                 status = dict(truncated=False, skipped_entries=0)
                 self.assertEqual(sum(1 for _ in self.reader.walk('.', status)), 100000)
                 self.assertLess(checked.call_count, 60000)

@@ -8,10 +8,10 @@ import unittest
 from unittest.mock import Mock, patch
 import uuid
 from test_power_policy import FakePower
-from power_policy import PowerSchemeManager, PowerError, tick_interval
-from power_windows import WindowsPower, Guid, ModeChannel, follow_mode, GUID_POWER_MODE_BEST_EFFICIENCY as BEST
-from connection_settings import normalize_connection, load_settings
-from power_restore_guard import serve
+from mcp_local.power_policy import PowerSchemeManager, PowerError, tick_interval
+from mcp_local.power_windows import WindowsPower, Guid, ModeChannel, follow_mode, GUID_POWER_MODE_BEST_EFFICIENCY as BEST
+from mcp_local.connection_settings import normalize_connection, load_settings
+from mcp_local.power_restore_guard import serve
 
 
 class UserModeTests(unittest.TestCase):
@@ -139,7 +139,7 @@ class UserModeTests(unittest.TestCase):
         self.manager.restore()
 
     def test_display_zero_caps_and_shorter_values(self):
-        from power_policy import DISPLAY, EPP, SLEEP
+        from mcp_local.power_policy import DISPLAY, EPP, SLEEP
         for value, expected in ((0, (300, 120)), (30, (30, 30)), (900, (300, 120))):
             with patch.object(self.api, 'read', return_value=value):
                 self.manager.apply('extreme')
@@ -200,7 +200,7 @@ class BindingTests(unittest.TestCase):
         for supply in ('AC', 'DC'):
             setattr(powr, 'PowerGetUserConfigured' + supply + 'PowerMode', None)
             setattr(powr, 'PowerSetUserConfigured' + supply + 'PowerMode', None)
-        with patch('power_windows.c.WinDLL', side_effect=[kernel, powr]):
+        with patch('mcp_local.power_windows.c.WinDLL', side_effect=[kernel, powr]):
             api = WindowsPower()
         self.assertFalse(api.supports_user_power_mode())
         with self.assertRaisesRegex(PowerError, 'UNAVAILABLE'):
@@ -214,7 +214,7 @@ class BindingTests(unittest.TestCase):
                 return 0
             getattr(powr, 'PowerGetUserConfigured' + supply + 'PowerMode').side_effect = getter
             getattr(powr, 'PowerSetUserConfigured' + supply + 'PowerMode').return_value = 0
-        with patch('power_windows.c.WinDLL', side_effect=[kernel, powr]):
+        with patch('mcp_local.power_windows.c.WinDLL', side_effect=[kernel, powr]):
             api = WindowsPower()
         self.assertTrue(api.supports_user_power_mode())
         with patch('sys.audit') as audit:
@@ -231,7 +231,7 @@ class BindingTests(unittest.TestCase):
         def run_now(**kwargs):
             kwargs['target']()
             return Mock()
-        with patch('power_windows.WindowsPower', return_value=api), patch('threading.Thread', side_effect=run_now):
+        with patch('mcp_local.power_windows.WindowsPower', return_value=api), patch('threading.Thread', side_effect=run_now):
             follow_mode('a' * 32, 123)
         self.assertEqual(api.wait.call_args_list[0].args[0], 3)
         self.assertEqual([c.args[0] for c in api.qos.call_args_list], [True, False])
@@ -242,7 +242,7 @@ class BindingTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             ModeChannel(api, 'low')
         api.create_event.assert_not_called()
-        with patch('power_windows.WindowsPower') as native:
+        with patch('mcp_local.power_windows.WindowsPower') as native:
             with self.assertRaises(ValueError):
                 follow_mode('invalid', 1)
             native.assert_not_called()

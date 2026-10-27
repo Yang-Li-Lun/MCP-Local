@@ -5,7 +5,7 @@ import sys
 import tempfile
 import unittest
 
-from key_store import KeyStore
+from mcp_local.key_store import KeyStore
 
 
 class KeyStoreTests(unittest.TestCase):
@@ -18,7 +18,7 @@ class KeyStoreTests(unittest.TestCase):
             self.assertNotIn(b'fake-key-for-local-test', path.read_bytes())
             self.assertEqual(store.load(), 'fake-key-for-local-test')
             result = subprocess.run([sys.executable, '-B', '-c',
-                'from pathlib import Path; from key_store import KeyStore; import sys; '
+                'from pathlib import Path; from mcp_local.key_store import KeyStore; import sys; '
                 'assert KeyStore(Path(sys.argv[1])).load() == "fake-key-for-local-test"', str(path)],
                 capture_output=True, timeout=10, creationflags=subprocess.CREATE_NO_WINDOW)
             self.assertEqual(result.returncode, 0)

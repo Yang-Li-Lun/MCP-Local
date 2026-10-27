@@ -5,14 +5,18 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-import benchmark_actual_performance as benchmark
+from tools.benchmarks import benchmark_actual_performance as benchmark
 
 
 class BenchmarkSnapshotTests(unittest.TestCase):
     def test_working_directory_cannot_select_archive_module(self):
-        expected = (Path(benchmark.__file__).resolve().parent / 'archive/backups'
-                    / 'performance-backup-20260913-180807/local_files_mcp.py').resolve()
         with tempfile.TemporaryDirectory() as temporary:
+            project = Path(temporary) / 'project'
+            script = project / 'tools/benchmarks/benchmark_actual_performance.py'
+            expected = (project / 'archive/backups'
+                        / 'performance-backup-20260913-180807/local_files_mcp.py')
+            expected.parent.mkdir(parents=True)
+            expected.write_text("SENTINEL = 'expected snapshot'", encoding='utf-8')
             decoy = (Path(temporary) / 'archive/backups'
                      / 'performance-backup-20260913-180807/local_files_mcp.py')
             decoy.parent.mkdir(parents=True)
@@ -20,15 +24,17 @@ class BenchmarkSnapshotTests(unittest.TestCase):
             previous = Path.cwd()
             try:
                 os.chdir(temporary)
-                module = benchmark.load_original_module()
+                with patch.object(benchmark, '__file__', str(script)):
+                    module = benchmark.load_original_module()
             finally:
                 os.chdir(previous)
             self.assertEqual(Path(module.__file__).resolve(), expected)
             self.assertNotEqual(expected, decoy)
+            self.assertEqual(module.SENTINEL, 'expected snapshot')
 
     def test_missing_snapshot_fails_before_module_execution(self):
         with tempfile.TemporaryDirectory() as temporary:
-            script = Path(temporary) / 'benchmark_actual_performance.py'
+            script = Path(temporary) / 'tools/benchmarks/benchmark_actual_performance.py'
             with patch.object(benchmark, '__file__', str(script)), patch.object(
                     benchmark.importlib.util, 'spec_from_file_location') as select:
                 with self.assertRaises(FileNotFoundError):
@@ -38,7 +44,7 @@ class BenchmarkSnapshotTests(unittest.TestCase):
     def test_snapshot_link_outside_repository_is_rejected(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            script = root / 'benchmark_actual_performance.py'
+            script = root / 'tools/benchmarks/benchmark_actual_performance.py'
             snapshot = (root / 'archive/backups'
                         / 'performance-backup-20260913-180807/local_files_mcp.py')
             snapshot.parent.mkdir(parents=True)

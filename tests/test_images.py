@@ -18,12 +18,12 @@ from PIL import Image, PngImagePlugin
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 from mcp.types import CallToolResult, ImageContent, TextContent
-from image_reader import MAX_IMAGE_BYTES, MAX_IMAGE_RESPONSE_BYTES
-from local_files_mcp import create_server
-from operation_budget import ensure_output_limit, OperationError, Budget, operation
-from reader_settings import encode_reader_settings
-from tool_contract import verify_contract, SERVICE_VERSION
-from workspace_reader import WorkspaceReader
+from mcp_local.image_reader import MAX_IMAGE_BYTES, MAX_IMAGE_RESPONSE_BYTES
+from mcp_local.local_files_mcp import create_server
+from mcp_local.operation_budget import ensure_output_limit, OperationError, Budget, operation
+from mcp_local.reader_settings import encode_reader_settings
+from mcp_local.tool_contract import verify_contract, SERVICE_VERSION
+from mcp_local.workspace_reader import WorkspaceReader
 
 
 class ImageTests(unittest.TestCase):
@@ -169,7 +169,7 @@ class ImageTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 self.workspace.read_image(path)
         (self.root/'state').mkdir(); self.fixture('state/image.png')
-        with patch('security_policy.STATE_DIR', self.root/'state'):
+        with patch('mcp_local.security_policy.STATE_DIR', self.root/'state'):
             with self.assertRaises(ValueError):
                 self.workspace.read_image('state/image.png')
 
@@ -192,9 +192,9 @@ class ImageTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.workspace.read_image('hard.png')
         (self.root/'hard.png').unlink()
-        import local_files_mcp
+        from mcp_local import local_files_mcp
         original = local_files_mcp.linked
-        with patch('local_files_mcp.linked', side_effect=lambda p, info=None: p == path or original(p, info)):
+        with patch('mcp_local.local_files_mcp.linked', side_effect=lambda p, info=None: p == path or original(p, info)):
             with self.assertRaises(ValueError):
                 self.workspace.read_image('image.png')
 
@@ -220,7 +220,7 @@ class ImageTests(unittest.TestCase):
                 if count == on_call:
                     values[field] += delta
                 return SimpleNamespace(**values)
-            with patch('local_files_mcp.os.fstat', side_effect=changed):
+            with patch('mcp_local.local_files_mcp.os.fstat', side_effect=changed):
                 with self.subTest(field=field), self.assertRaises(ValueError):
                     self.workspace.read_image(path.name)
 

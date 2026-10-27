@@ -10,7 +10,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from local_files_mcp import FileReader
+from mcp_local.local_files_mcp import FileReader
 
 
 class PaginationTests(unittest.TestCase):
@@ -142,7 +142,7 @@ class PaginationTests(unittest.TestCase):
             for target in (file, folder):
                 set_attributes(str(target), 128)
         self.assertEqual(len(reader.list_files()['files']), 2)
-        with patch('local_files_mcp.hidden', side_effect=OSError('unavailable')):
+        with patch('mcp_local.local_files_mcp.hidden', side_effect=OSError('unavailable')):
             with self.assertRaises(OSError):
                 reader.checked('ordinary.txt')
 

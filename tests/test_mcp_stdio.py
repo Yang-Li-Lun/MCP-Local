@@ -8,8 +8,8 @@ import unittest
 
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
-from reader_settings import encode_reader_settings
-from tool_contract import verify_contract
+from mcp_local.reader_settings import encode_reader_settings
+from mcp_local.tool_contract import verify_contract
 
 
 class McpSmokeTests(unittest.TestCase):

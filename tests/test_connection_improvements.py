@@ -8,17 +8,17 @@ import time
 import unittest
 from unittest.mock import patch
 
-import connection_cli
-import connection_settings
-import local_files_gui
-from connection_settings import load_settings, save_settings, require_migration
-from local_files_gui import Connection
+from mcp_local import connection_cli
+from mcp_local import connection_settings
+from mcp_local import local_files_gui
+from mcp_local.connection_settings import load_settings, save_settings, require_migration
+from mcp_local.local_files_gui import Connection
 
 
 class ConnectionImprovementsTests(unittest.TestCase):
     def setUp(self):
         import uuid
-        mutex = patch('connection_runtime.CONNECTION_MUTEX', 'Local\\MCP_Test_' + uuid.uuid4().hex)
+        mutex = patch('mcp_local.connection_runtime.CONNECTION_MUTEX', 'Local\\MCP_Test_' + uuid.uuid4().hex)
         mutex.start()
         self.addCleanup(mutex.stop)
 
@@ -56,8 +56,8 @@ class ConnectionImprovementsTests(unittest.TestCase):
 
     def run_commands(self, commands, timeout=.3):
         connection = Connection(stage_timeout=timeout)
-        with patch('connection_runtime.existing_tunnel', return_value=False), patch(
-                'connection_runtime.build_commands', return_value=commands):
+        with patch('mcp_local.connection_runtime.existing_tunnel', return_value=False), patch(
+                'mcp_local.connection_runtime.build_commands', return_value=commands):
             connection.start({'settings_version': 1}, 'fake-secret-key')
             connection.thread.join(timeout=8)
         self.assertFalse(connection.thread.is_alive())
@@ -72,8 +72,8 @@ class ConnectionImprovementsTests(unittest.TestCase):
             _, events = self.run_commands(commands)
             self.assertTrue(any(kind == 'error' and stage in text and '逾時' in text for kind, text in events))
         connection, _ = self.run_commands([sleep])
-        with patch('connection_runtime.existing_tunnel', return_value=False), patch(
-                'connection_runtime.build_commands', return_value=[okay]):
+        with patch('mcp_local.connection_runtime.existing_tunnel', return_value=False), patch(
+                'mcp_local.connection_runtime.build_commands', return_value=[okay]):
             connection.start({'settings_version': 1}, 'fake-secret-key')
             connection.thread.join(timeout=5)
         self.assertFalse(connection.thread.is_alive())
@@ -92,8 +92,8 @@ class ConnectionImprovementsTests(unittest.TestCase):
         sleep = [sys.executable, '-c', 'import time; time.sleep(60)']
         first = Connection(stage_timeout=.5)
         second = Connection()
-        with patch('connection_runtime.existing_tunnel', return_value=False), patch(
-                'connection_runtime.build_commands', return_value=[okay, okay, sleep]):
+        with patch('mcp_local.connection_runtime.existing_tunnel', return_value=False), patch(
+                'mcp_local.connection_runtime.build_commands', return_value=[okay, okay, sleep]):
             first.start({'settings_version': 1}, 'fake-secret-key')
             try:
                 for _ in range(3):
@@ -112,7 +112,7 @@ class ConnectionImprovementsTests(unittest.TestCase):
         self.assertFalse(first.thread.is_alive())
 
     def test_migration_blocks_before_process_creation(self):
-        with patch('connection_runtime.build_commands') as build:
+        with patch('mcp_local.connection_runtime.build_commands') as build:
             connection = Connection()
             connection.start({}, 'fake-secret-key')
             connection.thread.join(timeout=5)

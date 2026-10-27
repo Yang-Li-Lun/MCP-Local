@@ -6,8 +6,8 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from local_files_gui import build_commands, load_settings, save_settings, validate_settings
-from local_files_mcp import FileReader
+from mcp_local.local_files_gui import build_commands, load_settings, save_settings, validate_settings
+from mcp_local.local_files_mcp import FileReader
 from command_fixture import command_project
 
 
@@ -50,9 +50,9 @@ class SettingsTests(unittest.TestCase):
         self.assertNotIn('CONTROL_PLANE_API_KEY', ' '.join(commands[0]))
 
     def test_command_rejects_changed_vendor_before_returning_commands(self):
-        from integrity import IntegrityError
+        from mcp_local.integrity import IntegrityError
         with command_project() as project:
-            (project / 'tunnel-client.exe').write_bytes(b'changed')
+            (project / 'third_party/tunnel-client/tunnel-client.exe').write_bytes(b'changed')
             with self.assertRaises(IntegrityError):
                 build_commands(validate_settings(str(self.root), 'tunnel_test'))
 

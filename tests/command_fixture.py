@@ -12,13 +12,14 @@ from unittest.mock import patch
 def command_project() -> Iterator[Path]:
     with tempfile.TemporaryDirectory(prefix='mcp-command-') as directory:
         project = Path(directory)
+        (project / 'third_party/tunnel-client').mkdir(parents=True)
         data = b'non-executable command fixture'
-        (project / 'tunnel-client.exe').write_bytes(data)
-        (project / 'vendor-integrity.json').write_text(json.dumps({
+        (project / 'third_party/tunnel-client/tunnel-client.exe').write_bytes(data)
+        (project / 'third_party/tunnel-client/vendor-integrity.json').write_text(json.dumps({
             'tunnel-client.exe': {'sha256': hashlib.sha256(data).hexdigest()}}), encoding='utf-8')
         python = project / '.venv' / 'Scripts' / 'python.exe'
         python.parent.mkdir(parents=True)
         python.write_bytes(b'non-executable fixture')
         (project / 'local_files_mcp.py').write_text('# fixture; never executed\n', encoding='utf-8')
-        with patch('connection_settings.PROJECT', project):
+        with patch('mcp_local.connection_settings.PROJECT', project):
             yield project

@@ -12,11 +12,11 @@ from unittest.mock import patch
 
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
-import incremental_state as state
-from local_files_mcp import create_server
-from operation_budget import Budget, OperationError, operation
-from tool_contract import verify_contract
-from workspace_reader import WorkspaceReader, TOOLS
+from mcp_local import incremental_state as state
+from mcp_local.local_files_mcp import create_server
+from mcp_local.operation_budget import Budget, OperationError, operation
+from mcp_local.tool_contract import verify_contract
+from mcp_local.workspace_reader import WorkspaceReader, TOOLS
 
 
 class IncrementalTests(unittest.TestCase):
@@ -126,7 +126,7 @@ class IncrementalTests(unittest.TestCase):
         self.write('.dot.txt', 'secret')
         self.write('secrets.json', '{}')
         self.reader.settings['excluded_names'].append('private')
-        with patch('security_policy.STATE_DIR', self.root / 'state'):
+        with patch('mcp_local.security_policy.STATE_DIR', self.root / 'state'):
             self.write('state/deny.txt', 'secret')
             with self.assertRaises(ValueError):
                 self.workspace.hash_files(['state/deny.txt'])
@@ -143,7 +143,7 @@ class IncrementalTests(unittest.TestCase):
             original = getattr(module, guard)
             def denied(path, info=None):
                 return path.name == 'a.txt' or original(path, info)
-            with patch('local_files_mcp.' + guard, side_effect=denied):
+            with patch('mcp_local.local_files_mcp.' + guard, side_effect=denied):
                 with self.assertRaises(ValueError):
                     self.workspace.hash_files(['a.txt'])
                 with self.assertRaises(ValueError):
@@ -170,7 +170,7 @@ class IncrementalTests(unittest.TestCase):
     def test_baseline_revoked_paths_not_reported_as_deletions(self):
         baseline = self.workspace.project_status()
         original = __import__('local_files_mcp').hidden
-        with patch('local_files_mcp.hidden', side_effect=lambda path, info=None: path.name == 'a.txt' or original(path, info)):
+        with patch('mcp_local.local_files_mcp.hidden', side_effect=lambda path, info=None: path.name == 'a.txt' or original(path, info)):
             with self.assertRaisesRegex(ValueError, 'BASELINE_SCOPE_CHANGED'):
                 self.workspace.project_status(baseline_id=baseline['baseline_id'])
         os.link(self.root / 'a.txt', self.root / 'hard.txt')
@@ -284,7 +284,7 @@ class IncrementalTests(unittest.TestCase):
 
     def test_scan_io_error_not_false_deletion(self):
         baseline = self.workspace.project_status()
-        with patch('local_files_mcp.os.scandir', side_effect=PermissionError('sensitive path')):
+        with patch('mcp_local.local_files_mcp.os.scandir', side_effect=PermissionError('sensitive path')):
             with self.assertRaises(ValueError) as error:
                 self.workspace.project_status(baseline_id=baseline['baseline_id'])
         self.assertNotIn('sensitive', str(error.exception))
@@ -330,7 +330,7 @@ class IncrementalTests(unittest.TestCase):
         result = self.workspace.server_diagnostics()
         self.assertFalse(result['consistent'])
         self.assertEqual(result['schema_or_annotation_mismatches'], ['hash_files'])
-        with patch('capability_diagnostics.Path.open', side_effect=PermissionError('HOST_SECRET_SENTINEL')):
+        with patch('mcp_local.capability_diagnostics.Path.open', side_effect=PermissionError('HOST_SECRET_SENTINEL')):
             result = self.workspace.server_diagnostics()
         self.assertFalse(result['consistent'])
         self.assertNotIn('HOST_SECRET_SENTINEL', json.dumps(result))

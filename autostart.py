@@ -1,10 +1,8 @@
-"""Windows 登入入口：啟動主程式至系統匣，沿用既有排程。"""
-
-
-def main() -> int:
-    from local_files_gui import main as run_gui
-    return run_gui(startup=True)
-
+"""相容啟動入口；實作位於 mcp_local.autostart。"""
+import sys
+from mcp_local import autostart as _implementation
 
 if __name__ == '__main__':
-    raise SystemExit(main())
+    raise SystemExit(_implementation.main())
+else:
+    sys.modules[__name__] = _implementation

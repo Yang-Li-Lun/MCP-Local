@@ -25,13 +25,13 @@ from mcp.client.stdio import stdio_client
 from pypdf import PdfWriter
 from pypdf.generic import DictionaryObject, NameObject, DecodedStreamObject
 
-import format_reader as formats
-from format_parsers import checked_zip, xml
-from local_files_mcp import create_server
-from operation_budget import Budget, OperationError, operation
-from reader_settings import encode_reader_settings
-from tool_contract import verify_contract, SERVICE_VERSION
-from workspace_reader import WorkspaceReader
+from mcp_local import format_reader as formats
+from mcp_local.format_parsers import checked_zip, xml
+from mcp_local.local_files_mcp import create_server
+from mcp_local.operation_budget import Budget, OperationError, operation
+from mcp_local.reader_settings import encode_reader_settings
+from mcp_local.tool_contract import verify_contract, SERVICE_VERSION
+from mcp_local.workspace_reader import WorkspaceReader
 
 
 def office(kind, entries):
@@ -104,7 +104,7 @@ class FormatTests(unittest.TestCase):
             self.put(name, b'\0\xff')
         self.put('.hidden.bin', b'x')
         self.put('secrets.json', b'x')
-        with patch('format_reader.parse_snapshot', side_effect=AssertionError('listing parsed content')):
+        with patch('mcp_local.format_reader.parse_snapshot', side_effect=AssertionError('listing parsed content')):
             self.assertEqual(len(self.workspace.list_files()['files']), 8)
             self.assertEqual(len(self.workspace.list_directory()['entries']), 8)
             self.assertEqual(len(self.workspace.find_files(['.'])['results'][0]['matches']), 8)
@@ -239,7 +239,7 @@ class FormatTests(unittest.TestCase):
 
     def test_worker_resource_limit_and_external_access_enforced(self):
         script = '''import sys, socket, subprocess
-from format_worker import memory_limit, deny_external_access
+from mcp_local.format_worker import memory_limit, deny_external_access
 memory_limit()
 try:
     bytearray(768*1024*1024)
@@ -266,7 +266,7 @@ for action in (lambda: open('never-opened', 'w'), lambda: socket.socket(),
         self.put('audio.wav', wav_bytes())
         original = subprocess.Popen
         with patch.dict(os.environ, {'CONTROL_PLANE_API_KEY': 'fixture-only-not-a-key', 'PYTHONPATH': 'untrusted'}):
-            with patch('format_reader.subprocess.Popen', wraps=original) as spawned:
+            with patch('mcp_local.format_reader.subprocess.Popen', wraps=original) as spawned:
                 self.workspace.inspect_media('audio.wav')
             args, kwargs = spawned.call_args
             self.assertEqual(args[0][:3], [sys.executable, '-I', '-B'])
@@ -443,7 +443,7 @@ for action in (lambda: open('never-opened', 'w'), lambda: socket.socket(),
             finally:
                 ctypes.windll.kernel32.SetFileAttributesW(str(path), old)
         original = __import__('local_files_mcp').linked
-        with patch('local_files_mcp.linked', side_effect=lambda p, info=None: p == path or original(p, info)):
+        with patch('mcp_local.local_files_mcp.linked', side_effect=lambda p, info=None: p == path or original(p, info)):
             with self.assertRaises(ValueError):
                 self.workspace.read_binary(path.name)
 
@@ -462,13 +462,13 @@ for action in (lambda: open('never-opened', 'w'), lambda: socket.socket(),
         for call in (self.workspace.file_info, self.workspace.read_binary, self.workspace.read_document,
                      self.workspace.inspect_media, self.workspace.inspect_archive):
             calls = 0
-            with patch('local_files_mcp.os.fstat', side_effect=changed):
-                with patch('format_reader.parse_snapshot', side_effect=AssertionError('must not parse changed data')):
+            with patch('mcp_local.local_files_mcp.os.fstat', side_effect=changed):
+                with patch('mcp_local.format_reader.parse_snapshot', side_effect=AssertionError('must not parse changed data')):
                     with self.subTest(tool=call.__name__), self.assertRaises(ValueError):
                         call(path.name)
 
     def test_real_worker_timeout_and_cancel(self):
-        with patch('format_reader.PARSER_TIMEOUT', .01):
+        with patch('mcp_local.format_reader.PARSER_TIMEOUT', .01):
             started = time.monotonic()
             with self.assertRaisesRegex(ValueError, 'FORMAT_TIMEOUT'):
                 formats.parse_snapshot('document', pdf_bytes(), start=0, limit=1)

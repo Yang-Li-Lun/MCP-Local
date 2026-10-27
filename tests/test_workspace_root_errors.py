@@ -3,13 +3,13 @@ from pathlib import Path
 import unittest
 from unittest.mock import patch
 
-from workspace_settings import create_workspace_root
+from mcp_local.workspace_settings import create_workspace_root
 
 
 class WorkspaceRootErrorTests(unittest.TestCase):
     def test_drive_root_allows_hidden_root_but_rejects_hidden_children(self):
-        from local_files_mcp import FileReader
-        with patch('local_files_mcp.hidden', return_value=True) as hidden:
+        from mcp_local.local_files_mcp import FileReader
+        with patch('mcp_local.local_files_mcp.hidden', return_value=True) as hidden:
             row = create_workspace_root(Path.cwd().anchor, [])
             reader = FileReader(Path(row['path']))
             self.assertEqual(reader.checked('.'), Path(Path.cwd().anchor))
@@ -20,8 +20,8 @@ class WorkspaceRootErrorTests(unittest.TestCase):
     def test_drive_root_roundtrip_and_read_with_state_exclusion(self):
         import os
         import tempfile
-        from local_files_mcp import FileReader, hidden, linked
-        from workspace_settings import encode_workspace, decode_workspace
+        from mcp_local.local_files_mcp import FileReader, hidden, linked
+        from mcp_local.workspace_settings import encode_workspace, decode_workspace
         # Drive-root reads validate every child, including the fixture's ancestors.
         # System TEMP may be under hidden AppData; use a checked repository path.
         fixture_parent = Path(__file__).absolute().parent
@@ -37,7 +37,7 @@ class WorkspaceRootErrorTests(unittest.TestCase):
             state = folder / 'state'
             state.mkdir()
             (state / 'key.txt').write_text('private', encoding='utf-8')
-            with patch('security_policy.STATE_DIR', state), patch('connection_settings.CONFIG_DIR', state):
+            with patch('mcp_local.security_policy.STATE_DIR', state), patch('mcp_local.connection_settings.CONFIG_DIR', state):
                 row = create_workspace_root(folder.anchor, [])
                 workspace = {'roots': [row], 'default_root': row['id']}
                 self.assertEqual(decode_workspace(encode_workspace(workspace)), workspace)
@@ -71,7 +71,7 @@ class WorkspaceRootErrorTests(unittest.TestCase):
         )
         for reason in reasons:
             with self.subTest(reason=reason):
-                with patch('local_files_mcp.FileReader', side_effect=ValueError(reason)):
+                with patch('mcp_local.local_files_mcp.FileReader', side_effect=ValueError(reason)):
                     with self.assertRaises(ValueError) as caught:
                         create_workspace_root(str(Path.cwd()), roots, previous=previous)
                 self.assertIn(reason, str(caught.exception))
@@ -84,7 +84,7 @@ class WorkspaceRootErrorTests(unittest.TestCase):
             (OSError('sensitive detail'), '磁碟或網路位置'),
         ):
             with self.subTest(error=type(error).__name__):
-                with patch('local_files_mcp.FileReader', side_effect=error):
+                with patch('mcp_local.local_files_mcp.FileReader', side_effect=error):
                     with self.assertRaises(ValueError) as caught:
                         create_workspace_root(str(Path.cwd()), [])
                 self.assertIn(expected, str(caught.exception))

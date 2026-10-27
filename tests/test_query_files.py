@@ -11,11 +11,11 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-import format_reader
-from file_query import query_files
-from local_files_mcp import create_server
-from operation_budget import Budget, operation, OperationError
-from workspace_reader import WorkspaceReader
+from mcp_local import format_reader
+from mcp_local.file_query import query_files
+from mcp_local.local_files_mcp import create_server
+from mcp_local.operation_budget import Budget, operation, OperationError
+from mcp_local.workspace_reader import WorkspaceReader
 
 
 def set_creation(path, seconds, extra_ticks=0):
@@ -146,7 +146,7 @@ class QueryFilesTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.workspace.query_files(cursor=token)
         self.reader.settings['excluded_names'].remove('b.txt')
-        with patch('snapshot_cache.CACHE.clock', return_value=10**15), self.assertRaises(ValueError):
+        with patch('mcp_local.snapshot_cache.CACHE.clock', return_value=10**15), self.assertRaises(ValueError):
             self.workspace.query_files(cursor=token)
         token = self.workspace.query_files(limit=1)['next_cursor']
         (self.root / 'b.txt').unlink()
@@ -183,7 +183,7 @@ class QueryFilesTests(unittest.TestCase):
         target.write_text('outside')
         (self.root / 'link.txt').symlink_to(target)
         (self.root / 'junction').symlink_to(self.other, target_is_directory=True)
-        with patch('security_policy.STATE_DIR', self.root / 'state'):
+        with patch('mcp_local.security_policy.STATE_DIR', self.root / 'state'):
             self.assertEqual(self.workspace.query_files()['files'], [])
             for directory in ('../other', str(self.other), 'safe.bin:stream', '.secret.txt', 'node_modules',
                               'custom', 'state', 'link.txt', 'junction', 'NUL', 'x.', 'x\x00'):
@@ -199,7 +199,7 @@ class QueryFilesTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'QUERY_SCAN_LIMIT'):
                 self.workspace.query_files(limit=1)
             self.reader.settings[setting] = old
-        with patch('snapshot_cache.SNAPSHOT_BYTES', 1024), self.assertRaisesRegex(ValueError, 'QUERY_SNAPSHOT_LIMIT'):
+        with patch('mcp_local.snapshot_cache.SNAPSHOT_BYTES', 1024), self.assertRaisesRegex(ValueError, 'QUERY_SNAPSHOT_LIMIT'):
             self.workspace.query_files(limit=1)
         with patch.object(self.reader, 'walk', side_effect=PermissionError('private absolute path')):
             with self.assertRaisesRegex(ValueError, '^QUERY_UNAVAILABLE'):
@@ -210,7 +210,7 @@ class QueryFilesTests(unittest.TestCase):
         self.write('b.bin', b'\0b')
         before = {p.name: (p.read_bytes(), p.stat().st_mtime_ns) for p in self.root.iterdir()}
         original = format_reader.file_info
-        with patch('format_reader.file_info', wraps=original) as parser:
+        with patch('mcp_local.format_reader.file_info', wraps=original) as parser:
             result = self.workspace.query_files(limit=1, include_format=True,
                 include_capabilities=True, include_sha256=True)
             self.assertEqual(parser.call_count, 1)
@@ -250,7 +250,7 @@ class QueryFilesTests(unittest.TestCase):
         def unavailable(*args, **kwargs):
             return dict(original(*args, **kwargs), created_time=None)
 
-        with patch('format_reader.basic_metadata', side_effect=unavailable):
+        with patch('mcp_local.format_reader.basic_metadata', side_effect=unavailable):
             self.assertIsNone(self.workspace.query_files()['files'][0]['created_time'])
             with self.assertRaisesRegex(ValueError, 'QUERY_TIME_UNAVAILABLE'):
                 self.workspace.query_files(sort_by='created_time', limit=1)
@@ -261,7 +261,7 @@ class QueryFilesTests(unittest.TestCase):
         server = create_server(self.workspace)
         tools = asyncio.run(server.list_tools())
         self.assertEqual(len(tools), 22)
-        from tool_contract import verify_contract
+        from mcp_local.tool_contract import verify_contract
         verify_contract(tools)
         model = server._tool_manager.get_tool('query_files').fn_metadata.arg_model
         for options in (dict(limit='1'), dict(limit=True), dict(unknown=1), dict(include_format=1),
