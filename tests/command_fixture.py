@@ -21,5 +21,6 @@ def command_project() -> Iterator[Path]:
         python.parent.mkdir(parents=True)
         python.write_bytes(b'non-executable fixture')
         (project / 'local_files_mcp.py').write_text('# fixture; never executed\n', encoding='utf-8')
-        with patch('mcp_local.connection_settings.PROJECT', project):
+        with patch('mcp_local.connection_settings.PROJECT', project), patch(
+                'mcp_local.connection_settings.CONFIG_DIR', project / 'synthetic-state'):
             yield project

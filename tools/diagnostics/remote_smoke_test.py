@@ -10,17 +10,29 @@ import argparse
 import asyncio
 import json
 import os
+from mcp_local.access_mode import READ_ONLY, HOST_CONTROL
 from mcp_local.tool_contract import verify_contract
 from urllib.parse import urlsplit
 import httpx
 from mcp import ClientSession
+from mcp.types import Tool
 from mcp.client.streamable_http import streamable_http_client
 
-EXPECTED = {'list_directory', 'list_files', 'read_file', 'search_text',
-            'workspace_info', 'list_projects', 'project_context', 'read_files', 'search_texts', 'find_files', 'read_file_ranges', 'hash_files', 'compare_paths', 'project_status', 'server_diagnostics', 'read_image'}
+EXPECTED_COUNTS = {READ_ONLY: 22, HOST_CONTROL: 36}
 
 
-async def smoke(url: str, root_id: str) -> None:
+def verify_tools(tools: list[Tool], access_mode: str) -> None:
+    """依明確模式核對完整名稱、輸入結構與所有權限標記。"""
+    if access_mode not in EXPECTED_COUNTS:
+        raise ValueError('遠端驗收模式不支援。')
+    if len(tools) != EXPECTED_COUNTS[access_mode] or len({tool.name for tool in tools}) != len(tools):
+        raise ValueError('工具數量或名稱不符。')
+    verify_contract(tools, access_mode)
+
+
+async def smoke(url: str, root_id: str, access_mode: str = READ_ONLY) -> None:
+    if access_mode not in EXPECTED_COUNTS:
+        raise ValueError('遠端驗收模式不支援。')
     token = os.environ.get('MCP_SMOKE_BEARER')
     headers = {'Authorization': 'Bearer ' + token} if token else {}
     async with httpx.AsyncClient(headers=headers, timeout=30) as client:
@@ -28,9 +40,7 @@ async def smoke(url: str, root_id: str) -> None:
             async with ClientSession(read, write) as session:
                 await session.initialize()
                 tools = (await session.list_tools()).tools
-                verify_contract(tools)
-                if {t.name for t in tools} != EXPECTED or not all(t.annotations and t.annotations.readOnlyHint for t in tools):
-                    raise ValueError('工具清單或唯讀標記不符。')
+                verify_tools(tools, access_mode)
                 for name, args in [('workspace_info', {}), ('list_directory', {'root_id': root_id}),
                                    ('read_file', {'path': 'README.md', 'root_id': root_id}),
                                    ('search_text', {'query': '唯讀連線測試成功', 'root_id': root_id})]:
@@ -75,6 +85,8 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--url', required=True)
     parser.add_argument('--fixture-root-id', required=True, help='僅含 shared/README.md 副本的專用 Root 代號')
+    parser.add_argument('--access-mode', choices=tuple(EXPECTED_COUNTS), default=READ_ONLY,
+                        help='預期的遠端模式；核對完整契約，測試呼叫仍僅使用唯讀工具')
     parser.add_argument('--expect-unavailable', action='store_true')
     args = parser.parse_args()
     parsed = urlsplit(args.url)
@@ -94,7 +106,7 @@ def main() -> int:
         print('無法確認通道不可用；認證或一般 HTTP 錯誤不算停止驗收成功。')
         return 1
     try:
-        asyncio.run(smoke(args.url, args.fixture_root_id))
+        asyncio.run(smoke(args.url, args.fixture_root_id, args.access_mode))
     except Exception:
         # 不輸出伺服器回應或 HTTP 例外中的認證資訊。
         print('REMOTE_SMOKE_FAILED：請檢查端點、測試 Root 與認證。')

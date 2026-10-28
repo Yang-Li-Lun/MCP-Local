@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import os
 import re
-import shutil
+import stat
 import uuid
 import hashlib
 import threading
@@ -223,25 +223,8 @@ def require_migration(settings: dict) -> None:
         raise ValueError('尚未完成共用設定遷移。請開啟連線設定介面，選定分享資料夾及通道後按儲存設定並確認。')
 
 
-def backup_connection_profile(commands: list[list[str]]) -> None:
-    """init --force 前保留原產生的通道設定，不輸出內容。"""
-    command = commands[0] if commands else []
-    if '--profile-dir' not in command or '--profile' not in command:
-        return
-    folder = Path(command[command.index('--profile-dir') + 1])
-    profile = command[command.index('--profile') + 1]
-    if profile != 'local-files-gui':
-        raise ValueError('通道設定名稱不符。')
-    source = folder / (profile + '.yaml')
-    if source.exists():
-        if source.is_symlink() or getattr(source.lstat(), 'st_file_attributes', 0) & 0x400:
-            raise ValueError('通道設定不可為連結。')
-        shutil.copy2(source, source.with_name(source.name + '.' + uuid.uuid4().hex + '.bak'))
-        rotate_backups(source, 3, folder)
-
-
-def build_commands(settings: dict, profile_dir: Path = CONFIG_DIR / 'profiles', *, power_channel=None) -> list[list[str]]:
-    """命令透過參數陣列傳遞；不經命令殼層解譯。"""
+def build_commands(settings: dict, profile_dir: Path | None = None, *, power_channel=None) -> list[list[str]]:
+    """重用既有 profile；本次設定以參數傳遞，僅缺少 profile 時初始化。"""
     settings = normalize_connection(settings)
     verify_client(PROJECT)
     client = PROJECT / 'third_party/tunnel-client/tunnel-client.exe'
@@ -262,14 +245,29 @@ def build_commands(settings: dict, profile_dir: Path = CONFIG_DIR / 'profiles', 
         if not re.fullmatch(r'[0-9a-f]{32}', token) or type(owner) is not int or owner <= 0:
             raise ValueError('電源通道無效。')
         mcp_command += f' --power-channel {token} --power-owner {owner}'
+    profile_dir = CONFIG_DIR / 'profiles' if profile_dir is None else Path(profile_dir)
+    profile = profile_dir / 'local-files-gui.yaml'
+    for path in (profile_dir, profile):
+        try:
+            info = path.lstat()
+        except FileNotFoundError:
+            continue
+        if (stat.S_ISLNK(info.st_mode) or getattr(info, 'st_file_attributes', 0) & 0x400
+                or path == profile and (not stat.S_ISREG(info.st_mode) or info.st_nlink > 1)):
+            raise ValueError('通道設定必須為一般檔案，設定及其目錄不可為連結。')
     common = ['--profile', 'local-files-gui', '--profile-dir', str(profile_dir)]
-    commands = [
-        [str(client), 'init', '--force', '--sample', 'sample_mcp_stdio_local',
-         *common, '--health-listen-addr', '127.0.0.1:0',
-         '--tunnel-id', settings['tunnel'], '--mcp-command', mcp_command],
-        [str(client), 'doctor', *common, '--explain'],
-        [str(client), 'run', *common],
-    ]
+    runtime = [*common, '--health.listen-addr', '127.0.0.1:0',
+               '--control-plane.tunnel-id', settings['tunnel'], '--mcp.command', mcp_command]
+    commands = []
+    if not profile.exists():
+        commands.append([
+            str(client), 'init', '--sample', 'sample_mcp_stdio_local',
+            *common, '--health-listen-addr', '127.0.0.1:0',
+            '--tunnel-id', settings['tunnel'], '--mcp-command', mcp_command])
+    commands.extend([
+        [str(client), 'doctor', *runtime, '--explain'],
+        [str(client), 'run', *runtime],
+    ])
     if any(len(subprocess.list2cmdline(command).encode('utf-16-le')) // 2 > 30000 for command in commands):
         raise ValueError('連線命令超過安全長度上限，請縮短路徑或設定清單。')
     return commands

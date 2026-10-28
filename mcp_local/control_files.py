@@ -14,7 +14,7 @@ from mcp_local.access_mode import require_full_control
 from mcp_local.control_edit import replace_block
 from mcp_local.local_files_mcp import linked, hidden
 from mcp_local.operation_budget import checkpoint
-from mcp_local.security_policy import validate_read_policy
+from mcp_local.security_policy import overlaps_python_runtime, validate_read_policy
 
 MAX_WRITE_BYTES = 2 * 1024 * 1024
 PROJECT = Path(__file__).resolve().parents[1]
@@ -93,8 +93,9 @@ class ControlledFiles:
         target = parent / raw.name
         validate_read_policy(target)
         # The control plane must never rewrite itself or move its ancestors.
-        if target.is_relative_to(PROJECT) or PROJECT.is_relative_to(target):
-            raise ValueError('CONTROL_PLANE_PROTECTED：禁止修改服務程式及其祖先。')
+        if (target.is_relative_to(PROJECT) or PROJECT.is_relative_to(target)
+                or overlaps_python_runtime(target)):
+            raise ValueError('CONTROL_PLANE_PROTECTED：禁止修改服務程式、主機 Python 執行環境及其祖先。')
         if os.path.lexists(target):
             reader.checked(relative)
             if getattr(target.stat(), 'st_file_attributes', 0) & 1:
@@ -204,9 +205,11 @@ class ControlledFiles:
             text = original.decode('utf-8-sig')
             if '\0' in text or '\0' in old or '\0' in new:
                 raise ValueError('不支援 NUL 文字。')
-            updated = replace_block(text, old, new, expected).encode('utf-8')
-            if original.startswith(b'\xef\xbb\xbf'):
-                updated = b'\xef\xbb\xbf' + updated
+            bom = b'\xef\xbb\xbf' if original.startswith(b'\xef\xbb\xbf') else b''
+            max_bytes = min(MAX_WRITE_BYTES, reader.settings['max_file_bytes']) - len(bom)
+            updated = replace_block(text, old, new, expected, max_bytes=max_bytes).encode('utf-8')
+            if bom:
+                updated = bom + updated
             return {**self.commit(reader, target, updated, original), 'replacements': expected}
 
     def mkdir(self, path: str, root_id: str | None) -> dict:

@@ -3,7 +3,6 @@ from pathlib import Path
 from typing import Annotated
 import os
 import stat
-import sys
 import threading
 import time
 import xml.etree.ElementTree as ET
@@ -112,9 +111,9 @@ def build_vm_mapping_plan(roots: list[Path], toolchains: list[Path]) -> str:
         path = raw.resolve(strict=True)
         if path.is_relative_to(state) or state.is_relative_to(path):
             raise ValueError('VM_MAPPING_PROTECTED：映射不得涵蓋 MCP 設定或憑證。')
-        protected = (PROJECT, Path(sys.base_prefix).resolve(),
-                     Path(os.environ.get('SystemRoot', 'C:/Windows')).resolve())
-        if not readonly and any(path.is_relative_to(item) or item.is_relative_to(path) for item in protected):
+        protected = (PROJECT, Path(os.environ.get('SystemRoot', 'C:/Windows')).resolve())
+        if not readonly and (any(path.is_relative_to(item) or item.is_relative_to(path) for item in protected)
+                             or security_policy.overlaps_python_runtime(path)):
             raise ValueError('VM_MAPPING_PROTECTED：可寫映射不得涵蓋 MCP、主機 Python 或 Windows 系統程式。')
         if any(path.is_relative_to(other) or other.is_relative_to(path) for other in seen):
             raise ValueError('VM_MAPPING_OVERLAP：映射不可重疊。')

@@ -19,7 +19,7 @@ def normalize_line_endings(content: str, ending: str) -> str:
     return content.replace('\r\n', '\n').replace('\r', '\n').replace('\n', ending)
 
 
-def replace_block(content: str, old: str, new: str, expected: int) -> str:
+def replace_block(content: str, old: str, new: str, expected: int, *, max_bytes: int) -> str:
     if not old or type(expected) is not int or not 1 <= expected <= 1000:
         raise ValueError('EDIT_INVALID：搜尋文字不可為空，替換次數須為 1 至 1000。')
     ending = detect_line_ending(content)
@@ -31,4 +31,10 @@ def replace_block(content: str, old: str, new: str, expected: int) -> str:
         position = content.find(search, position + 1)
     if count != expected or content.count(search) != expected:
         raise ValueError(f'EDIT_MATCH_COUNT：預期 {expected} 次，找到 {count} 次；檔案未變更。')
-    return content.replace(search, normalize_line_endings(new, ending))
+    replacement = normalize_line_endings(new, ending)
+    # Bound the encoded result before allocating the expanded string or bytes.
+    output_bytes = (len(content.encode('utf-8'))
+                    + expected * (len(replacement.encode('utf-8')) - len(search.encode('utf-8'))))
+    if output_bytes > max_bytes:
+        raise ValueError('WRITE_LIMIT：寫入結果超過 2 MiB 或讀取設定上限。')
+    return content.replace(search, replacement)

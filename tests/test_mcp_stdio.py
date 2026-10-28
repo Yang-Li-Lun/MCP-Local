@@ -1,18 +1,66 @@
 """以非敏感暫存目錄實際呼叫三個 STDIO MCP 工具。"""
 import asyncio
+from contextlib import asynccontextmanager, redirect_stdout
+import io
 import json
+import os
 from pathlib import Path
 import sys
 import tempfile
 import unittest
+from unittest.mock import AsyncMock, patch
 
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 from mcp_local.reader_settings import encode_reader_settings
 from mcp_local.tool_contract import verify_contract
+from tools.diagnostics import remote_smoke_test
 
 
 class McpSmokeTests(unittest.TestCase):
+    def test_remote_smoke_read_only_and_host_contract_over_fixture_stdio(self):
+        async def verify(root, mode):
+            parameters = StdioServerParameters(command=sys.executable, args=[
+                '-B', str(Path('local_files_mcp.py').resolve()), '--root', str(root), '--access-mode', mode])
+
+            @asynccontextmanager
+            async def fixture_transport(url, *, http_client):
+                self.assertEqual(url, 'https://fixture.invalid/mcp')
+                async with stdio_client(parameters) as (read, write):
+                    yield read, write, None
+
+            calls = []
+            original_call = ClientSession.call_tool
+
+            async def read_only_call(session, name, arguments):
+                self.assertIn(name, {'workspace_info', 'list_directory', 'read_file', 'search_text',
+                                    'read_files', 'search_texts', 'find_files', 'read_file_ranges'})
+                calls.append(name)
+                return await original_call(session, name, arguments)
+
+            with patch('tools.diagnostics.remote_smoke_test.streamable_http_client', fixture_transport), patch.dict(
+                    os.environ, {'MCP_SMOKE_BEARER': ''}), patch.object(ClientSession, 'call_tool', read_only_call):
+                await remote_smoke_test.smoke('https://fixture.invalid/mcp', 'main', mode)
+            self.assertEqual(len(calls), 14)
+
+        with tempfile.TemporaryDirectory(prefix='mcp-remote-smoke-fixture-') as directory:
+            root = Path(directory)
+            (root / 'README.md').write_text('唯讀連線測試成功\n', encoding='utf-8')
+            (root / '.hidden.txt').write_text('denied', encoding='utf-8')
+            before = {p.name: (p.read_bytes(), p.stat().st_mtime_ns) for p in root.iterdir()}
+            for mode in ('read_only', 'host_control'):
+                with self.subTest(mode=mode):
+                    asyncio.run(verify(root, mode))
+            self.assertEqual({p.name: (p.read_bytes(), p.stat().st_mtime_ns) for p in root.iterdir()}, before)
+
+    def test_remote_smoke_cli_selects_expected_mode(self):
+        for extra, mode in (([], 'read_only'), (['--access-mode', 'host_control'], 'host_control')):
+            with patch.object(sys, 'argv', ['remote_smoke_test.py', '--url', 'https://fixture.invalid/mcp',
+                    '--fixture-root-id', 'fixture', *extra]), patch.object(
+                    remote_smoke_test, 'smoke', new_callable=AsyncMock) as smoke, redirect_stdout(io.StringIO()):
+                self.assertEqual(remote_smoke_test.main(), 0)
+                smoke.assert_awaited_once_with('https://fixture.invalid/mcp', 'fixture', mode)
+
     def test_dart_read_tools_over_stdio(self):
         async def smoke(root):
             parameters = StdioServerParameters(command=sys.executable, args=[

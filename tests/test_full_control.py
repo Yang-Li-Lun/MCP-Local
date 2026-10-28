@@ -83,7 +83,66 @@ class FullControlTests(unittest.TestCase):
 
     def test_overlapping_matches_rejected(self):
         with self.assertRaises(ValueError):
-            replace_block('aaa', 'aa', 'b', 2)
+            replace_block('aaa', 'aa', 'b', 2, max_bytes=MAX_WRITE_BYTES)
+
+    def test_edit_expansion_rejected_before_result_allocation(self):
+        class NoExpandedResult(str):
+            def replace(self, *args, **kwargs):
+                raise AssertionError('expanded result must not be allocated')
+
+        content = NoExpandedResult('x' * 1000)
+        for replacement in ('y' * MAX_WRITE_BYTES, '\U0001f600' * (MAX_WRITE_BYTES // 4 + 1)):
+            with self.subTest(character=replacement[0]), self.assertRaisesRegex(ValueError, 'WRITE_LIMIT'):
+                replace_block(content, 'x', replacement, 1000, max_bytes=MAX_WRITE_BYTES)
+
+    def test_edit_limit_counts_normalized_utf8_bytes(self):
+        cases = [
+            ('a\r\n', 'a', '\u00e9\n', 1, '\u00e9\r\n\r\n'),
+            ('a\n', 'a', '\U0001f600\r\n', 1, '\U0001f600\n\n'),
+            ('a\rb\r', 'a\nb', '\u4e2d\n\u6587', 1, '\u4e2d\r\u6587\r'),
+            ('\u4e2dx\r\nx', 'x', '\U0001f600\n', 2, '\u4e2d\U0001f600\r\n\r\n\U0001f600\r\n'),
+            ('\ufeffx', 'x', '\u00e9', 1, '\ufeff\u00e9'),
+            ('\u4e2d\u4e2d', '\u4e2d', '', 2, ''),
+        ]
+        for content, old, new, count, expected in cases:
+            limit = len(expected.encode('utf-8'))
+            with self.subTest(content=content):
+                self.assertEqual(replace_block(content, old, new, count, max_bytes=limit), expected)
+                with self.assertRaisesRegex(ValueError, 'WRITE_LIMIT'):
+                    replace_block(content, old, new, count, max_bytes=limit - 1)
+
+    def test_edit_limit_includes_bom_and_preserves_rejected_file(self):
+        reader = self.workspace.reader(None)
+        target = self.root / 'limit.txt'
+        for limit_source in ('write', 'reader'):
+            for bom in (b'', b'\xef\xbb\xbf'):
+                with self.subTest(limit_source=limit_source, bom=bool(bom)), patch(
+                        'mcp_local.control_files.MAX_WRITE_BYTES', 12 if limit_source == 'write' else MAX_WRITE_BYTES), patch.dict(
+                        reader.settings, {'max_file_bytes': 12 if limit_source == 'reader' else MAX_WRITE_BYTES}):
+                    raw = bom + b'x\r\n'
+                    target.write_bytes(raw)
+                    sha256 = hashlib.sha256(raw).hexdigest()
+                    replacement = '\U0001f600\u00e9' + 'a' * (4 - len(bom))
+                    with patch.object(self.control.files, 'commit') as commit:
+                        with self.assertRaisesRegex(ValueError, 'WRITE_LIMIT'):
+                            self.control.edit_block('limit.txt', 'x', replacement + 'b', sha256)
+                        commit.assert_not_called()
+                    self.assertEqual(target.read_bytes(), raw)
+                    result = self.control.edit_block('limit.txt', 'x', replacement, sha256)
+                    self.assertEqual(target.read_bytes(), bom + (replacement + '\r\n').encode('utf-8'))
+                    self.assertEqual(result['bytes'], 12)
+
+    def test_edit_limit_preserves_conflict_and_match_error_order(self):
+        raw = b'xx'
+        target = self.root / 'order.txt'
+        target.write_bytes(raw)
+        sha256 = hashlib.sha256(raw).hexdigest()
+        with patch('mcp_local.control_files.MAX_WRITE_BYTES', 4):
+            for expected_hash, count, error in [('0' * 64, 2, 'CONTENT_CONFLICT'),
+                                                 (sha256, 1, 'EDIT_MATCH_COUNT')]:
+                with self.subTest(error=error), self.assertRaisesRegex(ValueError, error):
+                    self.control.edit_block('order.txt', 'x', 'oversized', expected_hash, count)
+                self.assertEqual(target.read_bytes(), raw)
 
     def test_escape_hidden_exclusions_device_and_hardlink_denied(self):
         (self.root / 'private').mkdir()

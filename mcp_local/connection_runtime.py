@@ -12,7 +12,7 @@ import time
 import random
 from enum import Enum
 from collections import deque
-from mcp_local.connection_settings import PROJECT, require_migration, build_commands, backup_connection_profile
+from mcp_local.connection_settings import PROJECT, require_migration, build_commands
 from mcp_local.integrity import IntegrityError
 from mcp_local.power_windows import CancelEvent
 
@@ -125,7 +125,6 @@ class Connection:
                 commands = build_commands(settings, power_channel=self.power.connection_arguments())
             else:
                 commands = build_commands(settings)
-            backup_connection_profile(commands)
             self.error_kind = ConnectionErrorKind.START_FAILED
             environment = os.environ.copy()
             environment['CONTROL_PLANE_API_KEY'] = key
@@ -142,7 +141,9 @@ class Connection:
                 if self.cancel.is_set():
                     return
                 self.job = Job()
-            for stage, command in zip(('建立設定', '檢查連線', '通道程序執行中'), commands):
+            # 既有 profile 只有 doctor/run；首次初始化才包含 init。
+            stages = ('建立設定', '檢查連線', '通道程序執行中')[-len(commands):]
+            for stage, command in zip(stages, commands):
                 with self.lock:
                     if self.cancel.is_set():
                         break

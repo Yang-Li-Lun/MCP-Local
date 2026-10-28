@@ -24,7 +24,7 @@ from mcp_local.reader_settings import MIB, NUMERIC_FIELDS, LIST_FIELDS, normaliz
 
 from mcp_local.connection_settings import (PROJECT, CONFIG_DIR, CONFIG_FILE, DEFAULT_TUNNEL, SETTINGS_VERSION,
                                  validate_settings, normalize_connection, load_settings, save_settings, build_commands,
-                                 require_migration, backup_connection_profile)
+                                 require_migration)
 
 
 from mcp_local.connection_runtime import Connection, existing_tunnel, RetryPolicy

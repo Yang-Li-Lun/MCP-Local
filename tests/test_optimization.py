@@ -10,7 +10,7 @@ import xml.etree.ElementTree as ET
 
 from mcp_local.local_files_mcp import FileReader
 from mcp_local.snapshot_cache import SnapshotCache
-from mcp_local.connection_settings import save_settings, load_settings, backup_connection_profile
+from mcp_local.connection_settings import save_settings, load_settings
 from mcp_local.connection_runtime import RetryPolicy, ConnectionErrorKind
 from mcp_local.workspace_settings import normalize_workspace
 from mcp_local.integrity import verify_client, IntegrityError
@@ -113,7 +113,7 @@ class OptimizationTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 normalize_workspace([root, {'id': 'b', 'path': str(other)}], 'a')
 
-    def test_backups_rotate_deduplicate_and_profile_cap(self):
+    def test_explicit_settings_save_rotates_and_deduplicates_backups(self):
         target = self.root / 'settings.json'
         settings = {'root': str(self.root), 'tunnel': 'tunnel_test', 'settings_version': 1}
         for i in range(20):
@@ -123,11 +123,6 @@ class OptimizationTests(unittest.TestCase):
         before = target.stat().st_mtime_ns
         save_settings(load_settings(target), target)
         self.assertEqual(target.stat().st_mtime_ns, before)
-        profile = self.root / 'local-files-gui.yaml'
-        profile.write_text('fixture')
-        for _ in range(10):
-            backup_connection_profile([['client', '--profile-dir', str(self.root), '--profile', 'local-files-gui']])
-        self.assertEqual(len(list(self.root.glob('local-files-gui.yaml.*.bak'))), 3)
 
     def test_integrity_valid_invalid_missing_manifest(self):
         client = self.root / 'third_party/tunnel-client/tunnel-client.exe'
