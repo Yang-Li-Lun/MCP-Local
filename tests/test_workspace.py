@@ -18,7 +18,7 @@ from mcp_local.workspace_reader import WorkspaceReader, TOOLS, BATCH_BYTES, CONT
 class WorkspaceTests(unittest.TestCase):
     def setUp(self):
         from mcp_local.autostart_windows import BackgroundStatus
-        status = patch('mcp_local.local_files_gui.get_background_status',
+        status = patch('mcp_local.desktop_controller.get_background_status',
                        return_value=BackgroundStatus(False, False, False))
         status.start()
         self.addCleanup(status.stop)
@@ -285,9 +285,9 @@ class WorkspaceTests(unittest.TestCase):
         self.assertIn('skipped_reason', self.reader.read_files([{'path': 'AGENTS.md'}])['files'][0])
 
     def test_command_snapshot_and_gui_persistence(self):
-        import tkinter as tk
+        from mcp_local.desktop_ports import Scheduler
         from unittest.mock import Mock
-        from mcp_local.local_files_gui import App
+        from mcp_local.desktop_controller import DesktopController as App
         from mcp_local.workspace_settings import decode_workspace
         settings = normalize_connection({'roots': self.roots, 'default_root': 'main',
                                          'tunnel': 'tunnel_test', 'settings_version': 2})
@@ -297,18 +297,17 @@ class WorkspaceTests(unittest.TestCase):
         decoded = decode_workspace(command.split(' --workspace-settings ')[1].split(' ')[0])
         self.assertEqual(len(decoded['roots']), 2)
         self.assertNotIn('key', decoded)
-        window = tk.Tk()
+        window = Scheduler()
         window.withdraw()
         store = Mock()
         store.load.return_value = ''
         with patch('mcp_local.tray_windows.Tray'):
             app = App(window, settings, store)
         try:
-            app.folder_list.selection_set(0)
-            app.remove_selected_folders()
+            app.remove_folders([0])
             self.assertEqual(app.workspace_rows[0]['path'], str(self.b))
             target = self.base / 'settings.json'
-            with patch('mcp_local.local_files_gui.save_settings', side_effect=lambda value: save_settings(value, target)):
+            with patch('mcp_local.desktop_controller.save_settings', side_effect=lambda value: save_settings(value, target)):
                 self.assertTrue(app.save())
                 import time
                 deadline = time.monotonic() + 5

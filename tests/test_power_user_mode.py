@@ -8,8 +8,9 @@ import unittest
 from unittest.mock import Mock, patch
 import uuid
 from test_power_policy import FakePower
-from mcp_local.power_policy import PowerSchemeManager, PowerError, tick_interval
-from mcp_local.power_windows import WindowsPower, Guid, ModeChannel, follow_mode, GUID_POWER_MODE_BEST_EFFICIENCY as BEST
+from mcp_local.power_policy import PowerSchemeManager, PowerError
+from legacy_power_fixture import LegacySchemeFixture
+from mcp_local.power_windows import WindowsPower, Guid, GUID_POWER_MODE_BEST_EFFICIENCY as BEST
 from mcp_local.connection_settings import normalize_connection, load_settings
 from mcp_local.power_restore_guard import serve
 
@@ -20,7 +21,7 @@ class UserModeTests(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.path = Path(self.temp.name) / 'runtime.json'
         self.api = FakePower()
-        self.manager = PowerSchemeManager(self.api, self.path)
+        self.manager = LegacySchemeFixture(self.api, self.path)
 
     def test_intent_is_durable_before_either_write(self):
         setter = self.api.set_user_power_mode
@@ -139,7 +140,7 @@ class UserModeTests(unittest.TestCase):
         self.manager.restore()
 
     def test_display_zero_caps_and_shorter_values(self):
-        from mcp_local.power_policy import DISPLAY, EPP, SLEEP
+        from legacy_power_fixture import DISPLAY, EPP, SLEEP
         for value, expected in ((0, (300, 120)), (30, (30, 30)), (900, (300, 120))):
             with patch.object(self.api, 'read', return_value=value):
                 self.manager.apply('extreme')
@@ -150,48 +151,32 @@ class UserModeTests(unittest.TestCase):
             self.manager.restore()
             self.api.writes.clear()
 
-    def test_guard_options_and_eof_restore(self):
+    def test_guard_rejects_new_power_mode(self):
         output = io.StringIO()
-        serve(self.manager, io.StringIO(json.dumps({
-            'mode': 'extreme', 'manage_power_scheme': False,
-            'manage_windows_power_mode': True}) + '\n'), output)
-        self.assertTrue(all(json.loads(row)['ok'] for row in output.getvalue().splitlines()))
+        serve(self.manager, io.StringIO(json.dumps({'mode': 'extreme'}) + '\n'), output)
+        responses = [json.loads(row) for row in output.getvalue().splitlines()]
+        self.assertTrue(responses[0]['ok'])
+        self.assertFalse(responses[1]['ok'])
         self.assertEqual(self.api.schemes, {self.api.original})
         self.assertEqual(self.api.user_modes, self.api.initial_user_modes)
 
-    def test_v4_migration_v5_validation_and_preservation(self):
+    def test_legacy_modes_are_retired_preserving_roots(self):
         root = Path(self.temp.name).resolve()
         base = {'roots': [{'id': 'main', 'name': 'main', 'path': str(root),
                           'excluded_names': ['private']}],
                 'default_root': 'main', 'tunnel': 'tunnel_fixture'}
         target = root / 'settings.json'
-        for old, new in (('off', 'off'), ('low', 'off'), ('extreme', 'extreme')):
+        for old in ('off', 'low', 'extreme'):
             target.write_text(json.dumps({**base, 'settings_version': 4, 'power': {'mode': old}}))
             result = load_settings(target)
-            self.assertEqual(result['settings_version'], 8)
-            self.assertEqual(result['power']['mode'], new)
+            self.assertNotIn('power', result)
             self.assertEqual(result['roots'], base['roots'])
-        value = normalize_connection({**base, 'settings_version': 5,
-                                      'power': {'manage_windows_power_mode': False}})
-        self.assertFalse(value['power']['manage_windows_power_mode'])
-        for invalid in ({'mode': 'low'}, {'extra': 1}, {'keep_system_awake': False}):
-            with self.assertRaises(ValueError):
-                normalize_connection({**base, 'settings_version': 5, 'power': invalid})
+            self.assertNotIn('power', json.loads(target.read_text(encoding='utf-8')))
         data = json.dumps({**base, 'settings_version': 99})
         target.write_text(data)
         with self.assertRaises(ValueError):
             load_settings(target)
         self.assertEqual(target.read_text(), data)
-
-    def test_all_stable_ticks(self):
-        for mode, values in (('off', (250, 500, 1000)), ('extreme', (1000, 5000, 5000))):
-            for visible, state, expected in ((True, 'RUNNING', values[0]),
-                                            (False, 'RUNNING', values[1]),
-                                            (False, 'IDLE', values[2])):
-                self.assertEqual(tick_interval(mode, visible, state, False, False), expected)
-        with self.assertRaises(ValueError):
-            tick_interval('low', True, 'STARTING', True, True)
-
 
 class BindingTests(unittest.TestCase):
     def test_optional_bindings_missing(self):
@@ -223,26 +208,3 @@ class BindingTests(unittest.TestCase):
                 api.set_user_power_mode(supply, BEST)
                 audit.assert_called_with('mcp.power.mutate', 'PowerSetUserConfigured' + supply + 'PowerMode')
 
-    def test_follower_three_handles_and_owner_exit_clear_qos(self):
-        api = Mock()
-        api.open_process.return_value = 10
-        api.open_event.side_effect = [11, 12]
-        api.wait.side_effect = [2, 0]
-        def run_now(**kwargs):
-            kwargs['target']()
-            return Mock()
-        with patch('mcp_local.power_windows.WindowsPower', return_value=api), patch('threading.Thread', side_effect=run_now):
-            follow_mode('a' * 32, 123)
-        self.assertEqual(api.wait.call_args_list[0].args[0], 3)
-        self.assertEqual([c.args[0] for c in api.qos.call_args_list], [True, False])
-        self.assertEqual(api.close.call_count, 3)
-
-    def test_invalid_channel_and_token_do_not_touch_native_api(self):
-        api = Mock()
-        with self.assertRaises(ValueError):
-            ModeChannel(api, 'low')
-        api.create_event.assert_not_called()
-        with patch('mcp_local.power_windows.WindowsPower') as native:
-            with self.assertRaises(ValueError):
-                follow_mode('invalid', 1)
-            native.assert_not_called()

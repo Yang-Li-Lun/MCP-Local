@@ -7,10 +7,10 @@ import argparse
 from pathlib import Path
 
 from mcp_local.connection_settings import (CONFIG_DIR, CONFIG_FILE, SETTINGS_VERSION, load_settings,
-                                 load_for_edit, save_settings, require_migration, normalize_connection)
+                                 load_for_edit, save_settings, require_migration, normalize_connection, retire_legacy_power_setting)
 from mcp_local.key_store import KeyStore
 from mcp_local.connection_runtime import Connection, existing_tunnel
-from mcp_local.power_policy import PowerPolicyManager
+from mcp_local.legacy_power_recovery import recover_legacy_power
 from mcp_local.access_mode import MODES, MODE_LABELS, normalize_access_mode
 
 
@@ -29,6 +29,7 @@ def set_local_mode(path: Path, mode: str) -> None:
             restart = True
         elif existing_tunnel():
             raise ValueError('MODE_SWITCH_APP_RUNNING：請先在原 APP 停止連線，或使用 APP 切換模式。')
+    recover_legacy_power(path.parent)
     settings = {**editable.settings, 'settings_version': SETTINGS_VERSION, 'access_mode': mode}
     save_settings(settings, path, expected_revision=editable.revision if editable.revision is not None else '')
     if restart:
@@ -51,18 +52,16 @@ def main() -> int:
         except (ValueError, OSError) as error:
             print('模式未完成套用：' + str(error), flush=True)
             return 1
-    power = PowerPolicyManager(args.settings_file.parent / 'power-runtime.json')
-    connection = Connection(power=power)
+    connection = Connection()
     failed = False
     try:
+        recover_legacy_power(args.settings_file.parent)
+        retire_legacy_power_setting(args.settings_file)
         settings = load_settings(args.settings_file)
         require_migration(settings)
         if args.access_mode:
             settings = {**settings, 'settings_version': SETTINGS_VERSION, 'access_mode': args.access_mode}
         settings = normalize_connection(settings)
-        power.options = settings['power']
-        power.recover()
-        power.apply(settings['power']['mode'])
         print(f"已授權資料夾：{len(settings['roots'])} 個", flush=True)
         print('本次模式：' + MODE_LABELS[settings['access_mode']], flush=True)
         key = KeyStore(args.settings_file.parent / 'api-key.dpapi').load()
@@ -91,7 +90,6 @@ def main() -> int:
         connection.stop()
         if connection.thread:
             connection.thread.join(timeout=10)
-        power.close()
 
 
 if __name__ == '__main__':

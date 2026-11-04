@@ -3,14 +3,6 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 $utf8 = [Text.UTF8Encoding]::new($false)
-function Publish-McpMessage {
-    param([string]$name, [string]$json)
-    # The host must only see complete control messages. Keep malformed messages
-    # fail-closed there; publish this guest's finished file by a same-folder move.
-    $pendingPath = Join-Path $McpSpool ('pending-guest-' + [Guid]::NewGuid().ToString('N') + '.json')
-    [IO.File]::WriteAllText($pendingPath, $json, $utf8)
-    [IO.File]::Move($pendingPath, (Join-Path $McpSpool $name))
-}
 [Console]::InputEncoding = $utf8
 [Console]::OutputEncoding = $utf8
 $env:PATH = $McpPath
@@ -27,7 +19,7 @@ for ($gitIndex = 0; $gitIndex -lt $McpGitRoots.Count; $gitIndex++) {
     [Environment]::SetEnvironmentVariable(('GIT_CONFIG_KEY_' + $gitIndex), 'safe.directory', 'Process')
     [Environment]::SetEnvironmentVariable(('GIT_CONFIG_VALUE_' + $gitIndex), $McpGitRoots[$gitIndex], 'Process')
 }
-Publish-McpMessage 'ready.json' '{"ready":true}'
+[IO.File]::WriteAllText((Join-Path $McpSpool 'ready.json'), '{"ready":true}', $utf8)
 try {
     $requestPath = Join-Path $McpSpool 'request.json'
     while (-not [IO.File]::Exists($requestPath)) { Start-Sleep -Milliseconds 50 }
@@ -86,7 +78,7 @@ try {
         }
         $process.WaitForExit()
     } finally { $output.Dispose() }
-    Publish-McpMessage 'result.json' (@{exit_code=$process.ExitCode}|ConvertTo-Json -Compress)
+    [IO.File]::WriteAllText((Join-Path $McpSpool 'result.json'), (@{exit_code=$process.ExitCode}|ConvertTo-Json -Compress), $utf8)
 } catch {
-    Publish-McpMessage 'result.json' '{"exit_code":1,"error":"GUEST_IO_FAILED"}'
+    [IO.File]::WriteAllText((Join-Path $McpSpool 'result.json'), '{"exit_code":1,"error":"GUEST_IO_FAILED"}', $utf8)
 }

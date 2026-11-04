@@ -6,8 +6,8 @@ import tempfile
 import unittest
 from unittest.mock import Mock, patch
 import uuid
-from mcp_local.power_policy import (PowerPolicyManager, PowerSchemeManager, PowerMode, PowerError,
-                          normalize_power, tick_interval, SLEEP, DISPLAY, EPP, MAXIMUM, BOOST)
+from mcp_local.power_policy import PowerSchemeManager, PowerError
+from legacy_power_fixture import LegacySchemeFixture, SLEEP, DISPLAY, EPP, MAXIMUM, BOOST
 from mcp_local.power_restore_guard import serve
 
 
@@ -102,7 +102,7 @@ class PowerPolicyTests(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.path = Path(self.temp.name) / 'power-runtime.json'
         self.api = FakePower()
-        self.schemes = PowerSchemeManager(self.api, self.path)
+        self.schemes = LegacySchemeFixture(self.api, self.path)
 
     def test_scheme_modes_restore_original_and_display_limits(self):
         self.schemes.apply('extreme')
@@ -193,147 +193,29 @@ class PowerPolicyTests(unittest.TestCase):
                 PowerSchemeManager(self.api, self.path).recover()
         self.assertNotEqual(self.api.active, self.api.original)
 
-    def test_guard_pipe_eof_and_bad_command_restore(self):
-        source = io.StringIO('{"mode":"extreme"}\n{"mode":"bad"}\n{"mode":"extreme"}\n')
+    def test_guard_recovers_journal_and_rejects_new_mode(self):
+        self.schemes.apply('extreme')
+        recovered = PowerSchemeManager(self.api, self.path)
         output = io.StringIO()
-        serve(self.schemes, source, output)
+        with patch('ctypes.get_last_error', return_value=0):
+            serve(recovered, io.StringIO('{"mode":"extreme"}\n{"mode":"off"}\n'), output)
         responses = [json.loads(line) for line in output.getvalue().splitlines()]
         self.assertTrue(responses[0]['ok'])
-        self.assertTrue(responses[1]['ok'])
-        self.assertFalse(responses[2]['ok'])
+        self.assertFalse(responses[1]['ok'])
+        self.assertTrue(responses[2]['ok'])
         self.assertEqual(self.api.active, self.api.original)
         self.assertFalse(self.path.exists())
 
     def test_guard_broken_parent_output_still_restores(self):
+        self.schemes.apply('extreme')
+        recovered = PowerSchemeManager(self.api, self.path)
         output = Mock()
         output.write.side_effect = [None, BrokenPipeError()]
-        with self.assertRaises(BrokenPipeError):
-            serve(self.schemes, io.StringIO('{"mode":"extreme"}\n'), output)
+        with patch('ctypes.get_last_error', return_value=0), self.assertRaises(BrokenPipeError):
+            serve(recovered, io.StringIO('{"mode":"off"}\n'), output)
         self.assertEqual(self.api.active, self.api.original)
 
-    def test_policy_lifecycle_reference_count_and_no_reconnect(self):
-        guard = Mock(apply=Mock(return_value=[]))
-        manager = PowerPolicyManager(self.path, api=self.api, guard=guard)
-        manager.channel = Mock()
-        manager.connection_started()
-        self.assertEqual(self.api.requests, 0)
-        manager.apply('extreme')
-        manager.connection_started()
-        manager.apply('extreme')
-        self.assertEqual(self.api.requests, 1)
-        self.assertEqual(manager.connections, 2)
-        manager.channel.publish.assert_called_with('extreme')
-        manager.connection_stopped()
-        self.assertEqual(self.api.releases, 0)
-        manager.connection_stopped()
-        self.assertEqual(self.api.releases, 1)
-        manager.close()
-        self.assertEqual(manager.mode, PowerMode.OFF)
-        self.assertEqual(self.api.qos_values, [True, False])
-
-    def test_policy_failure_keeps_previous_mode(self):
-        guard = Mock(apply=Mock(side_effect=[[], PowerError('POWER_SCHEME_APPLY_FAILED'), []]))
-        manager = PowerPolicyManager(self.path, api=self.api, guard=guard)
-        manager.apply('extreme')
-        with self.assertRaises(PowerError):
-            manager.apply('off')
-        self.assertEqual(manager.mode, PowerMode.EXTREME)
-
-    def test_request_failure_never_claims_keep_awake(self):
-        guard = Mock(apply=Mock(return_value=[]))
-        manager = PowerPolicyManager(self.path, api=self.api, guard=guard)
-        manager.connection_started()
-        self.api.fail = 'request'
-        with self.assertRaises(PowerError):
-            manager.apply('extreme')
-        self.assertEqual(manager.mode, PowerMode.OFF)
-        self.assertIsNone(manager.request_handle)
-
-    def test_qos_failure_is_visible_degradation(self):
-        manager = PowerPolicyManager(self.path, api=self.api, guard=Mock(apply=Mock(return_value=[])))
-        self.api.fail = 'qos'
-        manager.apply('extreme')
-        self.assertEqual(manager.mode, PowerMode.EXTREME)
-        self.assertIn('POWER_QOS_APPLY_FAILED', manager.warnings)
-
-    def test_qos_restore_failure_is_not_silent_success(self):
-        manager = PowerPolicyManager(self.path, api=self.api, guard=Mock(apply=Mock(return_value=[])))
-        manager.apply('extreme')
-        self.api.fail = 'qos'
-        with self.assertRaises(PowerError):
-            manager.close()
-        self.assertEqual(manager.mode, PowerMode.EXTREME)
-        self.api.fail = None
-        manager.close()
-        self.assertEqual(manager.mode, PowerMode.OFF)
-
-    def test_settings_and_tick(self):
-        for mode in ('off', 'extreme'):
-            self.assertEqual(normalize_power({'mode': mode})['mode'], mode)
-            self.assertEqual(tick_interval(mode, False, 'STARTING', False, False), 100)
-            self.assertEqual(tick_interval(mode, False, 'RUNNING', False, True), 50)
-            self.assertEqual(tick_interval(mode, False, 'RUNNING', True, False), 100)
-        self.assertEqual(tick_interval('extreme', False, 'RUNNING', False, False), 5000)
-        self.assertEqual(tick_interval('off', False, 'RUNNING', False, False), 500)
-        for item in ({'mode': 'low'}, {'restore_original_plan': False}, {'keep_system_awake': False}, {'mode': 'unknown'}, {'other': 1}, {'keep_system_awake': 1},
-                     {'advanced_job_cpu_cap_percent': True}, {'advanced_job_cpu_cap_percent': 9},
-                     {'advanced_job_cpu_cap_percent': 101}, {'advanced_job_cpu_cap_percent': 10.5}):
-            with self.subTest(item=item), self.assertRaises(ValueError):
-                normalize_power(item)
-
-
 class PowerApiBoundaryTests(unittest.TestCase):
-    def test_request_uses_system_only_and_balances_clear(self):
-        import ctypes
-        from mcp_local.power_windows import WindowsPower, Reason
-        api = WindowsPower()
-        api.create_request = Mock(return_value=987)
-        api.set_request = Mock(return_value=True)
-        api.clear_request = Mock(return_value=True)
-        api.close = Mock()
-        handle = api.request()
-        api.set_request.assert_called_once_with(987, 1)
-        reason = ctypes.cast(api.create_request.call_args.args[0], ctypes.POINTER(Reason)).contents
-        self.assertEqual(reason.flags, 1)
-        api.release_request(handle)
-        api.clear_request.assert_called_once_with(987, 1)
-        api.close.assert_called_once_with(987)
-
-    def test_request_failure_closes_handle_without_false_success(self):
-        from mcp_local.power_windows import WindowsPower
-        api = WindowsPower()
-        api.create_request = Mock(return_value=987)
-        api.set_request = Mock(return_value=False)
-        api.close = Mock()
-        with self.assertRaisesRegex(PowerError, 'SET_FAILED'):
-            api.request()
-        api.close.assert_called_once_with(987)
-
-    def test_qos_off_returns_to_system_management(self):
-        import ctypes
-        from mcp_local.power_windows import WindowsPower, Throttling
-        api = WindowsPower()
-        seen = []
-        def capture(handle, kind, pointer, size):
-            value = ctypes.cast(pointer, ctypes.POINTER(Throttling)).contents
-            seen.append((kind, value.version, value.control, value.state))
-            return True
-        api.info = capture
-        api.qos(True)
-        api.qos(False)
-        self.assertEqual(seen, [(4, 1, 1, 1), (4, 1, 0, 0)])
-
-    def test_mode_broadcast_resets_other_states(self):
-        from mcp_local.power_windows import ModeChannel
-        api = Mock()
-        api.create_event.side_effect = [11, 12]
-        channel = ModeChannel(api, 'off')
-        channel.publish('extreme')
-        self.assertEqual([call.args[0] for call in api.reset_event.call_args_list], [11])
-        api.set_event.assert_called_once_with(12)
-        channel.close()
-        self.assertEqual(api.close.call_count, 2)
-
     def test_guard_environment_excludes_credentials(self):
         import os
         from mcp_local.power_policy import PowerRestoreGuardClient

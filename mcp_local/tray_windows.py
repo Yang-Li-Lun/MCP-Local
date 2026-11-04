@@ -228,8 +228,7 @@ class Tray:
         while user.PeekMessageW(c.byref(message), self.window, 0, 0, 1):
             user.TranslateMessage(c.byref(message))
             user.DispatchMessageW(c.byref(message))
-        # Windows 通知可能由 Tcl 原生訊息迴圈分派，WNDPROC 內不得再進入 Tk。
-        # 在 Tk 的定時回呼中取出事件，避免 Python/Tcl 的 GIL 狀態衝突。
+        # WNDPROC 僅排入事件；由擁有此視窗的 Python 訊息迴圈執行操作。
         while self.events:
             event = self.events.popleft()
             if event == 'show':

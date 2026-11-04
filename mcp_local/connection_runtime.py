@@ -70,10 +70,10 @@ def existing_tunnel() -> bool:
 
 class Connection:
     """背景執行連線流程，將狀態送回介面執行緒。"""
-    def __init__(self, stage_timeout: float = 60, *, power=None, notify=None):
+    def __init__(self, stage_timeout: float = 60, *, notify=None, monitor=None):
         from mcp_local.gui_tasks import WakeQueue
         self.events = WakeQueue(notify)
-        self.power = power
+        self.monitor = monitor
         self.cancel = CancelEvent()
         self.lock = threading.Lock()
         self.job = None
@@ -91,10 +91,27 @@ class Connection:
         self.cancel.clear()
         self.error_kind = None
         self.running_since = None
+        if self.monitor:
+            try:
+                self.monitor.begin_connection()
+            except Exception:
+                pass
         self.thread = threading.Thread(target=self._run, args=(settings, key), daemon=True)
-        self.thread.start()
+        try:
+            self.thread.start()
+        except Exception:
+            self._stop_monitor()
+            raise
+
+    def _stop_monitor(self) -> None:
+        if self.monitor:
+            try:
+                self.monitor.disconnect()
+            except Exception:
+                pass
 
     def stop(self) -> None:
+        self._stop_monitor()
         self.cancel.set()
         self.error_kind = ConnectionErrorKind.CANCELLED
         with self.lock:
@@ -105,7 +122,6 @@ class Connection:
         from mcp_local.tray_windows import Job, kernel
         mutex = None
         process = None
-        power_started = False
         vm_guard = None
         try:
             self.error_kind = ConnectionErrorKind.MIGRATION_REQUIRED
@@ -119,14 +135,18 @@ class Connection:
             if existing_tunnel():
                 raise ValueError('已有 tunnel-client 執行中。請先在原本視窗按 Ctrl+C 停止，再從此介面啟動。')
             self.error_kind = ConnectionErrorKind.CONFIG_INVALID
-            if self.power:
-                self.power.connection_started()
-                power_started = True
-                commands = build_commands(settings, power_channel=self.power.connection_arguments())
-            else:
-                commands = build_commands(settings)
+            commands = build_commands(settings)
             self.error_kind = ConnectionErrorKind.START_FAILED
             environment = os.environ.copy()
+            # Only this GUI's ephemeral channel is inherited. Never save it in a
+            # Tunnel profile or accidentally reuse an ambient monitor capability.
+            from mcp_local.request_monitor import ENV_NAME
+            environment.pop(ENV_NAME, None)
+            if self.monitor:
+                try:
+                    environment.update(self.monitor.environment())
+                except Exception:
+                    pass
             environment['CONTROL_PLANE_API_KEY'] = key
             if settings.get('access_mode') == 'developer_control':
                 from mcp_local.developer_vm_client import GuardOwner, GUARD_ENV
@@ -175,15 +195,8 @@ class Connection:
                 output = deque(maxlen=8)
                 def drain(stream=process.stdout, buffer=output):
                     try:
-                        tail = b''
-                        warned = set()
                         while chunk := stream.read1(1024):
                             buffer.append(chunk)
-                            tail = (tail + chunk)[-2048:]
-                            for code in ('POWER_QOS_APPLY_FAILED', 'POWER_QOS_RESTORE_FAILED'):
-                                if code.encode('ascii') in tail and code not in warned:
-                                    warned.add(code)
-                                    self.events.put(('power_warning', code))
                     finally:
                         stream.close()
                 drainer = threading.Thread(target=drain, daemon=True)
@@ -209,10 +222,12 @@ class Connection:
             if not self.cancel.is_set():
                 self.events.put(('error', str(exc).replace(key, '[已隱藏金鑰]') if key else str(exc)))
         finally:
+            self._stop_monitor()
             key = ''
             if 'environment' in locals():
                 environment.pop('CONTROL_PLANE_API_KEY', None)
                 environment.pop('MCP_LOCAL_VM_GUARD', None)
+                environment.pop('MCP_LOCAL_REQUEST_MONITOR', None)
             cleanup_failed = False
             def cleanup(action):
                 nonlocal cleanup_failed
@@ -240,8 +255,6 @@ class Connection:
                 cleanup(vm_guard.close)
             if mutex:
                 cleanup(lambda: kernel.CloseHandle(mutex))
-            if power_started:
-                cleanup(self.power.connection_stopped)
             cleanup(self.cancel.close)
             if self.cancel.is_set():
                 self.error_kind = ConnectionErrorKind.CANCELLED

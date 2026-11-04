@@ -41,7 +41,7 @@ main()
 '''
 
 
-async def verify(*, allow_git_mutations: bool = True, preserve_on_failure: bool = False) -> dict:
+async def verify() -> dict:
     executable = find_cli()
     if invoke_cli(executable, 'list')['WindowsSandboxEnvironments']:
         raise ValueError('A foreign VM exists; acceptance will not stop or reuse it')
@@ -58,7 +58,6 @@ async def verify(*, allow_git_mutations: bool = True, preserve_on_failure: bool 
     calls = 0
     results = {}
     last_session = None
-    succeeded = False
     project = Path(__file__).resolve().parents[2]
 
     def parameters(mode, *, builtin=False):
@@ -144,7 +143,7 @@ $ErrorActionPreference='Stop'
 [IO.File]::WriteAllText((Join-Path $env:MCP_WORKSPACE 'allowed.txt'),'VM_ROOT_WRITE')
 if($r.python -ne 'NOT_DETECTED'){& python -I -B python-program.py; if($LASTEXITCODE -ne 0){throw 'Python file operation failed'}}
 if($r.node -ne 'NOT_DETECTED'){& node node-program.js; if($LASTEXITCODE -ne 0){throw 'Node file operation failed'}}
-if($r.git -ne 'NOT_DETECTED' -and __ALLOW_GIT_MUTATIONS__){
+if($r.git -ne 'NOT_DETECTED'){
 & git -c init.defaultBranch=main init --quiet
 if($LASTEXITCODE -ne 0){throw 'Git init failed'}
 & git -c core.autocrlf=false add -- source.cs allowed.txt
@@ -158,7 +157,7 @@ $compiler='C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe'
 if($LASTEXITCODE -ne 0){throw 'Compiler failed'}
 $r.compiler=(& .\compiled.exe | Out-String).Trim()
 Write-Output ('VM_REPORT:'+($r|ConvertTo-Json -Compress))
-'''.replace('__OUTSIDE__', outside_path).replace('__OUTSIDE_DIR__', str(outside).replace("'", "''")).replace('__STATE__', state_path).replace('__READONLY__', ro_guest).replace('__READONLY_DIR__', ro_guest.rsplit('\\', 1)[0]).replace('__ALLOW_GIT_MUTATIONS__', '$true' if allow_git_mutations else '$false')
+'''.replace('__OUTSIDE__', outside_path).replace('__OUTSIDE_DIR__', str(outside).replace("'", "''")).replace('__STATE__', state_path).replace('__READONLY__', ro_guest).replace('__READONLY_DIR__', ro_guest.rsplit('\\', 1)[0])
                 started = await call('start_process', {'command': program, 'timeout_ms': 0, 'lifetime_seconds': 180})
                 last_session = started['session_id']
                 await call('interact_with_process', {'session_id': last_session, 'input': '中文🙂\n', 'close_stdin': True})
@@ -176,7 +175,7 @@ Write-Output ('VM_REPORT:'+($r|ConvertTo-Json -Compress))
                     assert (root / 'python-output.txt').read_text() == 'PYTHON_FILE_OK'
                 if result['node'] != 'NOT_DETECTED':
                     assert (root / 'node-output.txt').read_text() == 'NODE_FILE_OK'
-                if allow_git_mutations and result['git'] != 'NOT_DETECTED':
+                if result['git'] != 'NOT_DETECTED':
                     assert len(result['git_commit']) == 40, result
                 assert hashlib.sha256(sentinel.read_bytes()).hexdigest() == digest
                 assert (readonly / 'marker.txt').read_text() == 'SYNTHETIC_READONLY_TOOL'
@@ -263,16 +262,12 @@ Write-Output ('VM_REPORT:'+($r|ConvertTo-Json -Compress))
                     calls += 1
                     assert value.isError
         results['downgrade_to_readonly'] = 'PASS'
-        results['git_fixture_mutations'] = 'ENABLED' if allow_git_mutations else 'NOT_RUN_SCOPE_RESTRICTION'
-        succeeded = True
         return {'status': 'PASS', 'service_version': SERVICE_VERSION, 'contract_version': CONTRACT_VERSION,
                 'tools': [34, 22], 'calls': calls, 'transport': 'real_stdio', 'backend': 'real_windows_sandbox',
                 'results': results, 'production': 'UNTOUCHED', 'remote_acceptance': 'NOT_RUN'}
     finally:
         # A failed cleanup retains the fixture; never remove a live VM's backing map.
-        if not succeeded and preserve_on_failure:
-            print('Failed acceptance fixture retained: ' + str(fixture), file=sys.stderr)
-        elif not invoke_cli(executable, 'list')['WindowsSandboxEnvironments']:
+        if not invoke_cli(executable, 'list')['WindowsSandboxEnvironments']:
             assert fixture.name.startswith('mcp-dev-stdio-') and fixture.parent == Path(tempfile.gettempdir()).resolve()
             remove_owned_tree(fixture)
 
@@ -280,11 +275,8 @@ Write-Output ('VM_REPORT:'+($r|ConvertTo-Json -Compress))
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--report', type=Path)
-    parser.add_argument('--no-git-mutations', action='store_true', help='不執行 fixture Git init／add／commit')
-    parser.add_argument('--preserve-on-failure', action='store_true', help='失敗時保留自有 fixture 供診斷')
     args = parser.parse_args()
-    report = asyncio.run(verify(allow_git_mutations=not args.no_git_mutations,
-                               preserve_on_failure=args.preserve_on_failure))
+    report = asyncio.run(verify())
     if args.report:
         args.report.write_text(json.dumps(report, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
     print(json.dumps(report))

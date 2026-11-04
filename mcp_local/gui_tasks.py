@@ -1,4 +1,4 @@
-"""單一 GUI 工作；工作完成僅送佇列，不接觸 Tk 元件。"""
+"""單一 GUI 工作；工作完成僅送佇列，不接觸 WPF 或視窗元件。"""
 import queue
 import threading
 

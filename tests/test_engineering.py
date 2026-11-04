@@ -26,7 +26,7 @@ from mcp_local import autostart_windows as tasks
 class EngineeringTests(unittest.TestCase):
     def setUp(self):
         from mcp_local.autostart_windows import BackgroundStatus
-        status = patch('mcp_local.local_files_gui.get_background_status',
+        status = patch('mcp_local.desktop_controller.get_background_status',
                        return_value=BackgroundStatus(False, False, False))
         status.start()
         self.addCleanup(status.stop)
@@ -314,10 +314,10 @@ class EngineeringTests(unittest.TestCase):
 
 
     def test_gui_repair_slow_save_keeps_ui_responsive_and_stop_cancels_start(self):
-        import tkinter as tk
-        from mcp_local.local_files_gui import App
+        from mcp_local.desktop_ports import Scheduler
+        from mcp_local.desktop_controller import DesktopController as App
         settings = normalize_connection(self.settings)
-        window = tk.Tk()
+        window = Scheduler()
         window.withdraw()
         with patch('mcp_local.tray_windows.Tray'):
             app = App(window, settings, Mock(load=Mock(return_value='fake-key')))
@@ -331,7 +331,7 @@ class EngineeringTests(unittest.TestCase):
             def save(value):
                 gate.wait(2)
                 save_settings(value, self.target)
-            with patch('mcp_local.local_files_gui.save_settings', save):
+            with patch('mcp_local.desktop_controller.save_settings', save):
                 self.assertTrue(app.save(after=lambda: launched.append(True)))
                 self.assertFalse(app.save())
                 painted = []

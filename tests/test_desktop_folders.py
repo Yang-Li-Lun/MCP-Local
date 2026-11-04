@@ -3,13 +3,12 @@ import json
 from pathlib import Path
 import tempfile
 import time
-import tkinter as tk
+from mcp_local.desktop_ports import Scheduler
 import unittest
 from unittest.mock import Mock, patch
 from mcp_local.connection_settings import normalize_connection, save_settings, load_settings
 from mcp_local.workspace_settings import create_workspace_root, allocate_root_id, normalize_workspace
-from mcp_local.power_policy import PowerPolicyManager, PowerMode
-from mcp_local.local_files_gui import App
+from mcp_local.desktop_controller import DesktopController as App
 
 
 class FolderPowerGuiTests(unittest.TestCase):
@@ -62,7 +61,7 @@ class FolderPowerGuiTests(unittest.TestCase):
             target.write_text(json.dumps(old), encoding='utf-8')
             value = load_settings(target)
             self.assertEqual(value['settings_version'], 8)
-            self.assertEqual(value['power']['mode'], 'off')
+            self.assertNotIn('power', value)
             self.assertEqual(value['roots'], self.rows)
             before = target.read_bytes()
             load_settings(target)
@@ -70,21 +69,18 @@ class FolderPowerGuiTests(unittest.TestCase):
         legacy = normalize_connection(dict(self.settings, settings_version=0))
         self.assertEqual(legacy['settings_version'], 0)
 
-    def test_v4_modes_backup_whitelist_and_conflict(self):
+    def test_legacy_power_removed_and_backup_excludes_injected_secret(self):
         target = self.base / 'settings.json'
-        for mode in ('off', 'extreme'):
-            settings = dict(self.settings, power={'mode': mode})
-            save_settings(settings, target)
-            self.assertEqual(load_settings(target)['power']['mode'], mode)
-        old = json.loads(target.read_text(encoding='utf-8'))
-        old['power']['api_key'] = 'DO_NOT_BACKUP'
+        old = dict(self.settings, power={'mode': 'extreme', 'api_key': 'DO_NOT_BACKUP'})
         target.write_text(json.dumps(old), encoding='utf-8')
-        with self.assertRaises(ValueError):
-            save_settings(self.settings, target)
-        self.assertEqual(json.loads(target.read_text(encoding='utf-8')), old)
+        save_settings(self.settings, target)
+        self.assertNotIn('power', json.loads(target.read_text(encoding='utf-8')))
+        backups = list(self.base.glob('settings.json.*.bak'))
+        self.assertTrue(backups)
+        self.assertNotIn('DO_NOT_BACKUP', backups[0].read_text(encoding='utf-8'))
 
     def create_app(self):
-        window = tk.Tk()
+        window = Scheduler()
         window.withdraw()
         with patch('mcp_local.tray_windows.Tray'):
             app = App(window, self.settings)
@@ -101,33 +97,27 @@ class FolderPowerGuiTests(unittest.TestCase):
 
     def test_gui_has_only_folder_paths_and_empty_draft_is_blocked(self):
         app = self.create_app()
-        self.assertEqual(app.folder_list.get(0), str(self.folders[0]))
+        self.assertEqual(app.workspace_rows[0]['path'], str(self.folders[0]))
         for field in ('root', 'roots', 'workspace_fields', 'workspace_default', 'workspace_choice'):
             self.assertFalse(hasattr(app, field))
-        self.assertEqual([app.tabs.tab(tab, 'text') for tab in app.tabs.tabs()],
-                             ['連線設定', '進階讀取設定', '外觀', '權限模式'])
-        app.folder_list.selection_set(0)
-        app.remove_selected_folders()
+        app.remove_folders([0])
         self.assertEqual(app.workspace_rows, [])
         self.assertFalse(app.control_states()['save'])
         self.assertFalse(app.control_states()['start'])
-        with patch('mcp_local.local_files_gui.messagebox.showerror'):
+        with patch('mcp_local.desktop_controller.messagebox.showerror'):
             self.assertFalse(app.save())
 
     def test_gui_changes_preserve_identity_and_save_order(self):
         app = self.create_app()
         app.workspace_rows[0]['excluded_names'] = ['private']
         identifier = app.workspace_rows[0]['id']
-        app.folder_list.selection_set(0)
-        with patch('mcp_local.local_files_gui.filedialog.askdirectory', return_value=str(self.folders[1])):
-            app.change_selected_folder()
+        app.edit_folder(str(self.folders[1]), 0)
         self.assertEqual(app.workspace_rows[0]['id'], identifier)
         self.assertEqual(app.workspace_rows[0]['excluded_names'], ['private'])
-        with patch('mcp_local.local_files_gui.filedialog.askdirectory', return_value=str(self.folders[2])):
-            app.add_folder()
+        app.edit_folder(str(self.folders[2]))
         target = self.base / 'settings.json'
-        with patch('mcp_local.local_files_gui.save_settings', side_effect=lambda v: save_settings(v, target)), \
-             patch('mcp_local.local_files_gui.get_background_status', return_value=None):
+        with patch('mcp_local.desktop_controller.save_settings', side_effect=lambda v: save_settings(v, target)), \
+             patch('mcp_local.desktop_controller.get_background_status', return_value=None):
             app.save()
             self.poll(app)
         loaded = load_settings(target)
@@ -135,36 +125,19 @@ class FolderPowerGuiTests(unittest.TestCase):
         self.assertEqual([r['path'] for r in loaded['roots']], [str(p) for p in self.folders[1:3]])
         self.assertEqual(loaded['roots'][0]['excluded_names'], ['private'])
 
-    def test_running_mode_change_does_not_restart_and_failure_rolls_back_ui(self):
+    def test_gui_has_no_power_mode(self):
         app = self.create_app()
-        # Mock native boundaries, retaining the real state machine.
-        api = Mock()
-        guard = Mock(apply=Mock(return_value=[]))
-        app.power = PowerPolicyManager(self.base / 'power.json', api=api, guard=guard)
-        app.running, app.state = True, 'RUNNING'
-        with patch.object(app.connection, 'start') as start, patch.object(app.connection, 'stop') as stop:
-            app.change_power_mode('off')
-            self.poll(app)
-            self.assertEqual(app.power_mode.get(), 'off')
-            app.change_power_mode('extreme')
-            self.poll(app)
-            self.assertEqual(app.power_mode.get(), 'extreme')
-            start.assert_not_called()
-            stop.assert_not_called()
-        with patch.object(app.power, 'apply', side_effect=RuntimeError('fixture')), \
-             patch('mcp_local.local_files_gui.messagebox.showerror'):
-            app.change_power_mode('off')
-            self.poll(app)
-        self.assertEqual(app.power_mode.get(), 'extreme')
-        self.assertEqual(app.power.mode, PowerMode.EXTREME)
-        app.running = False
+        self.assertFalse(hasattr(app, 'change_power_mode'))
+        self.assertFalse(hasattr(app, 'power'))
 
     def test_repair_rows_do_not_expose_internal_ids(self):
         app = self.create_app()
         app.invalid_root_ids = {app.workspace_rows[0]['id']}
         app.refresh_folder_list()
-        self.assertIn('無法使用', app.folder_list.get(0))
-        self.assertNotIn(app.workspace_rows[0]['id'], app.folder_list.get(0))
+        from mcp_local.desktop_bridge import DesktopApi
+        form = DesktopApi(app).form()
+        self.assertEqual(form['invalid_root_ids'], [app.workspace_rows[0]['id']])
+        self.assertEqual(form['roots'][0]['path'], str(self.folders[0]))
 
     def test_three_root_routing_for_all_tools(self):
         from mcp_local.workspace_reader import WorkspaceReader

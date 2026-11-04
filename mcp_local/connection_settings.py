@@ -14,7 +14,6 @@ from mcp_local.local_files_mcp import FileReader
 from mcp_local.workspace_settings import normalize_workspace, encode_workspace
 from mcp_local.reader_settings import normalize_reader_settings, encode_reader_settings
 from mcp_local.backup_rotation import rotate_backups
-from mcp_local.power_policy import normalize_power, POWER_DEFAULTS
 from mcp_local.integrity import verify_client
 from mcp_local.icon_assets import normalize_icon_style
 from mcp_local.access_mode import normalize_access_mode, READ_ONLY, FULL_CONTROL, MODES
@@ -76,22 +75,7 @@ def normalize_connection(settings: dict, *, validate_paths: bool = True) -> dict
             'auto_connect': settings.get('auto_connect', False),
             'icon_style': normalize_icon_style(settings.get('icon_style', 'classic')),
             'access_mode': mode,
-            'power': normalize_power(migrate_power_v4_to_v5(settings.get('power', {})) if version == 4
-                                     else settings.get('power') if version >= 5 else None),
             'settings_version': SETTINGS_VERSION if version else 0}
-
-
-def migrate_power_v4_to_v5(power: dict | None) -> dict:
-    """Conservatively map the removed LOW mode to OFF."""
-    power = power if isinstance(power, dict) else {}
-    mode = power.get('mode', 'off')
-    if mode == 'low' or mode not in ('off', 'extreme'):
-        mode = 'off'
-    return {'mode': mode, 'restore_original_plan': True,
-            'keep_system_awake': True,
-            'manage_power_scheme': power.get('manage_power_scheme', True),
-            'manage_windows_power_mode': True,
-            'advanced_job_cpu_cap_percent': power.get('advanced_job_cpu_cap_percent')}
 
 
 def load_settings(path: Path = CONFIG_FILE) -> dict:
@@ -125,7 +109,18 @@ def _write_settings(safe: dict, path: Path, previous: dict | None) -> None:
             clean['reader'] = {key: value for key, value in clean['reader'].items()
                                if key in normalize_reader_settings()}
         if 'power' in clean:
-            clean['power'] = {key: value for key, value in clean['power'].items() if key in POWER_DEFAULTS}
+            old_power = clean['power']
+            sanitized = {}
+            if isinstance(old_power, dict):
+                if old_power.get('mode') in ('off', 'low', 'extreme'):
+                    sanitized['mode'] = old_power['mode']
+                for key in ('restore_original_plan', 'keep_system_awake', 'manage_power_scheme', 'manage_windows_power_mode'):
+                    if type(old_power.get(key)) is bool:
+                        sanitized[key] = old_power[key]
+                cap = old_power.get('advanced_job_cpu_cap_percent')
+                if cap is None or type(cap) is int and 1 <= cap <= 100:
+                    sanitized['advanced_job_cpu_cap_percent'] = cap
+            clean['power'] = sanitized
         backup.write_text(json.dumps(clean, ensure_ascii=False, indent=2), encoding='utf-8')
     temporary = path.with_name(path.name + '.' + uuid.uuid4().hex + '.tmp')
     try:
@@ -187,6 +182,22 @@ def load_for_edit(path: Path = CONFIG_FILE) -> EditableSettings:
     return EditableSettings(settings, state, errors, revision)
 
 
+def retire_legacy_power_setting(path: Path = CONFIG_FILE) -> bool:
+    """Retire a valid legacy field only after its recovery has succeeded."""
+    if not path.exists():
+        return False
+    saved, revision = read_settings_data(path)
+    if 'power' not in saved:
+        return False
+    editable = load_for_edit(path)
+    if editable.revision != revision:
+        raise SettingsError('SETTINGS_CONFLICT', '設定已由另一個操作更新，本次遷移已取消。')
+    if editable.state == 'REPAIR_REQUIRED':
+        return False
+    save_settings(editable.settings, path, expected_revision=revision)
+    return True
+
+
 def save_settings(settings: dict, path: Path = CONFIG_FILE, *, expected_revision: str | None = None) -> str:
     """驗證新範圍，結構驗證舊件；以鎖檔及版本核對避免覆蓋另一個更新。"""
     safe = normalize_connection(settings)
@@ -223,7 +234,7 @@ def require_migration(settings: dict) -> None:
         raise ValueError('尚未完成共用設定遷移。請開啟連線設定介面，選定分享資料夾及通道後按儲存設定並確認。')
 
 
-def build_commands(settings: dict, profile_dir: Path | None = None, *, power_channel=None) -> list[list[str]]:
+def build_commands(settings: dict, profile_dir: Path | None = None) -> list[list[str]]:
     """重用既有 profile；本次設定以參數傳遞，僅缺少 profile 時初始化。"""
     settings = normalize_connection(settings)
     verify_client(PROJECT)
@@ -239,12 +250,6 @@ def build_commands(settings: dict, profile_dir: Path | None = None, *, power_cha
     mcp_command += ' --access-mode ' + settings['access_mode']
     mcp_command += ' --workspace-settings ' + encode_workspace(settings)
     mcp_command += ' --reader-settings ' + encode_reader_settings(settings.get('reader'))
-    if power_channel:
-        token, owner = power_channel
-        import re
-        if not re.fullmatch(r'[0-9a-f]{32}', token) or type(owner) is not int or owner <= 0:
-            raise ValueError('電源通道無效。')
-        mcp_command += f' --power-channel {token} --power-owner {owner}'
     profile_dir = CONFIG_DIR / 'profiles' if profile_dir is None else Path(profile_dir)
     profile = profile_dir / 'local-files-gui.yaml'
     for path in (profile_dir, profile):

@@ -172,23 +172,30 @@ class OptimizationTests(unittest.TestCase):
             run.assert_called_once_with(startup=True)
 
     def test_startup_duplicate_is_silent(self):
-        from mcp_local import local_files_gui as gui
-        with patch.object(gui.tk, 'Tk') as window, patch('mcp_local.tray_windows.kernel') as kernel, patch.object(
-                gui.ctypes, 'get_last_error', return_value=183), patch.object(gui.messagebox, 'showinfo') as info:
-            self.assertEqual(gui.main(startup=True), 0)
-            info.assert_not_called()
-            window.return_value.destroy.assert_called_once()
+        from mcp_local import desktop_bridge as bridge
+        from unittest.mock import Mock
+        pipe = Mock()
+        pipe.outgoing.unfinished_tasks = 0
+        with patch.object(bridge, 'Pipe', return_value=pipe), patch.object(bridge.sys, 'argv', ['desktop', '--startup']), \
+             patch('mcp_local.tray_windows.kernel') as kernel, patch.object(bridge.ctypes, 'get_last_error', return_value=183), \
+             patch('mcp_local.connection_settings.load_for_edit') as load:
+            self.assertEqual(bridge.main(), 0)
+            load.assert_not_called()
+            self.assertEqual(pipe.emit.call_args.args[0], {'event': 'closed'})
             kernel.CloseHandle.assert_called_once()
 
     def test_disabled_startup_does_not_create_app(self):
-        from mcp_local import local_files_gui as gui
+        from mcp_local import desktop_bridge as bridge
         from unittest.mock import Mock
-        with patch.object(gui.tk, 'Tk') as window, patch('mcp_local.tray_windows.kernel'), patch.object(
-                gui.ctypes, 'get_last_error', return_value=0), patch.object(gui, 'load_for_edit',
-                return_value=Mock(settings={'auto_start': False})), patch.object(gui, 'App') as app:
-            self.assertEqual(gui.main(startup=True), 0)
-            app.assert_not_called()
-            window.return_value.destroy.assert_called_once()
+        pipe = Mock()
+        pipe.outgoing.unfinished_tasks = 0
+        with patch.object(bridge, 'Pipe', return_value=pipe), patch.object(bridge.sys, 'argv', ['desktop', '--startup']), \
+             patch('mcp_local.tray_windows.kernel'), patch.object(bridge.ctypes, 'get_last_error', return_value=0), \
+             patch('mcp_local.connection_settings.load_for_edit', return_value=Mock(settings={'auto_start': False})), \
+             patch('mcp_local.key_store.KeyStore') as store:
+            self.assertEqual(bridge.main(), 0)
+            store.assert_not_called()
+            self.assertEqual(pipe.emit.call_args.args[0], {'event': 'closed'})
 
     def test_backup_link_is_preserved(self):
         from mcp_local.backup_rotation import rotate_backups

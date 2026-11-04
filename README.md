@@ -29,7 +29,6 @@ MCP-Local 是 Windows 上預設唯讀的本機檔案 MCP 服務，在使用者�
 - 目錄探索、檔名定位、專案入口摘要、批次內容搜尋與多區段讀取。
 - SHA-256、檔案／目錄差異、專案增量基準與實際 MCP 工具註冊自我診斷。
 - Windows GUI、系統匣、登入自動連線及 DPAPI 金鑰保存。
-- 關閉／極致節能雙模式，預設關閉，可即時切換並保存偏好。
 
 預設唯讀模式不提供來源檔案寫入、刪除或指令執行能力。
 
@@ -48,7 +47,7 @@ MCP-Local 是 Windows 上預設唯讀的本機檔案 MCP 服務，在使用者�
 
 ## 快速開始
 
-環境需求：Windows。完整 TOML／SQLite 解析需 Python 3.11+，且 `sqlite3.Connection` 必須提供 `deserialize` 與 `setlimit`；建議使用完整的 Python 3.13 安裝（含 GUI 所需 Tcl/Tk）。Python 3.10 保留相容性，但不具這兩項解析能力。相依套件版本見 [requirements-lock.txt](requirements-lock.txt)。
+環境需求：Windows。完整 TOML／SQLite 解析需 Python 3.11+，且 `sqlite3.Connection` 必須提供 `deserialize` 與 `setlimit`；建議使用完整的 Python 3.13 安裝，桌面另需 .NET 9 Windows Desktop Runtime。Python 3.10 保留相容性，但不具這兩項解析能力。相依套件版本見 [requirements-lock.txt](requirements-lock.txt)。
 
 在專案根目錄執行：
 
@@ -63,7 +62,7 @@ py -3.13 -m venv .venv
 
 若未安裝 `py` launcher，可用完整 Python 路徑執行 `-m venv .venv`。升級 Python 不會自動升級既有 `.venv`；重建前先停止 MCP，將舊 `.venv` 移至備份，保留新環境驗證失敗時的回復路徑。不要修改 `%LOCALAPPDATA%\MCP-Local` 的設定、金鑰或共享根。正式 GUI、CLI 與 MCP 子程序均使用專案 `.venv`，應以此環境的能力檢查及實際 `read_document` 呼叫驗收。
 
-完整 clean-clone、Tcl/Tk 檢查與本機 ZIP／SHA-256 封裝步驟見 [Windows 部署與封版](RELEASE.md)。`requirements.txt` 是直接依賴；可重現部署使用完整 lock。精簡部署 ZIP 不含測試套件，完整 regression 請在 Git 原始碼 checkout 執行。
+完整 clean-clone、WPF／Python 能力檢查與本機 ZIP／SHA-256 封裝步驟見 [Windows 部署與封版](RELEASE.md)。`requirements.txt` 是直接依賴；可重現部署使用完整 lock。精簡部署 ZIP 不含測試套件，完整 regression 請在 Git 原始碼 checkout 執行。
 
 啟動本機 STDIO 服務：
 
@@ -81,7 +80,7 @@ py -3.13 -m venv .venv
 
 範例通道識別碼不能直接用於正式連線。修改共享資料夾後，使用「儲存並重連」套用；更新工具後，需在 MCP 用戶端重新整理工具清單。
 
-可勾選登入後啟動到系統匣並自動連線。左鍵系統匣圖示開啟設定，右鍵可啟停連線、切換電源模式或退出。
+可勾選登入後啟動到系統匣並自動連線。左鍵系統匣圖示開啟設定，右鍵可啟停連線或退出。
 
 ## 唯讀工具
 
@@ -128,11 +127,9 @@ py -3.13 -m venv .venv
 - MCP 中繼資料不揭露主機根目錄絕對路徑；金鑰不放入命令列參數。檔案內容本身可能含路徑或敏感資訊。
 - 內容視為不受信任資料。路徑防護不是作業系統沙箱，不抵禦不受信任本機程序持續替換共享路徑；不要以系統管理員身分執行服務。
 
-## 電源模式
+## 舊電源設定回復
 
-GUI 與系統匣可即時切換「關閉」或「極致節能」，不需重連；按「儲存設定」保留下次啟動偏好。極致節能使用 EcoQoS、臨時電源方案與 CPU 效能限制，可能增加工具回應時間；連線存活期間會提出防止系統睡眠的要求。
-
-Windows 11 支援時會套用「最佳電源效率」，不強制開啟 Windows 節能器。正常退出或異常結束由還原流程處理；使用者中途改選其他方案或模式時保留其選擇，還原失敗需查看日誌。實機功耗與長時間遠端穩定性仍需另行驗收，詳見 [低功耗模式工程設計](docs/history/低功耗模式工程設計.md)。
+不再提供電源模式；舊版回復日誌存在時，啟動前先完成回復，失敗時保留日誌並停止啟動。舊設定的電源欄位在安全驗證後移除並保留一般設定備份；失效資料夾先進入修復流程。
 
 ## 驗證與文件
 
@@ -169,3 +166,5 @@ Windows 11 支援時會套用「最佳電源效率」，不強制開啟 Windows 
 ## 批次 metadata 查詢（契約 13）
 
 新增單一 `query_files`，保留原有 21 個工具輸入契約。先完整掃描再篩選、排序與分頁；預設只查 metadata，不讀取檔案內容。`sort_by="created_time", order="asc", limit=1` 查詢整個安全範圍最早建立的檔案。Windows 使用真正 creation time。格式、能力與 SHA-256 僅 opt-in，且只處理本頁。參數、游標及資源限制見 [格式讀取說明](docs/guides/格式讀取說明.md#query_files-批次-metadata-查詢)。
+
+正式桌面使用 WPF，來源先執行 `desktop/Build-Desktop.ps1` 建置（需 .NET 9 SDK）；部署包含桌面成品。既有 VBS／EXE／登入入口維持相容，沒有 Tkinter fallback。[WPF 建置、整合邊界與隔離驗證](desktop/README.md)。

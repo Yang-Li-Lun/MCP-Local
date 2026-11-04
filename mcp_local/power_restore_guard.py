@@ -27,7 +27,7 @@ def serve(manager, source, output) -> None:
                 command = json.loads(line)
                 if (not isinstance(command, dict) or
                         set(command) not in ({'mode'}, {'mode', 'manage_power_scheme', 'manage_windows_power_mode'}) or
-                        command.get('mode') not in ('off', 'extreme') or
+                        command.get('mode') != 'off' or
                         any(type(command[k]) is not bool for k in command if k != 'mode')):
                     raise PowerError('POWER_RUNTIME_STATE_CORRUPT')
                 warnings = manager.apply(command['mode'], **{k: v for k, v in command.items() if k != 'mode'})

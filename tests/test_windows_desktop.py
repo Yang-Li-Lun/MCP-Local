@@ -7,11 +7,13 @@ import subprocess
 import sys
 import tempfile
 import time
-import tkinter as tk
+from mcp_local.desktop_ports import Scheduler
 import unittest
 from unittest.mock import patch, Mock
 
-from mcp_local.local_files_gui import App, Connection, load_settings
+from mcp_local.desktop_controller import DesktopController as App
+from mcp_local.connection_runtime import Connection
+from mcp_local.connection_settings import load_settings
 from mcp_local.tray_windows import Job, kernel, signature
 
 
@@ -30,21 +32,20 @@ class WindowsGuiTests(unittest.TestCase):
             if error == 5:
                 self.skipTest('輸入桌面無法存取（WinError 5）；需已解鎖且可操作的桌面驗收原生選單。')
             raise ctypes.WinError(error)
-        # 獨立程序執行真正的 Tcl/Win32 訊息迴圈，能捕捉原生 GIL 崩潰。
+        # 獨立程序執行真正的 Python 排程器／Win32 訊息迴圈，能捕捉原生 GIL 崩潰。
         program = r'''
-import ctypes, os, threading, time, tkinter as tk
+import ctypes, os, threading, time
+from mcp_local.desktop_ports import Scheduler
 from ctypes import wintypes
 from pathlib import Path
-from mcp_local.local_files_gui import App, load_settings
+from mcp_local.desktop_controller import DesktopController as App
+from mcp_local.connection_settings import load_settings
 from mcp_local.tray_windows import user, signature
 signature(user, 'FindWindowW', wintypes.HWND, wintypes.LPCWSTR, wintypes.LPCWSTR)
 signature(user, 'GetWindowThreadProcessId', wintypes.DWORD, wintypes.HWND,
           ctypes.POINTER(wintypes.DWORD))
-w = tk.Tk()
+w = Scheduler()
 a = App(w, load_settings(Path('nonexistent-test-settings.json')))
-from mcp_local.power_policy import PowerMode
-# Exercise five-second hidden ticks without applying Windows policy.
-a.power.mode = PowerMode.EXTREME
 w.withdraw()
 a.key.set('fake-key-retained')
 observed = []
@@ -72,12 +73,14 @@ def check_menu():
     w.after(300, finish)
 def finish():
     observed.append(w.state())
-    a.power.mode = PowerMode.OFF
     a.quit()
 worker = threading.Thread(target=notifications, daemon=True)
 worker.start()
 w.after(100, check_menu)
-w.mainloop()
+while not w.closed:
+    a.tray.pump()
+    w.update()
+    time.sleep(.01)
 assert observed == ['native-menu-visible', 'withdrawn', True, 'normal'], observed
 print('REAL_TRAY_EVENTS_OK')
 '''
@@ -125,7 +128,7 @@ print('REAL_TRAY_EVENTS_OK')
         cursor = patch('mcp_local.tray_windows.user.GetCursorPos', return_value=1)
         cursor.start()
         self.addCleanup(cursor.stop)
-        window = tk.Tk()
+        window = Scheduler()
         settings = load_settings(Path('nonexistent-test-settings.json'))
         store = Mock()
         store.load.return_value = 'fake-saved-key'
@@ -147,14 +150,13 @@ print('REAL_TRAY_EVENTS_OK')
             with patch('mcp_local.tray_windows.user.TrackPopupMenuEx', return_value=2), patch.object(app, 'start') as start:
                 app.popup()
                 start.assert_called_once()
-            with patch('mcp_local.tray_windows.user.TrackPopupMenuEx', return_value=7), patch.object(app, 'quit') as quit_app:
+            with patch('mcp_local.tray_windows.user.TrackPopupMenuEx', return_value=5), patch.object(app, 'quit') as quit_app:
                 app.popup()
                 quit_app.assert_called_once()
             app.show()
             window.update()
             self.assertEqual(window.state(), 'normal')
             self.assertFalse(app.running)
-            app.tabs.select(1)
             window.update()
             app.reader_numbers['max_file_bytes'].set('0.5')
             app.reader_numbers['max_scan_files'].set('42')

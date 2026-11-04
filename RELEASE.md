@@ -7,7 +7,7 @@
 
 ## 新電腦 clean clone
 
-使用一般互動式 Windows 帳戶。安裝完整 CPython 3.13 x64，包含 pip、venv、Tcl/Tk；
+使用一般互動式 Windows 帳戶。安裝完整 CPython 3.13 x64，包含 pip、venv，另安裝 .NET 9 Windows Desktop Runtime；來源建置需 .NET 9 SDK；
 本機驗證版本為 3.13.15。Python 3.10 相容分支仍保留，但不是本次完整功能部署環境。
 若沒有 `py` launcher，將第一行的 `py -3.13` 換成 `& '實際 Python313\python.exe'`。
 不要複製其他電腦的 `.venv`；它含有主機專用路徑。
@@ -18,7 +18,9 @@
 py -3.13 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements-lock.txt
 .\.venv\Scripts\python.exe -m pip check
-.\.venv\Scripts\python.exe -B -c "import sys,tomllib,sqlite3,tkinter; assert sys.version_info[:2] == (3,13); assert tomllib.loads('ok=true')['ok']; assert hasattr(sqlite3.Connection,'deserialize') and hasattr(sqlite3.Connection,'setlimit'); w=tkinter.Tk(); print(sys.version,sqlite3.sqlite_version,w.tk.call('info','patchlevel')); w.destroy()"
+.\.venv\Scripts\python.exe -B -c "import sys,tomllib,sqlite3; assert sys.version_info[:2] == (3,13); assert tomllib.loads('ok=true')['ok']; assert hasattr(sqlite3.Connection,'deserialize') and hasattr(sqlite3.Connection,'setlimit'); print(sys.version,sqlite3.sqlite_version)"
+.\desktop\Build-Desktop.ps1
+.\.venv\Scripts\python.exe -B tools/verification/verify_desktop.py --no-build --output-dir <新的桌面驗證目錄>
 .\.venv\Scripts\python.exe -m py_compile local_files_mcp.py
 .\.venv\Scripts\python.exe -B -m unittest discover -s tests -v
 .\.venv\Scripts\python.exe -B tools/verification/verify_isolated.py
@@ -76,14 +78,14 @@ ZIP 內的 `SHA256SUMS.json` 列出每個 payload 檔案的 SHA-256；ZIP 自身
 另輸出 `.manifest.json` 及 `.verification.json`。打包程式自動解包至自身暫存目錄再核對逐檔雜湊。
 可用 `python -B build_release.py --verify 路徑.zip` 重驗。
 
-封包只包含 runtime、必要圖示、安全 shared 範例、部署文件及 STDIO 驗收腳本。
+封包包含 Python runtime 來源、WPF 來源與四個正式桌面成品、必要圖示、安全 shared 範例、部署文件及驗收腳本。打包前會離線重建 WPF；缺少 SDK、建置失敗或成品缺漏時不建立封包。
 文件入口為 [docs/INDEX.md](docs/INDEX.md)；操作與格式說明位於 `docs/guides/`，權限模式規格位於 `docs/architecture/`，目錄與相容入口見 [專案結構](docs/PROJECT_LAYOUT.md)。
 解壓時保留這些子目錄；索引所列開發入口不隨部署包提供；工程證據僅在保有 `reports/` 的本機工作樹可用，不隨 Git 來源候選提供。
 `docs/history/` 三份歷史設計／交付文件沿用既有白名單保留，不作目前版本的驗收依據。
-不含 `.venv`、憑證、正式設定、備份、benchmark、歷史驗收輸出、測試套件或 Git metadata。
+不含 `.venv`、憑證、正式設定、備份、歷史驗收輸出、Python 測試套件或 Git metadata。WPF 的明確測試參數與隔離 fixture 供部署驗證使用。
 完整 unit／隔離 regression 在 Git 原始碼 checkout 執行；精簡封包解壓後依上節建立 `.venv`，
 完成安裝、能力檢查及 `tools/verification/verify_release_stdio.py --report <本次報告.json>` 即可驗證部署。
-封包的 VBS 直接使用 Python GUI fallback，不依賴選用的 `MCP-Local.exe` launcher。
+封包的 VBS 經 Python 相容入口啟動唯一 WPF 桌面，不依賴選用的 `MCP-Local.exe` launcher，也沒有 Tkinter fallback。WPF 位於 `desktop/runtime/`，目標電腦仍需 .NET 9 Windows Desktop Runtime。`verify_desktop.py --no-build` 可在部署包執行合成整合驗證；Python 依賴使用本機建立的 `.venv`。
 
 供應商檔案不加入 Git。選用 vendor 模式只接受既有官方 ZIP，核對固定
 `third_party/tunnel-client/vendor-integrity.json` 的 tunnel-client v0.0.14 SHA-256、SPDX 內的全部六筆檔案雜湊，

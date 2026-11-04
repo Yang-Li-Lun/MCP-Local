@@ -10,9 +10,9 @@ from unittest.mock import patch
 
 from mcp_local import connection_cli
 from mcp_local import connection_settings
-from mcp_local import local_files_gui
+from mcp_local import desktop_controller as local_files_gui
 from mcp_local.connection_settings import load_settings, save_settings, require_migration
-from mcp_local.local_files_gui import Connection
+from mcp_local.connection_runtime import Connection
 from command_fixture import command_project
 
 
@@ -45,8 +45,7 @@ class ConnectionImprovementsTests(unittest.TestCase):
                                 for p in state.rglob('*') if p.is_file()}
             before = snapshot()
             for mode in ('read_only', 'developer_control', 'host_control'):
-                commands = connection_settings.build_commands({**load_settings(target), 'access_mode': mode},
-                    power_channel=('a' * 32, 123))
+                commands = connection_settings.build_commands({**load_settings(target), 'access_mode': mode})
                 self.assertEqual([command[1] for command in commands], ['doctor', 'run'])
                 for command in commands:
                     self.assertNotIn('--force', command)
@@ -54,7 +53,8 @@ class ConnectionImprovementsTests(unittest.TestCase):
                     self.assertEqual(command[command.index('--control-plane.tunnel-id') + 1], 'tunnel_kept')
                     mcp_command = command[command.index('--mcp.command') + 1]
                     self.assertIn('--access-mode ' + mode, mcp_command)
-                    self.assertIn('--power-channel ' + 'a' * 32 + ' --power-owner 123', mcp_command)
+                    self.assertNotIn('--power-channel', mcp_command)
+                    self.assertNotIn('--power-owner', mcp_command)
                     workspace = decode_workspace(mcp_command.split(' --workspace-settings ')[1].split()[0])
                     self.assertEqual(workspace['default_root'], 'kept')
                     self.assertEqual(workspace['roots'][0]['id'], 'kept')
@@ -105,8 +105,9 @@ class ConnectionImprovementsTests(unittest.TestCase):
                     self.assertEqual(source.read_bytes(), b'preserve fixture')
 
     def test_shared_settings_and_backup_preserve_original(self):
-        self.assertIs(connection_cli.load_settings, local_files_gui.load_settings)
-        self.assertIs(connection_settings.build_commands, local_files_gui.build_commands)
+        self.assertIs(connection_cli.load_settings, connection_settings.load_settings)
+        from mcp_local import connection_runtime
+        self.assertIs(connection_settings.build_commands, connection_runtime.build_commands)
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             target = root / 'settings.json'

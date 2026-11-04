@@ -11,6 +11,7 @@ import hashlib
 import json
 from pathlib import Path
 import re
+import subprocess
 import tempfile
 import zipfile
 
@@ -55,6 +56,7 @@ mcp_local/local_files_gui.py
 mcp_local/local_files_mcp.py
 mcp_local/media_parser.py
 mcp_local/operation_budget.py
+mcp_local/legacy_power_recovery.py
 mcp_local/power_policy.py
 mcp_local/power_restore_guard.py
 mcp_local/power_windows.py
@@ -67,6 +69,13 @@ mcp_local/stream_search.py
 mcp_local/structured_parser.py
 mcp_local/tool_contract.py
 mcp_local/read_call_trace.py
+mcp_local/request_monitor.py
+mcp_local/request_monitor_presenter.py
+mcp_local/desktop_ports.py
+mcp_local/desktop_controller.py
+mcp_local/desktop_bridge.py
+mcp_local/desktop_fixture.py
+mcp_local/desktop_launcher.py
 mcp_local/tray_windows.py
 mcp_local/workspace_reader.py
 mcp_local/workspace_settings.py
@@ -113,7 +122,34 @@ local_files_mcp.py
 local_files_gui.py
 connection_cli.py
 autostart.py
-docs/PROJECT_LAYOUT.md'''.split()
+docs/PROJECT_LAYOUT.md
+desktop/.gitignore
+desktop/README.md
+desktop/DESIGN.md
+desktop/Build-Desktop.ps1
+desktop/Start-Isolated.ps1
+desktop/wpf/.gitignore
+desktop/wpf/NuGet.Config
+desktop/wpf/McpLocal.Desktop.csproj
+desktop/wpf/Program.cs
+desktop/wpf/DesktopWindow.cs
+desktop/wpf/DesktopChecks.cs
+desktop/wpf/BackendClient.cs
+desktop/wpf/BoundaryListTextBox.cs
+desktop/wpf/DesignChecks.cs
+desktop/wpf/DesignResources.xaml
+desktop/wpf/DesignSystem.cs
+desktop/wpf/ReaderListEditor.cs
+desktop/wpf/RemoteMonitorSource.cs
+desktop/wpf/MonitorModel.cs
+desktop/wpf/MonitorView.cs
+desktop/wpf/MonitorChecks.cs
+desktop/wpf/JsonPane.cs
+desktop/wpf/JsonColor.cs
+desktop/wpf/ResizeMeasurement.cs
+tools/verification/verify_desktop.py'''.split()
+DESKTOP_ARTIFACTS = ['desktop/runtime/McpLocal.Desktop.' + suffix
+                     for suffix in ('exe', 'dll', 'deps.json', 'runtimeconfig.json')]
 MANIFEST = 'SHA256SUMS.json'
 
 
@@ -203,7 +239,14 @@ def main() -> int:
     if args.verify:
         print(json.dumps(verify_package(args.verify)))
         return 0
+    # Build from the current reviewed sources; never package a stale GUI binary.
+    built = subprocess.run(['powershell.exe', '-NoProfile', '-File', str(ROOT / 'desktop/Build-Desktop.ps1')],
+                           cwd=ROOT, capture_output=True, timeout=120,
+                           creationflags=subprocess.CREATE_NO_WINDOW)
+    if built.returncode:
+        raise RuntimeError('WPF 建置失敗，未建立部署封包。' + built.stdout.decode(errors='replace') + built.stderr.decode(errors='replace'))
     files = {name: source_bytes(name) for name in PAYLOAD}
+    files.update({name: source_bytes(name) for name in DESKTOP_ARTIFACTS})
     if args.vendor_archive:
         files.update(vendor_bytes(args.vendor_archive))
     version = re.search(r"SERVICE_VERSION = '([^']+)'", files['mcp_local/tool_contract.py'].decode())[1]

@@ -53,7 +53,7 @@ py -3.13 -m venv .venv
 
 ## 版本與測試門檻
 
-Python 3.10+ 保留相容性；完整 TOML／SQLite 解析需要 Python 3.11+、可用的 `tomllib` 與 SQLite `deserialize`／`setlimit`。新環境建議完整 Python 3.13（含 Tcl/Tk），不得只以版本字串代替 API 能力檢查。升級 runtime 時先備份舊 `.venv`，保留正式設定與金鑰；正式程序與驗證都使用專案 `.venv`。
+Python 3.10+ 保留相容性；完整 TOML／SQLite 解析需要 Python 3.11+、可用的 `tomllib` 與 SQLite `deserialize`／`setlimit`。新環境建議完整 Python 3.13；桌面使用 .NET 9 WPF，來源建置需 .NET 9 SDK，不得只以版本字串代替 API 能力檢查。升級 runtime 時先備份舊 `.venv`，保留正式設定與金鑰；正式程序與驗證都使用專案 `.venv`。
 
 建議交付前至少完成：
 
@@ -108,3 +108,9 @@ Python 3.10+ 保留相容性；完整 TOML／SQLite 解析需要 Python 3.11+、
 - 真實整合測試需 `MCP_LOCAL_ALLOW_POWER_INTEGRATION_TEST=1` 與明確使用者授權；tools/benchmarks/benchmark_power.py 另要求 `--allow-system-power-changes`。
 - 設定版本 8，MCP 契約為 13（服務 2026.10.06.1；唯讀 22／開發控制 34／主機控制 36 個註冊工具）；不保存 `developer_toolchains`；從可信安裝子目錄與實際 executable 自動偵測，工具鏈唯讀，無額外工具仍可用 VM 內建 PowerShell。舊個別排除不可因 GUI 簡化而刪除。
 - Restore guard 不接收金鑰、不加入 Connection Job；回復失敗需保留日誌，不能宣稱已還原。
+
+## WPF 桌面回歸
+
+- 唯一桌面位於 `desktop/wpf/`；`desktop/Build-Desktop.ps1` 離線建置至 `desktop/runtime/`，不加入 Git。
+- `tools/verification/verify_desktop.py --output-dir <新目錄>` 驗證實際 WPF 控制項與私有 Python 管線；fixture 使用合成 DPAPI／Job，排程及電源須為替身。
+- `desktop/Start-Isolated.ps1 -load` 保留人工邊框拖曳入口；心跳與渲染回呼不得稱為實際 FPS 或人工驗收。

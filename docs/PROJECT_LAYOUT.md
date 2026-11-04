@@ -4,7 +4,8 @@
 
 | 位置 | 用途 |
 | --- | --- |
-| `mcp_local/` | 正式 Python 套件；唯讀讀取、格式 worker、三模式控制、設定、連線、GUI 與電源實作 |
+| `mcp_local/` | 正式 Python 套件；唯讀讀取、格式 worker、三模式控制、設定、連線、桌面控制器／私有管線與舊電源回復 |
+| `desktop/` | 唯一 WPF 桌面來源、建置／隔離入口與本機 runtime 成品 |
 | `contracts/` | 四份固定工具契約；包含僅供內部回歸的 AppContainer 契約 |
 | `tools/verification/` | 離線回歸及 STDIO 驗證；原生 VM／AppContainer 驗收另需明確授權 |
 | `tools/benchmarks/`、`cases/` | 效能工具與固定案例；真實共享根、遠端、電源量測依各工具原授權條件 |
@@ -20,7 +21,7 @@
 | `reports/validation/` | 新的隔離回歸預設輸出；每次建立獨立目錄 |
 | `shared/` | 固定非敏感煙霧測試範例 |
 
-根目錄保留 `local_files_mcp.py`、`local_files_gui.py`、`connection_cli.py`、`autostart.py`、`build_release.py` 相容入口，以及 `MCP-Local.exe`、VBS 和 PowerShell 啟動檔。既有排程、GUI launcher 與 MCP 命令仍使用根目錄入口；它們匯入 `mcp_local` 中的同一實作。另保留 `access_mode.py` 相容匯入檔，讓原地封存文件的既有連結與舊匯入仍可使用；模式定義只存在於套件中。依賴繼續使用根目錄 `.venv`。正式設定與 Credential 的儲存位置沒有改變。
+根目錄保留 `local_files_mcp.py`、`local_files_gui.py`、`connection_cli.py`、`autostart.py`、`build_release.py` 相容入口，以及 `MCP-Local.exe`、VBS 和 PowerShell 啟動檔。既有排程、GUI launcher 與 MCP 命令仍使用根目錄入口；它們匯入 `mcp_local` 中的同一實作。另保留 `access_mode.py` 相容匯入檔，讓原地封存文件的既有連結與舊匯入仍可使用；模式定義只存在於套件中。依賴繼續使用根目錄 `.venv`。正式設定與 Credential 的儲存位置沒有改變。GUI 相容入口僅啟動 `desktop/runtime/McpLocal.Desktop.exe`，不載入 Tkinter；WPF 再透過私有子程序管線連接 Python 桌面控制器。詳見 [WPF 桌面](../desktop/README.md)。
 
 ## 執行模組分類
 
@@ -31,7 +32,7 @@
 | 模式與檔案控制 | `access_mode`、`control_files`、`control_edit`、`full_control`、`control_sessions`、`sandbox_windows`、`host_control`、`host_files`、`host_windows` |
 | 開發 VM | `developer_control`、`developer_toolchains`、`developer_vm`、`developer_vm_client`、`developer_vm_guard`、`mcp_local/developer_guest.ps1` |
 | 連線與設定 | `connection_cli`、`connection_runtime`、`connection_settings`、`workspace_settings`、`reader_settings`、`security_policy`、`key_store`、`integrity`、`backup_rotation`、`safe_logging` |
-| 桌面與電源 | `local_files_gui`、`gui_tasks`、`tray_windows`、`icon_assets`、`autostart`、`autostart_windows`、`power_policy`、`power_windows`、`power_restore_guard` |
+| 桌面與舊電源回復 | `local_files_gui`／`desktop_launcher`、`desktop_bridge`、`desktop_controller`、`desktop_ports`、`desktop_fixture`、`request_monitor`、`request_monitor_presenter`、`gui_tasks`、`tray_windows`、`icon_assets`、`autostart`、`autostart_windows`、`legacy_power_recovery`、`power_policy`、`power_windows`、`power_restore_guard`（僅供舊電源日誌回復及程序等待） |
 | 契約與診斷 | `tool_contract`、`capability_diagnostics`、`read_call_trace` |
 
 ## 離線驗證與封裝

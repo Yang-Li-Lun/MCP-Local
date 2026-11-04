@@ -23,7 +23,7 @@ v1–v6 設定遷移為唯讀；所有 `full_control` 設定降為 `read_only`�
 
 ## 環境與啟動
 
-完整 TOML／SQLite 解析需 Python 3.11+，且 SQLite binding 必須提供 `deserialize`／`setlimit`；建議使用完整的 Python 3.13 安裝，包含 GUI 所需 Tcl/Tk。Python 3.10 仍可執行相容功能，但不能解析 TOML／SQLite。MCP 為 1.30.0；完整相依版本在 `requirements-lock.txt`。
+完整 TOML／SQLite 解析需 Python 3.11+，且 SQLite binding 必須提供 `deserialize`／`setlimit`；建議使用完整的 Python 3.13 安裝；桌面另需 .NET 9 Windows Desktop Runtime。Python 3.10 仍可執行相容功能，但不能解析 TOML／SQLite。MCP 為 1.30.0；完整相依版本在 `requirements-lock.txt`。
 
 ```powershell
 py -3.13 -m venv .venv
@@ -38,7 +38,7 @@ py -3.13 -m venv .venv
 
 沒有 `py` launcher 時，可改用完整 Python 路徑執行 `-m venv .venv`。既有 `.venv` 不會隨系統 Python 升級；重建前停止 MCP 並備份舊環境，新環境驗證失敗時可回復。保留 `%LOCALAPPDATA%\MCP-Local` 的正式設定、DPAPI 金鑰及共享根。GUI、CLI 與正式 MCP 子程序使用專案 `.venv`，須檢查此環境並實際呼叫 `read_document`。
 
-完整 clean-clone、Tcl/Tk 檢查與 ZIP／SHA-256 發布流程見 [Windows 部署與封版](RELEASE.md)。`requirements.txt` 列直接依賴；固定部署使用 `requirements-lock.txt`。精簡部署 ZIP 不含測試套件，完整 regression 在 Git 原始碼 checkout 執行。
+完整 clean-clone、WPF／Python 能力檢查與 ZIP／SHA-256 發布流程見 [Windows 部署與封版](RELEASE.md)。`requirements.txt` 列直接依賴；固定部署使用 `requirements-lock.txt`。精簡部署 ZIP 不含測試套件，完整 regression 在 Git 原始碼 checkout 執行。
 
 本機 STDIO：`.\.venv\Scripts\python.exe local_files_mcp.py --root .\shared`。預設根目錄為程式旁的 shared；不會自動使用 GUI 設定。
 
@@ -114,7 +114,7 @@ read_file 每次最多 400 行，公開回傳的 `text`（含行號、冒號、�
 
 固定入口：README.md、README.txt、README、AGENTS.md、package.json、pyproject.toml、requirements.txt、settings.gradle、settings.gradle.kts、build.gradle、build.gradle.kts、Cargo.toml、go.mod、CMakeLists.txt。使用者縮小文字白名單或增加排除時，入口仍受相同限制。
 
-GUI 與 PowerShell/CLI 共用 v8 設定。已確認的舊設定載入時先驗證全部欄位，再備份並原子替換；v1–v6 的權限模式遷移為 `read_only`；所有 `full_control` 設定均安全降為唯讀，v7 已授權 `developer_control`／`host_control` 保留，手動 `developer_toolchains` 欄位移除。既有多根順序、識別碼、排除與電源偏好依遷移規則保留；尚未確認的 v0 設定仍須在 GUI 完成首次確認。設定未知版本或損毀時保留原件並拒絕覆寫。已知版本的失效資料夾可在 GUI 修復，保存前完整驗證全部新根；失效舊設定仍禁止連線。每次保存均保留一般設定白名單備份；DPAPI 金鑰檔不參與遷移。還原時停止連線、退出介面，再將選定的 `settings.json.<識別碼>.bak` 複製回 `settings.json`，保留 `api-key.dpapi`，重新開啟確認範圍。
+GUI 與 PowerShell/CLI 共用 v8 設定。已確認的舊設定載入時先驗證全部欄位，再備份並原子替換；v1–v6 的權限模式遷移為 `read_only`；所有 `full_control` 設定均安全降為唯讀，v7 已授權 `developer_control`／`host_control` 保留，手動 `developer_toolchains` 欄位移除。既有多根順序、識別碼及排除依遷移規則保留；舊電源設定於完成必要回復後移除；尚未確認的 v0 設定仍須在 GUI 完成首次確認。設定未知版本或損毀時保留原件並拒絕覆寫。已知版本的失效資料夾可在 GUI 修復，保存前完整驗證全部新根；失效舊設定仍禁止連線。每次保存均保留一般設定白名單備份；DPAPI 金鑰檔不參與遷移。還原時停止連線、退出介面，再將選定的 `settings.json.<識別碼>.bak` 複製回 `settings.json`，保留 `api-key.dpapi`，重新開啟確認範圍。
 
 本機舊 `--root` 仍可使用；多資料夾可透過 `--workspace-settings` 傳入 `workspace_settings.encode_workspace` 產生的快照，包含 `roots` 與 `default_root`。若同時有 `--root`，具名快照優先。快照只能包含一般資料夾設定，Base64 是編碼而非加密；金鑰不進入參數。連線使用啟動時快照，修改設定後需「儲存並重連」，並在 MCP 用戶端重新整理工具清單。
 
@@ -153,16 +153,6 @@ GUI 儲存與背景控制透過單一工作佇列完成，儲存中重複提交�
 
 
 
-## 電源模式
-
-關閉、極致節能可由 GUI 或系統匣即時切換；按「儲存設定」保存偏好。資料夾變更仍須重連，電源模式切換不重連。極致節能對 GUI 啟用 EcoQoS，並透過事件立即通知已執行的 MCP 子程序啟用 EcoQoS。Tunnel 不套用 EcoQoS 或 Job CPU 硬限制。
-
-EXTREME 複製原電源方案，禁止閒置睡眠；連線存活期間建立 SystemRequired，不要求顯示器持續點亮。正常退出先停止連線再還原。獨立還原程序透過匿名 pipe EOF 偵測 GUI/CLI 終止，沒有定時輪詢；執行期 journal v2 保存方案 GUID、AC/DC 使用者電源模式原值與程序身分。若使用者自行改選其他電源方案，退出會保留該選擇並刪除本程式臨時方案。
-
-Windows 原生電源能力不足時顯示固定錯誤碼或降級警告。實機 AC/DC、功耗、雙模式延遲及 8/24 小時遠端穩定性仍需另行驗收；隔離測試不代表這些門檻已通過。詳見 [低功耗模式工程設計](docs/history/低功耗模式工程設計.md)。
-
-Windows 11 支援時，極致節能會設定 AC/DC「最佳電源效率」；API 不可用或失敗時顯示警告，其餘策略繼續。此功能不強制開啟 Windows 節能器。退出時僅在目前值仍為本程式套用值時還原；使用者中途改選其他模式會被保留。設定 v4 的 low 遷移為 off，extreme 保留；v5 拒絕 low。manage_windows_power_mode 預設 true，可在一般設定停用。舊 journal v1 僅用於復原，不能進入 low 執行狀態。
-
 ## 目前工具版本（契約 13；含 2026-09-17 性能工具）
 
 服務版本 `2026.10.06.1`，共 22 個唯讀工具；設定版本為 8。
@@ -195,3 +185,5 @@ Windows 11 支援時，極致節能會設定 AC/DC「最佳電源效率」；API
 ## 批次 metadata 查詢（契約 13）
 
 新增單一 `query_files`，保留原有 21 個工具輸入契約。先完整掃描再篩選、排序與分頁；預設只查 metadata，不讀取檔案內容。`sort_by="created_time", order="asc", limit=1` 查詢整個安全範圍最早建立的檔案。Windows 使用真正 creation time。格式、能力與 SHA-256 僅 opt-in，且只處理本頁。參數、游標及資源限制見 [格式讀取說明](docs/guides/格式讀取說明.md#query_files-批次-metadata-查詢)。
+
+正式桌面使用 WPF，來源先執行 `desktop/Build-Desktop.ps1` 建置（需 .NET 9 SDK）；部署包含桌面成品。既有 VBS／EXE／登入入口維持相容，沒有 Tkinter fallback。[WPF 建置、整合邊界與隔離驗證](desktop/README.md)。

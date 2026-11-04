@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from mcp_local.local_files_gui import build_commands, load_settings, save_settings, validate_settings
+from mcp_local.connection_settings import build_commands, load_settings, save_settings, validate_settings
 from mcp_local.local_files_mcp import FileReader
 from command_fixture import command_project
 

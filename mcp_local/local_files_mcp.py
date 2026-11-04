@@ -613,12 +613,7 @@ def main() -> None:
     from mcp_local.access_mode import MODES
     parser.add_argument('--access-mode', choices=MODES, default='read_only',
                         help='預設唯讀；developer_control 隔離 VM／自動唯讀工具鏈；host_control 受信任主機命令')
-    parser.add_argument('--power-channel', help=argparse.SUPPRESS)
-    parser.add_argument('--power-owner', type=int, help=argparse.SUPPRESS)
     args = parser.parse_args()
-    if args.power_channel:
-        from mcp_local.power_windows import follow_mode
-        follow_mode(args.power_channel, args.power_owner)
     settings = decode_reader_settings(args.reader_settings) if args.reader_settings else None
     from mcp_local.workspace_reader import WorkspaceReader
     from mcp_local.workspace_settings import decode_workspace
@@ -633,6 +628,9 @@ def main() -> None:
     if trace_request.exists():
         from mcp_local.read_call_trace import consume_request, install
         install(server, consume_request(trace_request))
+    # Optional local observation must not affect tool registration or transport.
+    from mcp_local.request_monitor import install_from_environment
+    install_from_environment(server)
     server.run(transport='stdio')
 
 
