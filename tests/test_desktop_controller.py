@@ -92,6 +92,94 @@ class GuiControlTests(unittest.TestCase):
         with self.assertRaisesRegex(OSError, 'injected menu failure'):
             self.app.popup()
 
+    def test_tray_modes_replace_open_and_check_saved_mode(self):
+        from mcp_local.access_mode import MODES, MODE_LABELS
+        self.app.access_mode.set('host_control')
+        self.app.popup()
+        actions = self.app.tray.popup.call_args.args[0]
+        self.assertEqual([item[0] for item in actions],
+                         ['啟動連線', '停止連線', '',
+                          *(MODE_LABELS[mode] for mode in MODES), '', '退出程式'])
+        self.assertEqual([item[3] for item in actions[3:6]], [True, False, False])
+        self.assertFalse(actions[3][1])
+        with patch.object(self.app, 'switch_access_mode') as switch:
+            actions[4][2]()
+            actions[5][2]()
+        self.assertEqual([call.args[0] for call in switch.call_args_list],
+                         ['developer_control', 'host_control'])
+
+    def test_tray_mode_switch_saves_then_waits_for_cleanup_to_reconnect(self):
+        a = self.app
+        a.running, a.state = True, 'RUNNING'
+        with patch('mcp_local.desktop_controller.messagebox.askyesno') as confirmation, patch(
+                'mcp_local.desktop_controller.save_settings',
+                side_effect=lambda value, **kw: save_settings(value, self.target, **kw)):
+            a.switch_access_mode('developer_control')
+            self.assertFalse(a.connection.cancel.is_set())
+            self.poll()
+        confirmation.assert_not_called()
+        self.assertFalse(a.window.visible)
+        self.assertEqual(load_for_edit(self.target).settings['access_mode'], 'developer_control')
+        self.assertTrue(a.connection.cancel.is_set())
+        self.assertTrue(a.restart_pending)
+        with patch.object(a, 'reload_and_launch') as launch:
+            a.tick()
+            launch.assert_not_called()
+            a.connection.events.put(('done', 'fixture stopped'))
+            a.tick()
+            launch.assert_called_once()
+
+    def test_tray_idle_mode_switch_starts_only_after_save_completion(self):
+        with patch('mcp_local.desktop_controller.messagebox.askyesno') as confirmation, patch(
+                'mcp_local.desktop_controller.save_settings',
+                side_effect=lambda value, **kw: save_settings(value, self.target, **kw)), patch.object(
+                self.app, 'start') as start:
+            self.app.switch_access_mode('host_control')
+            start.assert_not_called()
+            self.poll()
+            start.assert_called_once()
+        confirmation.assert_not_called()
+        self.assertFalse(self.app.window.visible)
+        self.assertEqual(load_for_edit(self.target).settings['access_mode'], 'host_control')
+
+    def test_tray_rejected_save_preserves_previous_draft_and_dirty_state(self):
+        for dirty in (False, True):
+            self.app.dirty = dirty
+            with patch.object(self.app, 'save', return_value=False) as save:
+                self.app.switch_access_mode('host_control')
+            save.assert_called_once_with(after=self.app.start, confirm_mode=False)
+            self.assertEqual(self.app.access_mode.get(), 'read_only')
+            self.assertEqual(self.app.dirty, dirty)
+
+    def test_tray_save_failure_preserves_connection_and_saved_mode(self):
+        a = self.app
+        a.running, a.state = True, 'RUNNING'
+        with patch('mcp_local.desktop_controller.messagebox.askyesno', return_value=True), patch(
+                'mcp_local.desktop_controller.save_settings', side_effect=OSError('fixture')), patch(
+                'mcp_local.desktop_controller.messagebox.showerror'), patch.object(a, 'start') as start:
+            a.switch_access_mode('host_control')
+            self.poll()
+            start.assert_not_called()
+        self.assertEqual(a.settings['access_mode'], 'read_only')
+        self.assertFalse(a.connection.cancel.is_set())
+        self.assertFalse(a.restart_pending)
+
+    def test_tray_switch_rejects_unstable_states_and_same_mode(self):
+        a = self.app
+        with patch.object(a, 'save') as save:
+            for state in ('SAVING', 'STARTING', 'STOPPING', 'RESTARTING', 'QUITTING'):
+                a.state = state
+                a.switch_access_mode('host_control')
+            a.state = 'IDLE'
+            a.switch_access_mode('read_only')
+            a.connection.cleanup_failed = True
+            a.switch_access_mode('host_control')
+            a.connection.cleanup_failed = False
+            a.repair_required = True
+            a.switch_access_mode('host_control')
+            save.assert_not_called()
+        self.assertEqual(a.access_mode.get(), 'read_only')
+
     def test_only_three_modes_and_no_manual_toolchain_controls(self):
         from mcp_local.desktop_bridge import DesktopApi
         api = DesktopApi(self.app)

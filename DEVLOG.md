@@ -2,6 +2,14 @@
 
 日期採台北時間，按日期記錄已完成的里程碑，附上可核對的提交或驗收報告。隔離驗證與正式驗收分開記錄。
 
+## 2026-11-05｜系統匣權限模式切換
+
+- 後續依使用者要求，系統匣切換略過權限模式確認，正常切換保持主介面隱藏；設定頁仍保留原確認，錯誤處理保持原有提示。此決策取代下列初版系統匣權限確認行為。相同三模組隔離復測 58 項全數通過，新增斷言確認系統匣切換不呼叫確認視窗且主介面保持隱藏；139 個 Python 檔案語法解析及 pip check 通過。證據：`reports/validation/tray-silent-switch-20261105/engineering-results.json`。未重啟正式 APP，未執行人工／LIVE 驗收。
+- 移除右鍵選單的「開啟快捷設定」，保留左鍵開啟視窗；右鍵直接列出唯讀、開發控制及主機控制，勾選已儲存模式。
+- 選擇其他模式沿用既有權限確認、設定儲存與連線生命週期：儲存成功後停止舊連線及 sessions，確認清理完成才重連；未連線時儲存後啟動。忙碌、修復及清理失敗時停用切換；取消確認還原原模式草稿與 dirty 狀態，儲存失敗不停止現有連線。
+- 執行 `.venv/Scripts/python.exe -B tools/verification/verify_isolated.py --offline --tests test_desktop_controller test_desktop_bridge test_windows_desktop --output-dir reports/validation/tray-modes-20261105-normal`：58 項通過、0 failures／errors／skips；139 個 Python 檔案語法解析及 pip check 通過。原生選單選取使用 Windows API 替身，非人工點選驗收。見 `reports/validation/tray-modes-20261105-normal/engineering-results.json`。
+- 初次受限 token 執行被前置檢查拒絕（0 項執行），改在一般未提升 Windows 使用者環境完成同一隔離驗證；保留原始環境拒絕紀錄 `reports/validation/tray-modes-20261105/engineering-results.json`。未操作正式連線、設定、憑證或系統電源，未執行完整回歸、真實 VM／遠端重連及人工系統匣驗收。Python 後端變更需重開 APP 載入，未重啟使用中的正式 APP。
+
 ## 2026-11-05｜.NET 10、桌面查詢更新與成品識別
 
 - WPF 升至 .NET 10 LTS x64，同步建置／部署文件、runtime 缺少提示及部署摘要；沿用 Python、私有 stdin/stdout 與三種模式。摘要按紀錄 revision 重用、狀態未變略過 WPF 刷新，背景收集頻率維持原值。

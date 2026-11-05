@@ -147,10 +147,10 @@ print('REAL_TRAY_EVENTS_OK')
                 self.assertTrue(popup.called)
             self.assertEqual(window.state(), 'withdrawn')
             self.assertEqual(app.key.get(), 'fake-key-retained')
-            with patch('mcp_local.tray_windows.user.TrackPopupMenuEx', return_value=2), patch.object(app, 'start') as start:
+            with patch('mcp_local.tray_windows.user.TrackPopupMenuEx', return_value=1), patch.object(app, 'start') as start:
                 app.popup()
                 start.assert_called_once()
-            with patch('mcp_local.tray_windows.user.TrackPopupMenuEx', return_value=5), patch.object(app, 'quit') as quit_app:
+            with patch('mcp_local.tray_windows.user.TrackPopupMenuEx', return_value=8), patch.object(app, 'quit') as quit_app:
                 app.popup()
                 quit_app.assert_called_once()
             app.show()

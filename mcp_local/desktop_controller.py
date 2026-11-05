@@ -213,11 +213,17 @@ class DesktopController:
 
     def popup(self) -> None:
         from mcp_local.tray_windows import TrayDesktopUnavailable
+        from mcp_local.access_mode import MODES, MODE_LABELS
 
+        controls = self.control_states()
+        saved_mode = self.settings.get('access_mode', 'read_only')
         actions = [
-            ('開啟快捷設定', True, self.show),
-            ('啟動連線', self.control_states()['start'], self.start),
-            ('停止連線', self.control_states()['stop'], self.stop),
+            ('啟動連線', controls['start'], self.start),
+            ('停止連線', controls['stop'], self.stop),
+            ('', False, None),
+            *((MODE_LABELS[mode], controls['switch_mode'] and mode != saved_mode,
+               lambda mode=mode: self.switch_access_mode(mode), mode == saved_mode)
+              for mode in MODES),
             ('', False, None),
             ('退出程式', not self.quitting, self.quit),
         ]
@@ -225,6 +231,21 @@ class DesktopController:
             self.tray.popup(actions)
         except TrayDesktopUnavailable as exc:
             self.status.set(str(exc))
+
+    def switch_access_mode(self, mode: str) -> None:
+        """系統匣切換沿用設定驗證與清理後重連流程。"""
+        from mcp_local.access_mode import normalize_access_mode
+
+        mode = normalize_access_mode(mode)
+        if (not self.control_states()['switch_mode']
+                or mode == self.settings.get('access_mode', 'read_only')):
+            return
+        previous_mode, was_dirty = self.access_mode.get(), self.dirty
+        self.access_mode.set(mode)
+        if not self.save(after=self.start, confirm_mode=False):
+            self.access_mode.set(previous_mode)
+            self.dirty = was_dirty
+            self.refresh_controls()
 
     def hide(self) -> None:
         self.window.withdraw()
@@ -254,6 +275,8 @@ class DesktopController:
         stable = available and self.state in ('IDLE', 'RUNNING', 'REPAIR')
         bg = self.background_status
         return {
+            'switch_mode': stable and bool(self.workspace_rows) and not self.repair_required
+                           and not self.connection.cleanup_failed,
             'save': stable and bool(self.workspace_rows) and (self.dirty or self.key_dirty or self.repair_required),
             'start': stable and bool(self.workspace_rows) and not self.running and not self.repair_required
                      and not self.connection.cleanup_failed
@@ -314,7 +337,7 @@ class DesktopController:
         self.background_status = None
         self.refresh_controls()
 
-    def save(self, after=None, retry_on_conflict=True) -> bool:
+    def save(self, after=None, retry_on_conflict=True, *, confirm_mode=True) -> bool:
         if self.tasks.busy or self.quitting or self.state not in ('IDLE', 'RUNNING', 'REPAIR'):
             return False
         try:
@@ -329,7 +352,7 @@ class DesktopController:
             from mcp_local.access_mode import normalize_access_mode
             settings['access_mode'] = normalize_access_mode(self.access_mode.get())
             mode_changed = settings['access_mode'] != self.settings.get('access_mode', 'read_only')
-            if mode_changed and settings['access_mode'] in ('developer_control', 'host_control'):
+            if confirm_mode and mode_changed and settings['access_mode'] in ('developer_control', 'host_control'):
                 from mcp_local.access_mode import MODE_LABELS
                 description = ('允許以目前使用者權限讀寫主機檔案與執行受信任命令，可跨原共享 root。\n'
                                '命令不是沙箱，也可讀寫設定與使用者憑證；檔案 API 防護不會限制命令。\n'
@@ -408,7 +431,7 @@ class DesktopController:
                             try:
                                 self.reload_settings()
                                 if not local_changes and intent == self.intent and not self.repair_required:
-                                    self.save(after=after, retry_on_conflict=False)
+                                    self.save(after=after, retry_on_conflict=False, confirm_mode=confirm_mode)
                             except Exception:
                                 self.dialogs.showerror('無法重新載入', '設定無法載入；目前編輯內容已保留。', parent=self.window)
                             return
