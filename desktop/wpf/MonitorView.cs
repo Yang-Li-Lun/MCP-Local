@@ -230,6 +230,15 @@ internal sealed class MonitorView : UserControl, IDisposable
         diagnostic.Click += (_, _) => ShowDiagnostics();
         UpdateTimer.Tick += (_, _) => Advance();
         Loaded += (_, _) => { Refresh(); if (source is SyntheticSource) UpdateTimer.Start(); };
+        if (source is RemoteMonitorSource live) live.HealthChanged += UpdateHealth;
+    }
+    private void UpdateHealth()
+    {
+        if (source is RemoteMonitorSource live)
+        {
+            notice.Text = live.HealthText; notice.ToolTip = live.HealthText;
+            UpdateStatus();
+        }
     }
     internal void FocusDetails(bool value)
     {
@@ -279,6 +288,7 @@ internal sealed class MonitorView : UserControl, IDisposable
         closed = true; UpdateTimer.Stop(); filterTimer.Stop(); filterCancellation?.Cancel();
         filterCancellation?.Dispose(); Request.Dispose(); Response.Dispose(); diagnosticWindow?.Close();
         if (source is SyntheticSource) source.Dispose();
+        if (source is RemoteMonitorSource live) live.HealthChanged -= UpdateHealth;
     }
 
     internal void Advance()
@@ -462,12 +472,22 @@ internal sealed class MonitorView : UserControl, IDisposable
         request_notes = Selected?.Record.RequestNotes, response_notes = Selected?.Record.ResponseNotes,
         capture = "未提供、截斷與省略的內容無法還原。",
         framework = System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription,
+        frontend = BuildIdentity.Current,
+        backend = source is RemoteMonitorSource remote && remote.BackendIdentity.ValueKind == JsonValueKind.Object ? (object)remote.BackendIdentity : "未知",
+        monitor_last_success = source is RemoteMonitorSource health ? health.LastSuccess?.ToString("O") ?? "尚無" : "不適用",
+        backend_query_error = source is RemoteMonitorSource query ? query.QueryError : null,
         dpi_scale = VisualTreeHelper.GetDpi(this).DpiScaleX,
         capture_source = "Python 記憶體監控；沒有擷取到的內容不能還原。"
     }, JsonData.PrettyOptions);
-    private void ShowDiagnostics()
+    private async void ShowDiagnostics()
     {
         if (diagnosticWindow is not null) { diagnosticWindow.Activate(); return; }
+        if (source is RemoteMonitorSource remote)
+        {
+            try { await remote.RefreshIdentity(); }
+            catch (Exception error) { remote.SetHealth(error.Message); }
+        }
+        if (closed || diagnosticWindow is not null) return;
         var pane = new TextBox { Text = DiagnosticsText(), IsReadOnly = true, TextWrapping = TextWrapping.Wrap,
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Margin = new Thickness(10) };
         diagnosticWindow = new Window { Owner = Window.GetWindow(this), Title = "監控診斷", Width = 610, Height = 560, Content = pane };

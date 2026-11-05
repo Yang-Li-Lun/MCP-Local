@@ -2,7 +2,9 @@
 
 正式 GUI 為 `desktop/runtime/McpLocal.Desktop.exe`。連線設定、進階讀取設定、外觀、權限模式及請求監控共用一個 WPF 主視窗；獨立監控視窗仍使用相同元件與後端。關閉／最小化主視窗會縮到系統匣，「更多 → 退出程式」停止自己的連線後結束。
 
-需要 Windows、.NET 9 Windows Desktop Runtime 與專案 `.venv`。從來源建置另需 .NET 9 SDK；沒有 NuGet 套件或外部還原來源。
+需要 Windows、.NET 10 LTS Windows Desktop Runtime（x64） 與專案 `.venv`。從來源建置另需 .NET 10 SDK（Windows x64）；沒有 NuGet 套件或外部還原來源。
+
+`Build-Desktop.ps1 -DotnetPath <dotnet.exe>` 可指定獨立安裝的 .NET 10 SDK。啟動器會有界檢查 x64 的 `Microsoft.NETCore.App` 與 `Microsoft.WindowsDesktop.App` 10.0；缺少時提示安裝 Windows Desktop Runtime，一般 .NET Runtime 不足以執行 WPF。成品只接受 .NET 10 的修補版本，不跨主要版本自動替代。
 
 來源介面使用官方 Fluent Theme 與共用設計資源，細節見 [桌面設計系統](DESIGN.md)。外觀頁提供跟隨 Windows／淺色／深色；色彩選擇僅本次程序生效。主視窗、獨立監控及診斷視窗同步，Windows 高對比優先。來源修改須重新建置才會進入指定執行檔；隔離建置不會自動更新正式 runtime。
 
@@ -22,6 +24,12 @@ WPF 啟動專案 Python 的 `mcp_local.desktop_bridge` 子程序，透過繼承�
 既有登入排程 action 與 LeastPrivilege 定義維持相容。啟動器透過 stdin 壽命通知 WPF 父程序已結束；WPF 關閉後端管線後，由 Python 停止其管理的 Job 並撤銷監控。獨立 VM guard 不由前端強制終止。系統匣訊息與背景工作共同喚醒 Python Windows 訊息迴圈。舊電源日誌存在時，啟動前只執行回復；回復失敗保留日誌並停止啟動。
 
 監控容量仍為原本 200 筆／32 MiB 歷史、每個請求／回應約 1 MiB、32 層及 10,000 節點。WPF 週期更新只取得摘要，選取後才取得完整已擷取內容，全文搜尋在 Python 執行。管線解碼、JSON 格式化與語法分析在背景執行；視窗尺寸變動不重新格式化詳情。正式內容不自動寫入檔案；複製、手動匯出保留 `mcp-local-request-monitor-v1` 及結構化截斷註記。
+
+監控摘要依每筆紀錄 revision 重用；版本同時涵蓋啟用、連線、接入、異常、遺失、淘汰及容量狀態。版本未變只回傳未變標記，WPF 保留現有快照並略過刷新。設定狀態未變也略過控制項更新。Python 的監控收集仍在原本的 100／200／250 ms 排程運作，前端仍為 250 ms 查詢；主視窗隱藏不暫停收集或獨立監控更新。
+
+唯讀管線查詢最多等待 3 秒；操作回覆最多等待 15 秒，包含等待寫入管線的時間。同一查詢尚未回覆時不堆疊重送。操作已開始傳送卻逾時時保留原請求識別、顯示結果尚未確認並阻擋新的操作；後續 state 查詢不能代替原回覆。收到原回覆後恢復操作，背景交易仍須以 state 的 busy／dirty／連線狀態確認完成。管線結束時保留未確認提示，不自動重送或重啟後端。錯誤顯示最後成功更新時間；監控診斷保留成功時間，即使資料未變。
+
+現有「診斷」包含前端內嵌建置識別、已載入組件 MVID、後端實際編譯來源雜湊、來源基底 commit 與工作樹 dirty 狀態、部署摘要及兩個程序各自的啟動 UUID／時間。`desktop-build.json` 必須與桌面成品一起部署。磁碟來源與成品另行比對；Python 識別只涵蓋已經過追蹤 loader 的專案模組，不包含識別 bootstrap、套件初始化、未載入模組或第三方依賴。缺少 manifest、來源不符或不可讀時明示未知，不能用磁碟 HEAD 代表正在執行的版本。
 
 ## 隔離驗證與人工縮放
 

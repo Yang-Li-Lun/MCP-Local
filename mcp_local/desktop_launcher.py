@@ -2,11 +2,32 @@
 from __future__ import annotations
 import argparse
 import ctypes
+import os
+import shutil
 from pathlib import Path
 import subprocess
 import sys
 
 PROJECT = Path(__file__).resolve().parents[1]
+
+
+def check_desktop_runtime() -> None:
+    """Check the x64 host and both frameworks without starting/loading the desktop."""
+    host = Path(os.environ.get('ProgramW6432', os.environ.get('ProgramFiles', r'C:\Program Files'))) / 'dotnet/dotnet.exe'
+    executable = str(host) if host.is_file() else shutil.which('dotnet')
+    message = ('需要 .NET 10 LTS Windows Desktop Runtime（x64）。請安裝 Desktop Runtime，'
+               '一般 .NET Runtime 不包含 WPF；從來源建置另需 .NET 10 SDK。')
+    if not executable:
+        raise OSError(message)
+    try:
+        result = subprocess.run([executable, '--list-runtimes'], capture_output=True, text=True,
+                                timeout=5, creationflags=subprocess.CREATE_NO_WINDOW)
+        frameworks = {line.split()[0] for line in result.stdout.splitlines()
+                      if len(line.split()) > 1 and line.split()[1].startswith('10.0.') and '-' not in line.split()[1]}
+        if result.returncode or not {'Microsoft.NETCore.App', 'Microsoft.WindowsDesktop.App'} <= frameworks:
+            raise OSError(message)
+    except subprocess.SubprocessError as error:
+        raise OSError(message + ' 執行環境檢查未完成。') from error
 
 
 def main(*, startup: bool = False, argv=None) -> int:
@@ -34,11 +55,15 @@ def main(*, startup: bool = False, argv=None) -> int:
     try:
         if not executable.is_file():
             raise FileNotFoundError('找不到 WPF 桌面程式；請執行 desktop\\Build-Desktop.ps1 或使用完整部署包。')
+        check_desktop_runtime()
         # The inherited stdin lifetime is owned by this launch/task process. Ending
         # it asks WPF to close, then its private backend pipe releases the owned Job.
         with subprocess.Popen(command, cwd=PROJECT, stdin=subprocess.PIPE,
                               creationflags=subprocess.CREATE_NO_WINDOW) as process:
-            return process.wait()
+            code = process.wait()
+            if code & 0xFFFFFFFF in (0x80008096, 0x8000809C):
+                raise OSError('WPF 執行環境無法載入；請安裝或修復 .NET 10 Windows Desktop Runtime（x64）。')
+            return code
     except OSError as error:
         message = '無法啟動 WPF 桌面：' + str(error)
         if args.fixture or args.self_test:

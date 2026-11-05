@@ -7,6 +7,18 @@ internal sealed class RemoteMonitorSource(BackendClient backend) : IMonitorSourc
     private readonly Dictionary<string, CaptureRecord> records = [];
     private readonly HashSet<(string, long)> loading = [];
     private long sequence;
+    internal long Version { get; private set; }
+    internal DateTimeOffset? LastSuccess { get; private set; }
+    internal string? QueryError { get; private set; }
+    internal JsonElement BackendIdentity { get; set; }
+    internal string HealthText => QueryError is null ? "" : $"{QueryError} 最後成功更新：{LastSuccess?.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss") ?? "尚無"}";
+    internal event Action? HealthChanged;
+    internal void SetHealth(string? error)
+    {
+        bool changed = QueryError != error;
+        QueryError = error;
+        if (changed) HealthChanged?.Invoke();
+    }
     private readonly SemaphoreSlim searchGate = new(1);
     public MonitorSnapshot Snapshot { get; private set; } = new([], new(0, 0, "未連線"));
     public bool Enabled { get; private set; }
@@ -14,8 +26,16 @@ internal sealed class RemoteMonitorSource(BackendClient backend) : IMonitorSourc
     public bool Failed { get; private set; }
     internal long CapturedBytes { get; private set; }
     public event Action? Changed;
+    internal async Task RefreshIdentity() => BackendIdentity = await backend.Send("diagnostics");
     public void Update(JsonElement result)
     {
+        LastSuccess = DateTimeOffset.UtcNow; SetHealth(null);
+        if (result.TryGetProperty("unchanged", out var unchanged) && unchanged.GetBoolean()) return;
+        if (result.TryGetProperty("version", out var version))
+        {
+            if (Version == version.GetInt64()) return;
+            Version = version.GetInt64();
+        }
         Enabled = result.GetProperty("enabled").GetBoolean(); Connected = result.GetProperty("connected").GetBoolean();
         Failed = result.GetProperty("failed").GetBoolean();
         CapturedBytes = result.GetProperty("captured_bytes").GetInt64();

@@ -1,6 +1,6 @@
 # 桌面設計系統
 
-WPF 桌面採用 .NET 9 官方 Fluent Theme。應用程式資源位於 `wpf/DesignResources.xaml`，色彩及主題生命週期由 `wpf/DesignSystem.cs` 管理；沒有第三方 UI 套件。標準來源為 [WPF Fluent Theme](https://learn.microsoft.com/en-us/dotnet/desktop/wpf/whats-new/net90)、[Fluent 2 Layout](https://fluent2.microsoft.design/layout)、[Fluent 2 Typography](https://fluent2.microsoft.design/typography) 與 [Fluent 2 Accessibility](https://fluent2.microsoft.design/accessibility)。
+WPF 桌面採用 .NET 10 官方 Fluent Theme。應用程式資源位於 `wpf/DesignResources.xaml`，色彩及主題生命週期由 `wpf/DesignSystem.cs` 管理；沒有第三方 UI 套件。標準來源為 [WPF Fluent Theme](https://learn.microsoft.com/en-us/dotnet/desktop/wpf/whats-new/net100)、[Fluent 2 Layout](https://fluent2.microsoft.design/layout)、[Fluent 2 Typography](https://fluent2.microsoft.design/typography) 與 [Fluent 2 Accessibility](https://fluent2.microsoft.design/accessibility)。
 
 ## 共用資源
 

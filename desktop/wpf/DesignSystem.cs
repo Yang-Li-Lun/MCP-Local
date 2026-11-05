@@ -49,7 +49,7 @@ internal static class DesignSystem
         var app = Application.Current;
         HighContrast = highContrast;
         if (resources is not null) app.Resources.MergedDictionaries.Remove(resources);
-        // .NET 9 marks only this API experimental. Keep all other diagnostics enabled.
+        // ThemeMode remains experimental in .NET 10; keep other diagnostics enabled.
 #pragma warning disable WPF0001
         app.ThemeMode = highContrast ? ThemeMode.None : Preference switch
         {

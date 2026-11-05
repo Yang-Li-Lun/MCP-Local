@@ -28,7 +28,7 @@ class BenchmarkSnapshotTests(unittest.TestCase):
                     module = benchmark.load_original_module()
             finally:
                 os.chdir(previous)
-            self.assertEqual(Path(module.__file__).resolve(), expected)
+            self.assertEqual(Path(module.__file__).resolve(), expected.resolve())
             self.assertNotEqual(expected, decoy)
             self.assertEqual(module.SENTINEL, 'expected snapshot')
 

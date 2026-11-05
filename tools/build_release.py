@@ -74,6 +74,8 @@ mcp_local/request_monitor_presenter.py
 mcp_local/desktop_ports.py
 mcp_local/desktop_controller.py
 mcp_local/desktop_bridge.py
+mcp_local/desktop_identity.py
+tools/desktop_build_identity.py
 mcp_local/desktop_fixture.py
 mcp_local/desktop_launcher.py
 mcp_local/tray_windows.py
@@ -135,6 +137,8 @@ desktop/wpf/Program.cs
 desktop/wpf/DesktopWindow.cs
 desktop/wpf/DesktopChecks.cs
 desktop/wpf/BackendClient.cs
+desktop/wpf/BuildIdentity.cs
+desktop/wpf/DesktopReliabilityChecks.cs
 desktop/wpf/BoundaryListTextBox.cs
 desktop/wpf/DesignChecks.cs
 desktop/wpf/DesignResources.xaml
@@ -149,7 +153,7 @@ desktop/wpf/JsonColor.cs
 desktop/wpf/ResizeMeasurement.cs
 tools/verification/verify_desktop.py'''.split()
 DESKTOP_ARTIFACTS = ['desktop/runtime/McpLocal.Desktop.' + suffix
-                     for suffix in ('exe', 'dll', 'deps.json', 'runtimeconfig.json')]
+                     for suffix in ('exe', 'dll', 'deps.json', 'runtimeconfig.json')] + ['desktop/runtime/desktop-build.json']
 MANIFEST = 'SHA256SUMS.json'
 
 

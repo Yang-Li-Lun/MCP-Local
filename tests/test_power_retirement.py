@@ -53,7 +53,7 @@ class RetirementTests(TestCase):
             saved = json.loads(path.read_text(encoding='utf-8'))
             self.assertNotIn('power', saved)
             self.assertEqual(saved['tunnel'], old['tunnel'])
-            self.assertEqual(saved['roots'][0]['path'], name)
+            self.assertEqual(saved['roots'][0]['path'], str(root.resolve()))
             self.assertTrue(list(root.glob('settings.json.*.bak')))
 
     def test_setting_conflict_or_invalid_root_preserves_original(self):

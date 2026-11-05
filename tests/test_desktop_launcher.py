@@ -13,7 +13,8 @@ from mcp_local import desktop_launcher
 
 class DesktopLauncherTests(unittest.TestCase):
     def test_native_tray_option_requires_fixture_and_is_forwarded(self):
-        with patch('mcp_local.desktop_launcher.subprocess.Popen') as spawn:
+        with patch('mcp_local.desktop_launcher.subprocess.Popen') as spawn, \
+             patch('mcp_local.desktop_launcher.check_desktop_runtime'):
             with self.assertRaises(SystemExit) as rejected:
                 desktop_launcher.main(argv=['--fixture-native-tray'])
             self.assertEqual(rejected.exception.code, 2)
@@ -29,6 +30,7 @@ class DesktopLauncherTests(unittest.TestCase):
 
     def test_launch_arguments_do_not_load_settings_or_credentials(self):
         with patch('mcp_local.desktop_launcher.subprocess.Popen') as spawn, \
+             patch('mcp_local.desktop_launcher.check_desktop_runtime'), \
              patch('mcp_local.connection_settings.load_for_edit', side_effect=AssertionError('settings read')), \
              patch('mcp_local.key_store.KeyStore', side_effect=AssertionError('credential read')):
             spawn.return_value.__enter__.return_value.wait.return_value = 0

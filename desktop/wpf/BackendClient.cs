@@ -11,8 +11,17 @@ internal sealed class BackendClient : IDisposable
     private readonly Process process;
     private readonly SemaphoreSlim writer = new(1);
     private readonly ConcurrentDictionary<int, TaskCompletionSource<JsonElement>> pending = new();
+    private readonly ConcurrentDictionary<string, int> queries = new();
+    private readonly ConcurrentDictionary<int, string> names = new();
     private readonly CancellationTokenSource lifetime = new();
-    private int sequence, closed;
+    private int sequence, closed, mutation;
+    internal TimeSpan QueryTimeout { get; set; } = TimeSpan.FromSeconds(3);
+    internal TimeSpan OperationTimeout { get; set; } = TimeSpan.FromSeconds(15);
+    internal bool OperationPending => Volatile.Read(ref mutation) != 0;
+    internal bool OperationUnconfirmed { get; private set; }
+    internal string? OperationError { get; private set; }
+    internal event Action? OperationChanged;
+    private static bool IsQuery(string command) => command is "hello" or "state" or "monitor" or "detail" or "export" or "monitor_search" or "diagnostics";
     public event Action<JsonElement>? Event;
     public event Action? Disconnected;
     public bool IsFixture { get; }
@@ -31,7 +40,8 @@ internal sealed class BackendClient : IDisposable
             RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true,
             StandardInputEncoding = new UTF8Encoding(false), StandardOutputEncoding = Encoding.UTF8
         };
-        info.ArgumentList.Add("-B"); info.ArgumentList.Add("-m"); info.ArgumentList.Add("mcp_local.desktop_bridge");
+        info.ArgumentList.Add("-B"); info.ArgumentList.Add("-m"); info.ArgumentList.Add("mcp_local.desktop_identity");
+        info.ArgumentList.Add("--build-manifest"); info.ArgumentList.Add(Path.Combine(AppContext.BaseDirectory, "desktop-build.json"));
         if (startup) info.ArgumentList.Add("--startup");
         if (fixture is not null) { info.ArgumentList.Add("--fixture"); info.ArgumentList.Add(Path.GetFullPath(fixture)); }
         if (fixtureLoad) info.ArgumentList.Add("--fixture-load");
@@ -70,6 +80,7 @@ internal sealed class BackendClient : IDisposable
                     var value = document.RootElement;
                     if (value.TryGetProperty("id", out var id) && pending.TryRemove(id.GetInt32(), out var waiter))
                     {
+                        CompleteRequest(id.GetInt32(), value.TryGetProperty("error", out var failure) ? failure.GetString() : null);
                         if (value.TryGetProperty("error", out var error)) waiter.TrySetException(new InvalidOperationException(error.GetString()));
                         else waiter.TrySetResult(value.GetProperty("result").Clone());
                     }
@@ -85,24 +96,77 @@ internal sealed class BackendClient : IDisposable
             pending.Clear(); Disconnected?.Invoke();
         }
     }
+    private void CompleteRequest(int id, string? error = null)
+    {
+        if (names.TryRemove(id, out var name)) queries.TryRemove(name, out _);
+        if (Interlocked.CompareExchange(ref mutation, 0, id) == id)
+        {
+            OperationUnconfirmed = false; OperationError = error; OperationChanged?.Invoke();
+        }
+    }
     public async Task<JsonElement> Send(string command, object? args = null)
     {
         int id = Interlocked.Increment(ref sequence);
+        bool query = IsQuery(command);
+        if (query)
+        {
+            if (!queries.TryAdd(command, id)) throw new TimeoutException("後端未回應；仍在等待先前的唯讀查詢。");
+        }
+        else
+        {
+            if (Interlocked.CompareExchange(ref mutation, id, 0) != 0)
+                throw new InvalidOperationException("先前操作結果尚未確認，未重送操作。");
+            OperationError = null; OperationChanged?.Invoke();
+        }
+        names[id] = command;
         var waiter = new TaskCompletionSource<JsonElement>(TaskCreationOptions.RunContinuationsAsynchronously);
         pending[id] = waiter;
+        // Observe late errors even after the caller's deadline; keep the request until its own reply.
+        _ = waiter.Task.ContinueWith(t => _ = t.Exception, TaskContinuationOptions.OnlyOnFaulted);
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token);
+        deadline.CancelAfter(query ? QueryTimeout : OperationTimeout);
+        bool sent = false;
         try
         {
             if (Volatile.Read(ref closed) != 0) throw new IOException("桌面後端已結束。");
-            await Write(JsonSerializer.Serialize(new { id, command, args = args ?? new { } }));
-            return await waiter.Task.WaitAsync(lifetime.Token);
+            var text = JsonSerializer.Serialize(new { id, command, args = args ?? new { } });
+            await writer.WaitAsync(deadline.Token);
+            sent = true;
+            // A partially written frame must finish under the same writer lock. A deadline
+            // stops waiting, never cancels/replays the operation or interleaves another frame.
+            var write = WriteLocked(text);
+            _ = write.ContinueWith(t => _ = t.Exception, TaskContinuationOptions.OnlyOnFaulted);
+            await write.WaitAsync(deadline.Token);
+            return await waiter.Task.WaitAsync(deadline.Token);
         }
-        catch { pending.TryRemove(id, out _); throw; }
+        catch (OperationCanceledException) when (!lifetime.IsCancellationRequested)
+        {
+            if (waiter.Task.IsCompleted) return await waiter.Task;
+            if (!sent) { pending.TryRemove(id, out _); CompleteRequest(id); }
+            else if (!query && OperationPending) { OperationUnconfirmed = true; OperationChanged?.Invoke(); }
+            throw new TimeoutException(query ? "後端未回應；唯讀查詢已逾時。" : sent ?
+                "後端未回應；操作結果尚未確認，請等待原請求回覆，勿重送。" : "等待傳送逾時；操作尚未送出。");
+        }
+        catch
+        {
+            if (!sent) { pending.TryRemove(id, out _); CompleteRequest(id); }
+            else if (!query && OperationPending) { OperationUnconfirmed = true; OperationChanged?.Invoke(); }
+            throw;
+        }
     }
     public Task Answer(string token, bool accepted) => Write(JsonSerializer.Serialize(new
     { id = Interlocked.Increment(ref sequence), command = "dialog_answer", token, accepted }));
     private async Task Write(string text)
     {
-        await writer.WaitAsync(lifetime.Token);
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token);
+        deadline.CancelAfter(OperationTimeout);
+        await writer.WaitAsync(deadline.Token);
+        var write = WriteLocked(text);
+        _ = write.ContinueWith(t => _ = t.Exception, TaskContinuationOptions.OnlyOnFaulted);
+        await write.WaitAsync(deadline.Token);
+    }
+    private async Task WriteLocked(string text)
+    {
         try { await process.StandardInput.WriteLineAsync(text); await process.StandardInput.FlushAsync(); }
         finally { writer.Release(); }
     }

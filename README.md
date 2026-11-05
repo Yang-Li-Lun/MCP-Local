@@ -47,7 +47,7 @@ MCP-Local 是 Windows 上預設唯讀的本機檔案 MCP 服務，在使用者�
 
 ## 快速開始
 
-環境需求：Windows。完整 TOML／SQLite 解析需 Python 3.11+，且 `sqlite3.Connection` 必須提供 `deserialize` 與 `setlimit`；建議使用完整的 Python 3.13 安裝，桌面另需 .NET 9 Windows Desktop Runtime。Python 3.10 保留相容性，但不具這兩項解析能力。相依套件版本見 [requirements-lock.txt](requirements-lock.txt)。
+環境需求：Windows。完整 TOML／SQLite 解析需 Python 3.11+，且 `sqlite3.Connection` 必須提供 `deserialize` 與 `setlimit`；建議使用完整的 Python 3.13 安裝，桌面另需 .NET 10 LTS Windows Desktop Runtime（x64）。Python 3.10 保留相容性，但不具這兩項解析能力。相依套件版本見 [requirements-lock.txt](requirements-lock.txt)。
 
 在專案根目錄執行：
 
@@ -167,4 +167,4 @@ py -3.13 -m venv .venv
 
 新增單一 `query_files`，保留原有 21 個工具輸入契約。先完整掃描再篩選、排序與分頁；預設只查 metadata，不讀取檔案內容。`sort_by="created_time", order="asc", limit=1` 查詢整個安全範圍最早建立的檔案。Windows 使用真正 creation time。格式、能力與 SHA-256 僅 opt-in，且只處理本頁。參數、游標及資源限制見 [格式讀取說明](docs/guides/格式讀取說明.md#query_files-批次-metadata-查詢)。
 
-正式桌面使用 WPF，來源先執行 `desktop/Build-Desktop.ps1` 建置（需 .NET 9 SDK）；部署包含桌面成品。既有 VBS／EXE／登入入口維持相容，沒有 Tkinter fallback。[WPF 建置、整合邊界與隔離驗證](desktop/README.md)。
+正式桌面使用 WPF，來源先執行 `desktop/Build-Desktop.ps1` 建置（需 .NET 10 SDK（Windows x64））；部署包含桌面成品。既有 VBS／EXE／登入入口維持相容，沒有 Tkinter fallback。[WPF 建置、整合邊界與隔離驗證](desktop/README.md)。

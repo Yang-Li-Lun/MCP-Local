@@ -36,6 +36,13 @@ internal sealed class DesktopWindow : Window
     internal readonly TextBlock DraftState = new() { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 12, 0), FontSize = 12 };
     private readonly TextBlock status = new() { TextWrapping = TextWrapping.Wrap }, backgroundStatus = new(), accessStatus = new();
     private readonly TextBlock keyStatus = new(), folderStatus = new();
+    internal readonly TextBlock BackendStatus = new() { TextWrapping = TextWrapping.Wrap, FontSize = 12 };
+    internal DateTimeOffset? LastStateSuccess { get; private set; }
+    private string? stateError;
+    private string? appliedState;
+    private long appliedGeneration = -1;
+    private bool appliedLocalDirty;
+    private long? unconfirmedDraftGeneration;
     private readonly DispatcherTimer poll = new() { Interval = TimeSpan.FromMilliseconds(250) };
     private readonly DispatcherTimer editDelay = new() { Interval = TimeSpan.FromMilliseconds(180) };
     private readonly List<Button> folderButtons = [];
@@ -47,6 +54,7 @@ internal sealed class DesktopWindow : Window
     internal JsonElement LastState { get; private set; }
     internal Task Ready { get; private set; } = Task.CompletedTask;
     internal MonitorView? DetachedMonitor => detachedMonitor;
+    internal void PausePollingForChecks() { if (backend.IsFixture) poll.Stop(); }
     internal Func<string, bool>? ConfirmFixture { get; set; }
 
     public DesktopWindow(BackendClient backend)
@@ -70,6 +78,7 @@ internal sealed class DesktopWindow : Window
         GlobalActions.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
         var connectionInfo = new StackPanel { Margin = new Thickness(0, 0, 16, 0), VerticalAlignment = VerticalAlignment.Center };
         connectionInfo.Children.Add(ConnectionState);
+        connectionInfo.Children.Add(BackendStatus); DesignSystem.Secondary(BackendStatus);
         ConnectionState.SetBinding(ToolTipProperty, new System.Windows.Data.Binding("Text") { Source = status });
         GlobalActions.Children.Add(connectionInfo); Ui.Place(GlobalActions, ConnectionActions, 0, 1);
         ConnectionActions.VerticalAlignment = VerticalAlignment.Center;
@@ -148,11 +157,22 @@ internal sealed class DesktopWindow : Window
             { Tabs.SelectedIndex = e.SystemKey - Key.D1; ((TabItem)Tabs.SelectedItem).Focus(); e.Handled = true; }
         };
         backend.Event += message => Dispatcher.BeginInvoke(() => HandleEvent(message));
+        backend.OperationChanged += () => Dispatcher.BeginInvoke(() =>
+        {
+            if (!backend.OperationPending && unconfirmedDraftGeneration is { } draft)
+            {
+                if (backend.OperationError is null && draft == generation) localDirty = false;
+                unconfirmedDraftGeneration = null;
+            }
+            UpdateBackendStatus(); if (LastState.ValueKind == JsonValueKind.Object) ApplyState(LastState, false);
+        });
         backend.Disconnected += () => Dispatcher.BeginInvoke(() =>
         {
             if (permitClose) return;
             poll.Stop(); status.Text = "桌面後端已結束；連線清理與電源回復結果請查閱既有診斷。";
             ConnectionState.Text = "● 後端已結束";
+            stateError = backend.OperationPending ? "管線已結束；操作結果尚未確認。" : "桌面後端已結束。";
+            Source.SetHealth(stateError); UpdateBackendStatus();
             foreach (var button in commands.Values) button.IsEnabled = false;
             permitClose = true; Show();
         });
@@ -275,7 +295,8 @@ internal sealed class DesktopWindow : Window
             access.Children.Add(accessStatus);
             var monitorPage = new DockPanel(); pageLayouts.Add(monitorPage); UpdatePageLayout();
             monitorPage.Children.Add(Monitor); AddPage("請求監控", monitorPage);
-            ready = true; ApplyState(hello.GetProperty("state"), true);
+            ready = true; LastStateSuccess = DateTimeOffset.UtcNow; ApplyState(hello.GetProperty("state"), true);
+            try { await Source.RefreshIdentity(); } catch (Exception error) { Source.SetHealth(error.Message); }
             UpdateSettingsActions();
             ApplyIcon(iconStyle);
             if (hello.GetProperty("state").GetProperty("key_load_error").ValueKind == JsonValueKind.String)
@@ -287,7 +308,8 @@ internal sealed class DesktopWindow : Window
         catch (Exception error)
         {
             if (permitClose) return;
-            status.Text = error.Message; permitClose = true; Opacity = 1; Show(); throw;
+            status.Text = error.Message; stateError = error.Message; UpdateBackendStatus(); permitClose = true; Opacity = 1; Show();
+            foreach (var button in commands.Values) button.IsEnabled = false;
         }
     }
     private void Dirty()
@@ -295,7 +317,7 @@ internal sealed class DesktopWindow : Window
         if (hydrating || !ready) return;
         localDirty = true; generation++; editDelay.Stop(); editDelay.Start();
         DraftState.Text = "有未儲存變更";
-        if (commands.TryGetValue("save", out var save)) save.IsEnabled = true;
+        if (commands.TryGetValue("save", out var save)) save.IsEnabled = !backend.OperationPending;
     }
     private Dictionary<string, object?> Form()
     {
@@ -307,7 +329,7 @@ internal sealed class DesktopWindow : Window
     }
     private async Task FlushDraft()
     {
-        if (!ready || !localDirty) return;
+        if (!ready || !localDirty || backend.OperationPending) return;
         await Run("edit", new { form = Form() });
     }
     internal async Task Run(string command, object? args = null, bool includeForm = false, bool hydrate = false)
@@ -321,7 +343,12 @@ internal sealed class DesktopWindow : Window
             if (generation == version && (includeForm || command == "edit")) localDirty = false;
             ApplyState(state, hydrate && generation == version);
         }
-        catch (Exception error) { status.Text = error.Message; }
+        catch (Exception error)
+        {
+            if (error is TimeoutException or IOException && backend.OperationUnconfirmed && (includeForm || command == "edit"))
+                unconfirmedDraftGeneration = version;
+            status.Text = error.Message; UpdateBackendStatus();
+        }
     }
     internal async Task Poll()
     {
@@ -329,14 +356,33 @@ internal sealed class DesktopWindow : Window
         polling = true;
         try
         {
-            ApplyState(await backend.Send("state"), false);
-            Source.Update(await backend.Send("monitor"));
+            try
+            {
+                var state = await backend.Send("state");
+                LastStateSuccess = DateTimeOffset.UtcNow; stateError = null;
+                ApplyState(state, false);
+            }
+            catch (Exception error) { stateError = error.Message; }
+            try { Source.Update(await backend.Send("monitor", new { since = Source.Version })); }
+            catch (Exception error) { Source.SetHealth(error.Message); }
+            UpdateBackendStatus();
         }
-        catch (Exception error) { status.Text = error.Message; }
         finally { polling = false; }
+    }
+    private void UpdateBackendStatus()
+    {
+        BackendStatus.Text = backend.OperationUnconfirmed ? "操作結果尚未確認；等待原請求回覆，未重送。" :
+            backend.OperationPending ? "正在等待操作回覆…" : backend.OperationError ?? stateError ?? Source.QueryError ?? "";
+        if (BackendStatus.Text.Length > 0)
+            BackendStatus.Text += $" 最後成功更新：{LastStateSuccess?.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss") ?? "尚無"}";
+        BackendStatus.Visibility = BackendStatus.Text.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
+        BackendStatus.ToolTip = $"狀態最後成功更新：{LastStateSuccess?.ToLocalTime().ToString("O") ?? "尚無"}";
     }
     private void ApplyState(JsonElement state, bool hydrate)
     {
+        string signature = state.GetRawText() + backend.OperationPending + backend.OperationUnconfirmed;
+        if (!hydrate && signature == appliedState && appliedGeneration == generation && appliedLocalDirty == localDirty) return;
+        appliedState = signature; appliedGeneration = generation; appliedLocalDirty = localDirty;
         LastState = state.Clone();
         status.Text = state.GetProperty("status").GetString(); backgroundStatus.Text = state.GetProperty("background_status").GetString();
         accessStatus.Text = state.GetProperty("access_status").GetString();
@@ -358,12 +404,12 @@ internal sealed class DesktopWindow : Window
         foreach (var (name, button) in commands)
         {
             string field = name == "restart" ? "apply" : name == "check_background" ? "background_check" : name;
-            button.IsEnabled = controls.GetProperty(field).GetBoolean() || name == "save" && localDirty && !state.GetProperty("busy").GetBoolean();
+            button.IsEnabled = !backend.OperationPending && (controls.GetProperty(field).GetBoolean() || name == "save" && localDirty && !state.GetProperty("busy").GetBoolean());
         }
         hydrating = true;
         try
         {
-            foreach (var button in folderButtons) button.IsEnabled = !state.GetProperty("busy").GetBoolean() && !state.GetProperty("quitting").GetBoolean();
+            foreach (var button in folderButtons) button.IsEnabled = !backend.OperationPending && !state.GetProperty("busy").GetBoolean() && !state.GetProperty("quitting").GetBoolean();
             if (hydrate || !localDirty && !state.GetProperty("dirty").GetBoolean() && !state.GetProperty("busy").GetBoolean())
             {
                 var form = state.GetProperty("form"); tunnel.Text = form.GetProperty("tunnel").GetString()!;
@@ -394,14 +440,14 @@ internal sealed class DesktopWindow : Window
                 bool confirm = message.GetProperty("kind").GetString() == "confirm";
                 if (backend.IsFixture && ConfirmFixture is not null)
                 {
-                    if (confirm) await backend.Answer(message.GetProperty("token").GetString()!, ConfirmFixture(message.GetProperty("text").GetString()!));
+                    if (confirm) { try { await backend.Answer(message.GetProperty("token").GetString()!, ConfirmFixture(message.GetProperty("text").GetString()!)); } catch (Exception error) { status.Text = error.Message; } }
                     break;
                 }
                 Opacity = 1; Show();
                 var result = MessageBox.Show(this, message.GetProperty("text").GetString(), message.GetProperty("title").GetString(),
                     confirm ? MessageBoxButton.YesNo : MessageBoxButton.OK, confirm ? MessageBoxImage.Warning : MessageBoxImage.Information,
                     confirm ? MessageBoxResult.No : MessageBoxResult.OK);
-                if (confirm) { try { await backend.Answer(message.GetProperty("token").GetString()!, result == MessageBoxResult.Yes); } catch (IOException) { } }
+                if (confirm) { try { await backend.Answer(message.GetProperty("token").GetString()!, result == MessageBoxResult.Yes); } catch (Exception error) { status.Text = error.Message; } }
                 break;
             case "fatal": status.Text = message.GetProperty("text").GetString(); permitClose = true; Opacity = 1; Show(); break;
             case "closed": permitClose = true; Close(); break;

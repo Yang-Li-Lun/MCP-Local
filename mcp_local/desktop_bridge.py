@@ -126,6 +126,10 @@ class PipeDialogs:
 class DesktopApi:
     def __init__(self, controller):
         self.controller = controller
+        self._monitor_key = None
+        self._monitor_version = 0
+        self._monitor_rows = {}
+        self._monitor_snapshot = None
 
     def form(self) -> dict:
         a = self.controller
@@ -171,15 +175,31 @@ class DesktopApi:
             # An empty PasswordBox never deletes a persisted credential.
             a.key.set(value['key'].strip() or a.saved_key)
 
-    def monitor(self) -> dict:
+    def monitor(self, since=None) -> dict:
         from mcp_local.request_monitor_presenter import argument_summary
         a = self.controller
         m = a.request_monitor
-        return {'records': [{**{k: v for k, v in row.items() if k in ('id', 'time', 'tool', 'status', 'elapsed_ms', '_revision')},
-                             'summary': argument_summary(row), 'partial': bool(row.get('request_notes') or row.get('response_notes'))}
-                            for row in m.records.values()],
-                'enabled': m.enabled, 'connected': m.connected, 'attached': m.attached, 'failed': m.failed,
-                'lost_events': m.lost_events, 'evicted_records': m.evicted_records, 'dropped_total': m.dropped, 'captured_bytes': m.used}
+        status = {'enabled': m.enabled, 'connected': m.connected, 'attached': m.attached, 'failed': m.failed,
+                  'lost_events': m.lost_events, 'evicted_records': m.evicted_records,
+                  'dropped_total': m.dropped, 'captured_bytes': m.used}
+        key = (tuple((row['id'], row['_revision']) for row in m.records.values()), tuple(status.values()))
+        if key != self._monitor_key:
+            rows = {}
+            for row in m.records.values():
+                cached = self._monitor_rows.get(row['id'])
+                if cached is None or cached['_revision'] != row['_revision']:
+                    cached = {**{k: v for k, v in row.items() if k in
+                                 ('id', 'time', 'tool', 'status', 'elapsed_ms', '_revision')},
+                              'summary': argument_summary(row),
+                              'partial': bool(row.get('request_notes') or row.get('response_notes'))}
+                rows[row['id']] = cached
+            self._monitor_rows = rows
+            self._monitor_key = key
+            self._monitor_version += 1
+            self._monitor_snapshot = {**status, 'records': list(rows.values()), 'version': self._monitor_version}
+        if type(since) is int and since == self._monitor_version:
+            return {'unchanged': True, 'version': self._monitor_version}
+        return self._monitor_snapshot
 
     def dispatch(self, command: str, args: dict) -> dict:
         a = self.controller
@@ -192,6 +212,9 @@ class DesktopApi:
             from mcp_local.access_mode import MODE_LABELS
             return {'protocol': PROTOCOL, 'state': self.state(), 'modes': MODE_LABELS,
                     'numbers': NUMERIC_FIELDS, 'defaults': normalize_reader_settings()}
+        if command == 'diagnostics':
+            from mcp_local.desktop_identity import diagnostics
+            return diagnostics()
         if command == 'edit':
             self.set_form(args['form'])
         elif command in ('save', 'start', 'restart'):
@@ -218,7 +241,7 @@ class DesktopApi:
         elif command == 'reader_maximums':
             a.set_maximums()
         elif command == 'monitor':
-            return self.monitor()
+            return self.monitor(args.get('since'))
         elif command in ('detail', 'export'):
             from mcp_local.request_monitor_presenter import record_document
             row = a.request_monitor.records.get(args.get('record_id'))
@@ -292,6 +315,7 @@ def main() -> int:
             if controller.repair_required:
                 controller.show()
             api = DesktopApi(controller)
+            fixture_counts = {}
             pool = stack.enter_context(ThreadPoolExecutor(max_workers=1, thread_name_prefix='monitor-search'))
             search_pending = None
             disconnected_at = None
@@ -335,8 +359,27 @@ def main() -> int:
                             snapshot = [dict(row) for row in controller.request_monitor.records.values()]
                             search_pending = pool.submit(search, request, snapshot)
                     else:
-                        result = api.dispatch(request['command'], request.get('args', {}))
-                        pipe.emit({'id': request['id'], 'result': result})
+                        command = request['command']
+                        if args.fixture and command == 'fixture_counts':
+                            result = dict(fixture_counts)
+                        elif args.fixture and command == 'fixture_emit':
+                            m = controller.request_monitor
+                            number = request.get('args', {}).get('number', 0)
+                            m.channel.publish(m.channel.epoch(), dict(id=f'live-{number}',
+                                time='2026-11-05T12:00:00+08:00', tool='read_file', status='success',
+                                request={'params': {'arguments': {'path': 'synthetic'}}}, response={'text': '合成更新'}))
+                            result = api.state()
+                        else:
+                            if args.fixture:
+                                fixture_counts[command] = fixture_counts.get(command, 0) + 1
+                            result = api.dispatch(command, request.get('args', {}))
+                        delay = request.get('args', {}).get('_fixture_reply_delay_ms', 0) if args.fixture else 0
+                        if type(delay) is int and 0 < delay <= 2000:
+                            # Fault injection only after the isolated fixture has been installed;
+                            # background collection and transactions keep running during a late reply.
+                            controller.window.after(delay, lambda reply={'id': request['id'], 'result': result}: pipe.emit(reply))
+                        else:
+                            pipe.emit({'id': request['id'], 'result': result})
                 except (ValueError, KeyError, IndexError, TypeError) as error:
                     pipe.emit({'id': request['id'], 'error': str(error)})
                 except Exception:

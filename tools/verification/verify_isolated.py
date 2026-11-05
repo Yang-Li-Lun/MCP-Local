@@ -16,6 +16,7 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+import tempfile
 import time
 import unittest
 from unittest.mock import patch
@@ -26,6 +27,43 @@ NATIVE_TESTS = {
     'test_full_control.FullControlTests.test_lifetime_and_terminate_own_job',
     'test_full_control_stdio.FullControlStdioTests.test_real_stdio_switches_and_calls',
 }
+
+
+def verify_user_token() -> None:
+    """Reuse the host-mode token check without starting a process or changing privileges."""
+    if os.name == 'nt':
+        from mcp_local.host_windows import HostProcess
+        probe = HostProcess(Path.cwd())
+        probe.close()
+
+
+def check_test_environment() -> dict:
+    """Reject unsuitable test environments before their failures obscure regressions."""
+    from mcp_local.security_policy import STATE_DIR, overlaps_python_runtime
+    try:
+        verify_user_token()
+    except (OSError, ValueError) as error:
+        raise RuntimeError('TEST_TOKEN_UNSUITABLE：請在一般未提升的 Windows 使用者環境執行；'
+                           '受限 AppContainer 或管理員 token 不符合主機模式回歸前置條件。') from error
+    temporary = Path(tempfile.gettempdir()).resolve()
+    state = STATE_DIR.resolve()
+    if overlaps_python_runtime(temporary) or temporary.is_relative_to(state) or state.is_relative_to(temporary):
+        raise RuntimeError('TEST_TEMP_PROTECTED：TEMP 必須位於專案／Python 匯入與執行路徑、正式狀態目錄之外；'
+                           '請使用一般使用者的系統 TEMP，不要為通過測試放寬服務保護。')
+    try:
+        with tempfile.TemporaryDirectory(prefix='mcp-regression-probe-', dir=temporary) as directory:
+            nested = Path(directory) / 'nested'
+            nested.mkdir()
+            source, link = nested / 'source.txt', nested / 'link.txt'
+            source.write_text('synthetic regression probe', encoding='utf-8')
+            os.link(source, link)
+            if source.stat().st_nlink < 2 or source.read_bytes() != link.read_bytes():
+                raise OSError('hardlink probe failed')
+    except OSError as error:
+        raise RuntimeError('TEST_TEMP_UNUSABLE：測試 TEMP 無法完成子目錄寫入、硬連結或清理；'
+                           '請使用可寫入且支援硬連結的系統 TEMP。') from error
+    return {'token': 'NORMAL_UNELEVATED' if os.name == 'nt' else 'NOT_WINDOWS',
+            'temporary_directory': str(temporary), 'nested_write_hardlink_cleanup': 'PASS'}
 
 
 def offline_suite(suite):
@@ -64,6 +102,14 @@ def main():
             if executable in ('schtasks.exe', 'tunnel-client.exe', 'cloudflared.exe', 'windowssandbox.exe', 'wsb.exe'):
                 raise RuntimeError('ISOLATION_GUARD：禁止正式排程或通道命令。')
     sys.addaudithook(guard)
+    try:
+        environment = check_test_environment()
+    except RuntimeError as error:
+        report = {'state': 'ENVIRONMENT_NOT_READY', 'tests': 0, 'error': str(error),
+                  'production': 'NOT_OPERATED'}
+        (output / 'engineering-results.json').write_text(json.dumps(report, indent=2), encoding='utf-8')
+        print(json.dumps(report))
+        return 2
     sources = sorted(list(root.glob('*.py')) + [path for folder in ('mcp_local', 'tools', 'tests')
                                               for path in (root / folder).rglob('*.py')])
     for path in sources:
@@ -80,7 +126,9 @@ def main():
             stack.enter_context(patch('mcp_local.developer_vm_client.GuardOwner.__init__', side_effect=RuntimeError('OFFLINE_VM_BLOCKED')))
         with (output / 'engineering-tests.txt').open('x', encoding='utf-8') as log:
             result = unittest.TextTestRunner(stream=log, verbosity=2).run(suite)
-    report = {'python': sys.version.split()[0], 'mcp': importlib.metadata.version('mcp'),
+    report = {'state': 'PASS' if result.wasSuccessful() and dependencies.returncode == 0 else 'FAIL',
+              'environment': environment,
+              'python': sys.version.split()[0], 'mcp': importlib.metadata.version('mcp'),
               'pydantic': importlib.metadata.version('pydantic'), 'syntax_files': len(sources),
               'pip_check': dependencies.returncode, 'tests': result.testsRun,
               'failures': len(result.failures), 'errors': len(result.errors),

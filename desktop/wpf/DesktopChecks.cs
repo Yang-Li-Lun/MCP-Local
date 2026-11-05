@@ -190,6 +190,7 @@ internal static class DesktopChecks
         Check(!window.Source.Connected, "connection stop revokes monitoring");
         window.Source.Clear(); await Until(() => window.Source.Snapshot.Records.Count == 0);
         Check(window.Monitor.Selected is null, "clear removes selection and payload");
+        await DesktopReliabilityChecks.Run(window, backend, Check);
         JsonData.WriteNew(report, JsonSerializer.Serialize(new { state = "PASS", checks, fixture_only = true,
             real_dpapi_and_job = true, production_credentials = "NOT_READ", scheduler = "MOCKED", power = "MOCKED",
             manual_resize = "NOT_ASSESSED", actual_fps = "NOT_MEASURED" }, JsonData.PrettyOptions));

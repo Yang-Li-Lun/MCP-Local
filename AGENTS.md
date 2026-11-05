@@ -53,7 +53,7 @@ py -3.13 -m venv .venv
 
 ## 版本與測試門檻
 
-Python 3.10+ 保留相容性；完整 TOML／SQLite 解析需要 Python 3.11+、可用的 `tomllib` 與 SQLite `deserialize`／`setlimit`。新環境建議完整 Python 3.13；桌面使用 .NET 9 WPF，來源建置需 .NET 9 SDK，不得只以版本字串代替 API 能力檢查。升級 runtime 時先備份舊 `.venv`，保留正式設定與金鑰；正式程序與驗證都使用專案 `.venv`。
+Python 3.10+ 保留相容性；完整 TOML／SQLite 解析需要 Python 3.11+、可用的 `tomllib` 與 SQLite `deserialize`／`setlimit`。新環境建議完整 Python 3.13；桌面使用 .NET 10 LTS WPF，來源建置需 .NET 10 SDK（Windows x64），不得只以版本字串代替 API 能力檢查。升級 runtime 時先備份舊 `.venv`，保留正式設定與金鑰；正式程序與驗證都使用專案 `.venv`。
 
 建議交付前至少完成：
 
@@ -81,6 +81,12 @@ Python 3.10+ 保留相容性；完整 TOML／SQLite 解析需要 Python 3.11+、
 - 使用 `pathlib.Path` 與明確路徑驗證，避免字串拼接路徑。
 - 文件與對外訊息沿用現有繁體中文語調。
 - PowerShell：使用核准的動詞、`$camelCase` 變數命名，啟用 `Set-StrictMode`，明確檢查 `$LASTEXITCODE`。
+
+## Codex 開發日誌維護
+
+- Codex 完成有實質意義的開發修改時，同步更新根目錄的 `DEVLOG.md`。以台北日期記錄實際完成事項、重要技術決策及結果。
+- 記下實際執行的驗證與結果、未驗證的範圍、未解問題及必要後續事項。可確認時附相關 Git commit SHA 與證據位置。區分隔離測試與正式驗收，證據不得含憑證或私人請求內容。
+- 同日工作可整合，只更新受影響的條目並保留既有紀錄。略過一般操作與無實質開發修改的對話，規劃不可列為已完成。
 
 ## 提交與 PR 規範
 
