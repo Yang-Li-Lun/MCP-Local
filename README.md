@@ -168,3 +168,7 @@ py -3.13 -m venv .venv
 新增單一 `query_files`，保留原有 21 個工具輸入契約。先完整掃描再篩選、排序與分頁；預設只查 metadata，不讀取檔案內容。`sort_by="created_time", order="asc", limit=1` 查詢整個安全範圍最早建立的檔案。Windows 使用真正 creation time。格式、能力與 SHA-256 僅 opt-in，且只處理本頁。參數、游標及資源限制見 [格式讀取說明](docs/guides/格式讀取說明.md#query_files-批次-metadata-查詢)。
 
 正式桌面使用 WPF，來源先執行 `desktop/Build-Desktop.ps1` 建置（需 .NET 10 SDK（Windows x64））；部署包含桌面成品。既有 VBS／EXE／登入入口維持相容，沒有 Tkinter fallback。[WPF 建置、整合邊界與隔離驗證](desktop/README.md)。
+
+## 安全中心入口
+
+WPF 第六頁「安全中心」提供獨立政策、本機限時主機授權、簽章本機通訊、敏感規則、真正 MCP 回傳防護及安全事件。首次升級預設關閉；啟用需本機明確確認，不新增遠端授權工具。操作與限制見[安全中心使用說明](docs/guides/安全中心使用說明.md)及[架構規格](docs/architecture/安全中心.md)。

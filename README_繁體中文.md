@@ -187,3 +187,7 @@ GUI 儲存與背景控制透過單一工作佇列完成，儲存中重複提交�
 新增單一 `query_files`，保留原有 21 個工具輸入契約。先完整掃描再篩選、排序與分頁；預設只查 metadata，不讀取檔案內容。`sort_by="created_time", order="asc", limit=1` 查詢整個安全範圍最早建立的檔案。Windows 使用真正 creation time。格式、能力與 SHA-256 僅 opt-in，且只處理本頁。參數、游標及資源限制見 [格式讀取說明](docs/guides/格式讀取說明.md#query_files-批次-metadata-查詢)。
 
 正式桌面使用 WPF，來源先執行 `desktop/Build-Desktop.ps1` 建置（需 .NET 10 SDK（Windows x64））；部署包含桌面成品。既有 VBS／EXE／登入入口維持相容，沒有 Tkinter fallback。[WPF 建置、整合邊界與隔離驗證](desktop/README.md)。
+
+## 安全中心
+
+WPF 第六頁提供獨立安全政策 v1、本機限時授權、簽章本機通訊、敏感規則、真正 MCP 回傳遮罩／阻擋及安全事件。舊安裝缺檔預設關閉；啟用需本機確認，三模式工具契約不變。完整操作及限制見[安全中心使用說明](docs/guides/安全中心使用說明.md)。

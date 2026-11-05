@@ -18,6 +18,7 @@
 | 文件 | 用途 |
 | --- | --- |
 | [介面使用說明](guides/介面使用說明.md) | GUI、系統匣、連線與權限選項 |
+| [安全中心使用說明](guides/安全中心使用說明.md) | 獨立政策、本機限時授權、敏感規則、回傳防護與安全事件 |
 | [自啟動與優化說明](guides/自啟動與優化說明.md) | 自啟動、重連、保存與效能工具；保留的舊版本段落依文內更新註記閱讀，現行操作以介面說明及 README 為入口 |
 | [格式讀取說明](guides/格式讀取說明.md) | 格式能力、工具參數、安全限制與 query_files |
 | [圖片讀取說明](guides/圖片讀取說明.md) | 原生圖片回應與靜態解碼邊界 |
@@ -28,6 +29,7 @@
 | 文件 | 用途 |
 | --- | --- |
 | [權限模式規格](architecture/完整控制模式.md) | 三模式架構、設定切換、VM／受信任主機邊界及驗收限制；保留原檔名 |
+| [安全中心架構](architecture/安全中心.md) | 本機 authority、簽章通訊、最後回傳邊界與 fail-closed 規則 |
 | [唯讀工具契約](../contracts/tool-contract.json) | 22 個唯讀工具快照 |
 | [開發控制工具契約](../contracts/tool-contract-developer-control.json) | 34 個開發控制工具快照 |
 | [主機控制工具契約](../contracts/tool-contract-host-control.json) | 36 個主機控制工具快照 |

@@ -115,7 +115,17 @@ Python 3.10+ 保留相容性；完整 TOML／SQLite 解析需要 Python 3.11+、
 - 設定版本 8，MCP 契約為 13（服務 2026.10.06.1；唯讀 22／開發控制 34／主機控制 36 個註冊工具）；不保存 `developer_toolchains`；從可信安裝子目錄與實際 executable 自動偵測，工具鏈唯讀，無額外工具仍可用 VM 內建 PowerShell。舊個別排除不可因 GUI 簡化而刪除。
 - Restore guard 不接收金鑰、不加入 Connection Job；回復失敗需保留日誌，不能宣稱已還原。
 
-## WPF 桌面回歸
+## 安全中心
+
+- 六個安全模組為 `policy.py`、`host_authorization.py`、`local_channel.py`、`sensitive_detector.py`、`response_guard.py`、`security_audit.py`，由 `security_center.py` 協調；WPF 第六頁管理實際後端，沿用私有 Python 管線。
+- 政策 v1 與連線設定 v8 獨立；舊安裝缺檔預設 OFF，未知版本、損毀及已存在政策遺失不得降級。三模式 MCP 22／34／36 工具契約不變，不新增遠端授權工具。
+- 本機授權必須經 WPF 本機確認；Ed25519 私鑰不得傳入 MCP 或持久化。命令與 stdin 在真正執行前核對期限及健康狀態。通訊不明確時拒絕新命令、終止主機 Session 並回報確認結果；恢復不得延長授權。
+- 回傳 guard 必須保留在 MCP 真正送出邊界；文字、結構化結果、Session、錯誤與通知皆須涵蓋。二進位、超限及不完整資料不得宣稱安全；受保護 Session 輸出須在完整 buffer 檢查後才分頁。
+- 安全事件不收敏感原文，與原始請求監控分離；保留遺失／截斷、鏈完整性及敏感輸入提示。不得將同帳戶軟體機制稱為憑證沙箱，或將 MCP 回傳檢查稱為完整網路防外洩。
+- 安全回歸只用暫存政策與合成資料；`SecurityChecks` 的通訊 peer 是替身，不是正式通道驗收。隔離桌面封裝使用 `build_release.py --desktop-artifacts <隔離成品>`，須核對目前來源與逐檔成品雜湊。
+- 詳見 `docs/architecture/安全中心.md` 及 `docs/guides/安全中心使用說明.md`。
+
+## WPF 桌面驗證入口
 
 - 唯一桌面位於 `desktop/wpf/`；`desktop/Build-Desktop.ps1` 離線建置至 `desktop/runtime/`，不加入 Git。
 - `tools/verification/verify_desktop.py --output-dir <新目錄>` 驗證實際 WPF 控制項與私有 Python 管線；fixture 使用合成 DPAPI／Job，排程及電源須為替身。

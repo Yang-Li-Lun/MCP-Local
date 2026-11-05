@@ -64,16 +64,20 @@ internal static class DesktopReliabilityChecks
         for (int i = 0; i < 80 && !window.Source.Connected; i++) { await Task.Delay(50); await window.Poll(); }
         window.OpenMonitor(); await Task.Delay(100); window.Hide();
         long lost = window.Source.Snapshot.Diagnostics.LostEvents;
-        // Four events / 100ms, below the original 16-slot channel capacity at 200ms drain.
-        // No frontend monitor query runs during this burst.
+        // No frontend monitor query runs during this controlled burst. Collection
+        // is asynchronous; verify completion separately from event loss.
         for (int batch = 0; batch < 8; batch++)
         {
             for (int i = 0; i < 4; i++) await backend.Send("fixture_emit", new { number = batch * 4 + i });
             await Task.Delay(100);
         }
         await Task.Delay(250); await window.Poll();
+        for (int i = 0; i < 20 && window.Source.Snapshot.Records.Count(r => r.Id.StartsWith("live-")) < 32 &&
+                window.Source.Snapshot.Diagnostics.LostEvents == lost; i++)
+        { await Task.Delay(100); await window.Poll(); }
         check(window.Source.Snapshot.Records.Count(r => r.Id.StartsWith("live-")) == 32,
-            "hidden main window keeps collecting all 32 events without frontend polling");
+            "hidden main window keeps collecting all 32 events without frontend polling during burst; observed=" +
+            window.Source.Snapshot.Records.Count(r => r.Id.StartsWith("live-")) + ", lost=" + window.Source.Snapshot.Diagnostics.LostEvents);
         check(window.Source.Snapshot.Diagnostics.LostEvents == lost, "unchanged collection cadence adds no event loss in controlled burst");
         check(window.DetachedMonitor!.Rows.Count(r => r.Id.StartsWith("live-")) == 32, "detached monitor updates while main window is hidden");
         window.Show(); await window.Run("stop");

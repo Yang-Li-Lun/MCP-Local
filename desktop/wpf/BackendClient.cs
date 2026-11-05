@@ -21,7 +21,7 @@ internal sealed class BackendClient : IDisposable
     internal bool OperationUnconfirmed { get; private set; }
     internal string? OperationError { get; private set; }
     internal event Action? OperationChanged;
-    private static bool IsQuery(string command) => command is "hello" or "state" or "monitor" or "detail" or "export" or "monitor_search" or "diagnostics";
+    private static bool IsQuery(string command) => command is "hello" or "state" or "monitor" or "detail" or "export" or "monitor_search" or "diagnostics" or "security_state" or "security_events" or "security_detail" or "security_export" or "security_defaults" or "security_detect" or "fixture_counts";
     public event Action<JsonElement>? Event;
     public event Action? Disconnected;
     public bool IsFixture { get; }
@@ -48,6 +48,7 @@ internal sealed class BackendClient : IDisposable
         if (fixtureNativeTray) info.ArgumentList.Add("--fixture-native-tray");
         // Never forward ambient credential or old ephemeral channel capabilities.
         info.Environment.Remove("CONTROL_PLANE_API_KEY"); info.Environment.Remove("MCP_LOCAL_REQUEST_MONITOR");
+        info.Environment.Remove("MCP_LOCAL_SECURITY_CHANNEL");
         info.Environment.Remove("PYTHONPATH"); info.Environment["PYTHONNOUSERSITE"] = "1";
         process = Process.Start(info) ?? throw new IOException("無法啟動桌面後端。");
     }

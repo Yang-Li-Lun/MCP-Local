@@ -59,7 +59,7 @@ internal static class DesktopChecks
         await window.Ready;
         await Until(() => !window.LastState.GetProperty("busy").GetBoolean());
         Check(window.Tabs.Items.Cast<TabItem>().Select(t => t.Header.ToString()).SequenceEqual(
-            new[] { "連線設定", "進階讀取設定", "外觀", "權限模式", "請求監控" }), "five complete desktop pages");
+            new[] { "連線設定", "進階讀取", "外觀", "權限模式", "請求監控", "安全中心" }), "six complete desktop pages");
         Check(!window.LastState.GetRawText().Contains("synthetic-fixture-key"), "saved DPAPI secret is not sent to WPF");
         window.Tunnel.Text = "tunnel_wpf_changed";
         await window.Run("save", includeForm: true);
@@ -190,6 +190,7 @@ internal static class DesktopChecks
         Check(!window.Source.Connected, "connection stop revokes monitoring");
         window.Source.Clear(); await Until(() => window.Source.Snapshot.Records.Count == 0);
         Check(window.Monitor.Selected is null, "clear removes selection and payload");
+        await SecurityChecks.Run(window, backend, fixture, report, Check);
         await DesktopReliabilityChecks.Run(window, backend, Check);
         JsonData.WriteNew(report, JsonSerializer.Serialize(new { state = "PASS", checks, fixture_only = true,
             real_dpapi_and_job = true, production_credentials = "NOT_READ", scheduler = "MOCKED", power = "MOCKED",

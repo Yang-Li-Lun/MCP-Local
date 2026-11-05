@@ -40,6 +40,7 @@ class HostProcess:
         self.workspace = workspace
         self._handle = self.job = self.stdin = self.stdout = None
         self.pid = None
+        self.authorize_start = None
         self.verify_current_token(w.HANDLE(-1))
 
     def verify_current_token(self, process: w.HANDLE) -> None:
@@ -131,6 +132,8 @@ class HostProcess:
             handles.remove(out_read)
             self.stdin = os.fdopen(msvcrt.open_osfhandle(in_write.value, os.O_WRONLY | os.O_BINARY), 'wb', buffering=0)
             handles.remove(in_write)
+            if self.authorize_start:
+                self.authorize_start()
             if kernel.ResumeThread(thread) == 0xffffffff:
                 raise c.WinError(c.get_last_error())
         except BaseException:

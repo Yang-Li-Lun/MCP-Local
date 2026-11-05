@@ -2,6 +2,24 @@
 
 日期採台北時間，按日期記錄已完成的里程碑，附上可核對的提交或驗收報告。隔離驗證與正式驗收分開記錄。
 
+## 2026-11-06｜安全中心滾輪與進階讀取名稱
+
+- 修正安全中心巢狀清單及輸出區在無法繼續捲動時攔截頁面滾輪；內部內容仍可捲動時保留自身操作，並容許邊界浮點誤差。導覽及頁面標題由「進階讀取設定」改為「進階讀取」，同步更新介面說明。
+- 使用既有 .NET 10 SDK 隔離建置，0 警告／0 錯誤；WPF 自測 100 項及合成 fixture 整合 404 項通過，涵蓋頁面、清單、輸出區與上下邊界的模擬滾輪事件；fixture 程序退出及清理通過。證據：`reports/validation/security-scroll-final-20261106/summary.json`。修正前清單事件攔截及邊界浮點誤差的失敗結果分別保留於 `security-scroll-nested-baseline-20261106/` 與 `security-scroll-diagnostics-20261106/`。
+- 新版隔離桌面成品位於 `reports/validation/security-scroll-probe-20261106/app/`；未替換正式 `desktop/runtime/` 或重啟正式 APP／連線。實體滑鼠人工操作、正式 Tunnel 及遠端驗收未執行。
+
+## 2026-11-06｜MCP-Local Security Center
+
+- 完成獨立安全政策 v1、限時主機授權、簽章本機共享記憶體通訊、敏感規則、MCP 最後送出回傳防護與 metadata 安全事件；由 `security_center.py` 協調。WPF 第六頁連接私有 Python 管線，提供草稿／已儲存／執行層確認、規則編輯及合成測試、本機授權與撤銷、診斷與恢復、事件篩選／詳情／匯出／受控清除。
+- 舊安裝政策缺檔預設 OFF，不自動寫入或啟用。啟用後主機命令與 stdin 必須有健康通訊及限時授權；到期可終止或保留至原期限，通訊失效要求停止主機 Job，未確認停止維持異常。恢復不授權，也不能接受外部改寫的停用政策。政策 OFF 的通訊診斷失敗不改寫既有工具回傳或阻擋既有命令。三模式 22／34／36 及四份 MCP 契約原件不變，沒有新增遠端授權工具。
+- 回傳檢查涵蓋文字 JSON、structuredContent、Session、錯誤與通知；二進位、超限、未知值及不完整 buffer 拒絕。受保護 Session 執行中輸出暫存，結束後先完整檢查再分頁。安全事件只保存分類、風險、時間、ID、計數與清除鏈錨點；原始請求監控保留敏感輸入提示及證據，觀察 guard 處理後的回應。不宣稱同帳戶憑證隔離或完整網路防外洩。
+- 完整離線隔離回歸：503 項，500 通過、3 項原生 AppContainer 測試按離線政策 skip，0 failures／errors。後續受影響的來源／封裝／橋接等 44 項定向驗證通過；最終安全中心 23 項全部通過，涵蓋真正 STDIO 三模式、簽章／過期／撤銷／恢復／外部政策降級拒絕、Session 完整輸出、稽核缺口及實際 PowerShell／Python／Git。147 個 Python 檔案語法解析、`pip check` 及入口 `py_compile` 通過。全套與各次定向結果分開保留，不把早期全套結果改寫成後續全套重跑。
+- 最終 .NET 10 隔離建置 0 warnings／errors；WPF 監控自測 100 項通過，最終實際控制項／私有管線整合 398 項通過。深色、淺色及高對比截圖檢視發現並修正安全中心 UserControl 前景繼承，加入實際顏色斷言。可靠性驗證的 fixture 計數歸為唯讀查詢，突發監控改為等待有界收集完成後仍核對全部 32 筆及零遺失；早期逾時／收集斷言失敗報告保留。隔離 fixture 退出與清理通過。
+- 標準 release STDIO：22 工具、47 次呼叫通過，合成來源內容／mtime／清冊未變；access-mode STDIO：62 次呼叫，三模式 discovery、拒絕路徑、主機父子 Job 結束通過。真實 Windows Sandbox VM 與 AppContainer 原生整合未執行，不能由替身推論通過。
+- 封裝白名單與完整來源清單加入模組、UI、測試及文件。新增 `--desktop-artifacts`，核對目前來源識別與成品雜湊後封裝，不更新正式 runtime；修正建置腳本為 UTF-8 BOM，Windows PowerShell 5.1 語法解析通過。最終精簡部署候選 151 檔解包與 SHA-256 核對通過，ZIP SHA-256：`2a0cd585c017fb9b72c1f928e16a54c8f7ed92c0237d82e068b7ad0ea292f605`。不含供應商成品、正式設定或憑證。
+- 證據入口：`reports/validation/security-center-final-20261106/REPORT.md`；完整回歸 `security-regression-20261106/engineering-results.json`；最終安全執行層 `security-compatibility-final-20261106/engineering-results.json`；最終 WPF `security-desktop-acceptance-20261106/summary.json`；STDIO 報告位於 `security-enforcement-final-20261106/`。初始受限 token／TEMP 被環境限制拒絕後，改用一般未提升 Windows 帳戶的同一隔離流程，未放寬保護或修改 ACL。
+- 來源基底 `b5f31a731e0893f3fdde51af33ad3ca6dcf0b1c6`，本次尚未提交、未 Push。未替換正式 `desktop/runtime/`、未重啟正式 APP／通道、未讀正式憑證、未操作 NCUE、正式共享範圍、排程、防火牆或系統電源。正式 Tunnel、人工多 DPI／多螢幕、鍵盤與輔助技術、真實長時間負載、OS 原生高對比切換及實際 FPS 未驗收。
+
 ## 2026-11-05｜系統匣權限模式切換
 
 - 後續依使用者要求，系統匣切換略過權限模式確認，正常切換保持主介面隱藏；設定頁仍保留原確認，錯誤處理保持原有提示。此決策取代下列初版系統匣權限確認行為。相同三模組隔離復測 58 項全數通過，新增斷言確認系統匣切換不呼叫確認視窗且主介面保持隱藏；139 個 Python 檔案語法解析及 pip check 通過。證據：`reports/validation/tray-silent-switch-20261105/engineering-results.json`。未重啟正式 APP，未執行人工／LIVE 驗收。

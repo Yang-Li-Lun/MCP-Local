@@ -161,7 +161,8 @@ class DeveloperSessions(Sessions):
             except BaseException:
                 process.close()
                 raise
-            session = Session(process, backend='windows_sandbox_vm', host_files_access='authorized_roots_and_readonly_toolchains')
+            session = Session(process, backend='windows_sandbox_vm', host_files_access='authorized_roots_and_readonly_toolchains',
+                              output_filter=self.output_filter)
             self.sessions[session.identifier] = session
             drain = threading.Thread(target=self._drain, args=(session,), daemon=True)
             monitor = threading.Thread(target=self._monitor, args=(session, drain, lifetime_seconds), daemon=True)

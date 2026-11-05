@@ -623,6 +623,15 @@ def main() -> None:
     # The local server never needs the Tunnel control-plane credential.
     os.environ.pop('CONTROL_PLANE_API_KEY', None)
     server = create_server(reader, args.access_mode)
+    from mcp_local.security_center import from_environment
+    from mcp_local.response_guard import install as install_response_guard
+    security = from_environment()
+    security.control, security.mode = server._full_control, args.access_mode
+    if security.control:
+        security.control.sessions.output_filter = security.session_output
+        if args.access_mode == 'host_control':
+            security.control.sessions.authorize_input = security.require_host
+    install_response_guard(server, security)
     from mcp_local import read_call_trace
     trace_request = read_call_trace.PROJECT / '.test-tmp/read-host-trace.request'
     if trace_request.exists():

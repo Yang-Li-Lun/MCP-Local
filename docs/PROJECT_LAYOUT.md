@@ -55,3 +55,7 @@
 歷史比較工具 `tools/benchmarks/benchmark_actual_performance.py` 需要本機保留的固定 `archive/backups/` 快照與另行授權的共享根；乾淨來源不含該快照，工具會拒絕執行。其路徑隔離回歸使用合成 fixture，不依賴備份原件。
 
 歷史報告與雜湊清單中的原始路徑保留當時語意；查找搬移後檔案請使用工程報告中的 `moves.json`。搬移不等於刪除，歷史驗證結果也不等於現行版本重新通過。
+
+## 安全控制層
+
+安全中心政策與連線設定獨立。`mcp_local/policy.py`、`host_authorization.py`、`local_channel.py`、`sensitive_detector.py`、`response_guard.py`、`security_audit.py` 由 `security_center.py` 協調，`desktop/wpf/SecurityCenterView.cs` 提供第六頁實際操作。`SecurityChecks.cs` 與 `tests/test_security_center.py` 僅用於隔離合成驗證。完整資料流見[安全中心架構](architecture/安全中心.md)。

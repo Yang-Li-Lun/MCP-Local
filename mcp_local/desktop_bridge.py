@@ -215,6 +215,8 @@ class DesktopApi:
         if command == 'diagnostics':
             from mcp_local.desktop_identity import diagnostics
             return diagnostics()
+        if command.startswith('security_'):
+            return self.security_dispatch(command, args)
         if command == 'edit':
             self.set_form(args['form'])
         elif command in ('save', 'start', 'restart'):
@@ -249,6 +251,53 @@ class DesktopApi:
         else:
             raise ValueError('不支援的桌面操作。')
         return self.state()
+
+    def security_dispatch(self, command: str, args: dict) -> dict:
+        center = self.controller.security
+        if center is None:
+            raise ValueError('SECURITY_UNAVAILABLE：安全中心尚未建立。')
+        if command == 'security_state':
+            return center.snapshot()
+        if command == 'security_defaults':
+            from mcp_local.policy import defaults
+            return {'policy': defaults(), 'draft_only': True}
+        if command == 'security_preview':
+            return center.preview(args['policy'], args.get('sample', 'credentials'))
+        if command == 'security_detect':
+            from mcp_local.policy import normalize
+            from mcp_local.sensitive_detector import SensitiveDetector, SYNTHETIC
+            policy = normalize(args['policy'])
+            masked, findings = SensitiveDetector(policy).inspect(SYNTHETIC)
+            return dict(enabled=policy['detector_enabled'], synthetic_only=True, findings=findings, preview=masked)
+        if command == 'security_events':
+            return center.audit.query(args.get('kind', ''), args.get('risk', ''), args.get('offset', 0))
+        if command == 'security_detail':
+            rows = center.audit.read()
+            return {'row': next((row for row in rows if row['event']['id'] == args.get('id')), None)}
+        if command == 'security_export':
+            return center.audit.export()
+        confirmations = {
+            'security_save': '儲存此安全政策並套用至本次連線？所有現有主機限時授權會撤銷。啟用防護會遮罩或阻擋回傳，執行中輸出暫存至結束後才可檢查。',
+            'security_grant': '由您在本機授予主機命令限時執行權限？這不是憑證沙箱；受信任命令具有目前 Windows 使用者權限。',
+            'security_revoke': '立即撤銷主機命令授權？既有 Session 依已儲存政策終止或執行至原期限；不再接受互動輸入。',
+            'security_recover': '重新驗證政策、事件及本機通訊？授權保持撤銷，必須另行本機核准。損毀或遺失原檔不會自動覆寫。',
+            'security_clear': '清除目前已檢視的安全事件？請先匯出必要證據；原始請求監控不受此操作影響。',
+        }
+        if command not in confirmations:
+            raise ValueError('SECURITY_COMMAND：不支援的安全操作。')
+        if not self.controller.dialogs.askyesno('安全中心｜本機確認', confirmations[command]):
+            raise ValueError('SECURITY_CANCELLED：本機未確認，未執行操作。')
+        if command == 'security_save':
+            return center.save(args['policy'], args['expected_revision'])
+        if command == 'security_grant':
+            return center.grant(args['minutes'])
+        if command == 'security_revoke':
+            return center.revoke()
+        if command == 'security_recover':
+            return center.recover()
+        with center.lock:
+            center.audit.clear(args['expected_revision'], args['confirmation'])
+        return center.audit.query()
 
 
 def main() -> int:
@@ -300,6 +349,9 @@ def main() -> int:
             from mcp_local.desktop_controller import DesktopController
             controller = DesktopController(Scheduler(pipe.emit), settings, store, startup=args.startup,
                 dialogs=PipeDialogs(pipe), tray_factory=tray)
+            from mcp_local.security_center import SecurityCenter
+            from mcp_local.connection_settings import CONFIG_DIR
+            controller.security = SecurityCenter(args.fixture if args.fixture else CONFIG_DIR)
             pipe.notify = controller.wake_event.set
             if editable:
                 controller.settings_revision = editable.revision if editable.revision is not None else ''
@@ -362,6 +414,14 @@ def main() -> int:
                         command = request['command']
                         if args.fixture and command == 'fixture_counts':
                             result = dict(fixture_counts)
+                        elif args.fixture and command == 'fixture_security_peer':
+                            from mcp_local.security_center import SecurityRuntime
+                            from mcp_local.local_channel import ENV_NAME
+                            peer = SecurityRuntime(args.fixture, controller.security.environment()[ENV_NAME])
+                            peer.mode = 'host_control'  # Synthetic peer; no host process is created.
+                            peer.start()
+                            stack.callback(peer.close)
+                            result = {'synthetic_only': True}
                         elif args.fixture and command == 'fixture_emit':
                             m = controller.request_monitor
                             number = request.get('args', {}).get('number', 0)
@@ -401,6 +461,8 @@ def main() -> int:
                 if controller.connection.thread:
                     controller.connection.thread.join(timeout=15)
                 controller.request_monitor.close()
+                if controller.security:
+                    controller.security.close()
                 if not controller.finished:
                     controller.tray.close()
                 controller.wake_event.close()

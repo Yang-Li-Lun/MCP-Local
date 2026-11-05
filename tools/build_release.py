@@ -63,6 +63,13 @@ mcp_local/power_windows.py
 mcp_local/reader_settings.py
 mcp_local/safe_logging.py
 mcp_local/security_policy.py
+mcp_local/policy.py
+mcp_local/host_authorization.py
+mcp_local/local_channel.py
+mcp_local/sensitive_detector.py
+mcp_local/response_guard.py
+mcp_local/security_audit.py
+mcp_local/security_center.py
 mcp_local/snapshot_cache.py
 mcp_local/stream_read.py
 mcp_local/stream_search.py
@@ -125,6 +132,8 @@ local_files_gui.py
 connection_cli.py
 autostart.py
 docs/PROJECT_LAYOUT.md
+docs/architecture/安全中心.md
+docs/guides/安全中心使用說明.md
 desktop/.gitignore
 desktop/README.md
 desktop/DESIGN.md
@@ -135,6 +144,8 @@ desktop/wpf/NuGet.Config
 desktop/wpf/McpLocal.Desktop.csproj
 desktop/wpf/Program.cs
 desktop/wpf/DesktopWindow.cs
+desktop/wpf/SecurityCenterView.cs
+desktop/wpf/SecurityChecks.cs
 desktop/wpf/DesktopChecks.cs
 desktop/wpf/BackendClient.cs
 desktop/wpf/BuildIdentity.cs
@@ -232,6 +243,26 @@ def verify_package(package: Path) -> dict:
     return dict(files=len(expected), sha256=sha256(package.read_bytes()), unpack_verified=True)
 
 
+def desktop_artifacts(directory: Path) -> dict[str, bytes]:
+    """只接受目前來源建置的成品；隔離封裝不更動正式 runtime。"""
+    from tools.desktop_build_identity import source_files, digest
+    manifest = json.loads((directory / 'desktop-build.json').read_text(encoding='utf-8'))
+    backend = source_files(ROOT)
+    frontend = {p.relative_to(ROOT).as_posix(): sha256(p.read_bytes())
+                for p in sorted((ROOT / 'desktop/wpf').iterdir())
+                if p.is_file() and p.suffix in ('.cs', '.xaml', '.csproj', '.Config')}
+    if manifest['backend_build_id'] != digest(backend) or manifest['frontend_build_id'] != digest(frontend):
+        raise ValueError('隔離桌面來源識別不符；請重新建置。')
+    result = {}
+    for name in DESKTOP_ARTIFACTS:
+        path = directory / Path(name).name
+        data = path.read_bytes()
+        if path.name != 'desktop-build.json' and sha256(data) != manifest['artifacts'].get(path.name):
+            raise ValueError('隔離桌面成品雜湊不符。')
+        result[name] = data
+    return result
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--vendor-archive', type=Path,
@@ -239,18 +270,23 @@ def main() -> int:
     parser.add_argument('--verify', type=Path, help='只驗證既有封包及解包後 SHA-256')
     parser.add_argument('--output-dir', type=Path, default=ROOT / 'release',
                         help='新封裝輸出目錄；拒絕覆寫既有 ZIP')
+    parser.add_argument('--desktop-artifacts', type=Path,
+                        help='使用已隔離建置的桌面目錄；必須驗證來源識別及每個成品 SHA-256，不更新正式 runtime')
     args = parser.parse_args()
     if args.verify:
         print(json.dumps(verify_package(args.verify)))
         return 0
-    # Build from the current reviewed sources; never package a stale GUI binary.
-    built = subprocess.run(['powershell.exe', '-NoProfile', '-File', str(ROOT / 'desktop/Build-Desktop.ps1')],
-                           cwd=ROOT, capture_output=True, timeout=120,
-                           creationflags=subprocess.CREATE_NO_WINDOW)
-    if built.returncode:
-        raise RuntimeError('WPF 建置失敗，未建立部署封包。' + built.stdout.decode(errors='replace') + built.stderr.decode(errors='replace'))
+    desktop_files = desktop_artifacts(args.desktop_artifacts) if args.desktop_artifacts else None
+    if desktop_files is None:
+        # Build from the current reviewed sources; never package a stale GUI binary.
+        built = subprocess.run(['powershell.exe', '-NoProfile', '-File', str(ROOT / 'desktop/Build-Desktop.ps1')],
+                               cwd=ROOT, capture_output=True, timeout=120,
+                               creationflags=subprocess.CREATE_NO_WINDOW)
+        if built.returncode:
+            raise RuntimeError('WPF 建置失敗，未建立部署封包。' + built.stdout.decode(errors='replace') + built.stderr.decode(errors='replace'))
+        desktop_files = {name: source_bytes(name) for name in DESKTOP_ARTIFACTS}
     files = {name: source_bytes(name) for name in PAYLOAD}
-    files.update({name: source_bytes(name) for name in DESKTOP_ARTIFACTS})
+    files.update(desktop_files)
     if args.vendor_archive:
         files.update(vendor_bytes(args.vendor_archive))
     version = re.search(r"SERVICE_VERSION = '([^']+)'", files['mcp_local/tool_contract.py'].decode())[1]

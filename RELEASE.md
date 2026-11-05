@@ -117,3 +117,10 @@ query_files 在精簡封包中包含 mcp_local/file_query.py；22-tool STDIO 會
 封裝不包含 Windows Sandbox App 或工具鏈；Sandbox 是目標電腦的前置條件；額外工具鏈由安全安裝子目錄自動偵測。
 部署時需保留所有白名單檔案；省略 access-mode 永遠是唯讀。
 正式 Secure MCP Tunnel discovery 與另一台實體 Windows 的驗收需另列結果，不可由本機 STDIO 推論。
+## 安全中心部署
+
+安全政策 v1、連線設定 v8 與 MCP 契約 13 分開管理。首次升級缺少 `security-policy.json` 時預設 OFF，不自動啟用或保存；政策損毀、未知版本或執行中遺失不得回退 OFF。請先閱讀[操作說明](docs/guides/安全中心使用說明.md)，在本機明確啟用並確認執行層回報。正式憑證與政策檔不放入來源或部署封包。
+
+隔離候選可使用既有 .NET 10 SDK 建置到專用目錄，再以 `build_release.py --desktop-artifacts <隔離成品目錄> --output-dir <新封包目錄>` 封裝。此參數核對目前 Python／WPF 來源識別與逐檔成品 SHA-256，拒絕過期或被修改的成品，不更新正式 `desktop/runtime/`。`Build-Desktop.ps1` 使用 UTF-8 BOM，Windows PowerShell 5.1 與 PowerShell 7 均可正確解碼繁體中文。
+
+正式部署須先由本機操作者正常停止原 APP／連線，確認 Session 清理完成，依既有部署規則替換同批來源與桌面成品後重開。不得在舊 APP 正執行時只換部分 Python 或 WPF 成品；不能將隔離 UI peer、STDIO 或 Job 驗證當作正式 Tunnel／原生 VM 或人工驗收。

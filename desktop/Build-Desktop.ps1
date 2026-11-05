@@ -1,4 +1,4 @@
-param([switch]$noBuild, [string]$OutputDirectory, [string]$IntermediateDirectory, [string]$DotnetPath = 'dotnet')
+﻿param([switch]$noBuild, [string]$OutputDirectory, [string]$IntermediateDirectory, [string]$DotnetPath = 'dotnet')
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $projectPath = Join-Path $PSScriptRoot 'wpf\McpLocal.Desktop.csproj'

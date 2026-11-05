@@ -15,6 +15,7 @@ internal sealed class DesktopWindow : Window
     private readonly BackendClient backend;
     internal readonly RemoteMonitorSource Source;
     internal readonly MonitorView Monitor;
+    internal readonly SecurityCenterView Security;
     internal readonly TabControl Tabs = new();
     internal readonly TextBox Tunnel = new();
     internal readonly ComboBox ThemeChoice = new() { ItemsSource = new[] { "跟隨 Windows", "淺色", "深色" }, SelectedIndex = 0, Width = 220, HorizontalAlignment = HorizontalAlignment.Left };
@@ -61,6 +62,7 @@ internal sealed class DesktopWindow : Window
     {
         this.backend = backend;
         Source = new RemoteMonitorSource(backend); Monitor = new MonitorView(Source);
+        Security = new SecurityCenterView(backend);
         Source.Changed += () => { Monitor.Refresh(); detachedMonitor?.Refresh(); };
         Monitor.DetachRequested += OpenMonitor;
         Title = backend.IsFixture ? "MCP-Local｜WPF 隔離整合驗證" : "MCP-Local｜連線與快捷設定";
@@ -152,8 +154,8 @@ internal sealed class DesktopWindow : Window
         Closed += (_, _) => { poll.Stop(); editDelay.Stop(); Monitor.Dispose(); detachedMonitor?.Dispose(); detachedWindow?.Close(); Source.Dispose(); backend.Dispose(); };
         PreviewKeyDown += async (_, e) =>
         {
-            if (e.Key == Key.S && Keyboard.Modifiers.HasFlag(ModifierKeys.Control)) { e.Handled = true; await Run("save", includeForm: true); }
-            if (Keyboard.Modifiers == ModifierKeys.Alt && e.SystemKey >= Key.D1 && e.SystemKey <= Key.D5)
+            if (e.Key == Key.S && Keyboard.Modifiers.HasFlag(ModifierKeys.Control)) { e.Handled = true; if (Tabs.SelectedIndex == 5) Security.Actions["save"].RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); else await Run("save", includeForm: true); }
+            if (Keyboard.Modifiers == ModifierKeys.Alt && e.SystemKey >= Key.D1 && e.SystemKey <= Key.D6)
             { Tabs.SelectedIndex = e.SystemKey - Key.D1; ((TabItem)Tabs.SelectedItem).Focus(); e.Handled = true; }
         };
         backend.Event += message => Dispatcher.BeginInvoke(() => HandleEvent(message));
@@ -217,7 +219,7 @@ internal sealed class DesktopWindow : Window
     }
     private void AddPage(string name, UIElement content)
     {
-        string glyph = name switch { "連線設定" => "\uE839", "進階讀取設定" => "\uE713", "外觀" => "\uE790", "權限模式" => "\uE72E", _ => "\uE9D9" };
+        string glyph = name switch { "連線設定" => "\uE839", "進階讀取" => "\uE713", "外觀" => "\uE790", "權限模式" => "\uE72E", "安全中心" => "\uEA18", _ => "\uE9D9" };
         Tabs.Items.Add(new TabItem { Header = name, Tag = glyph, Content = content });
     }
     private static void Label(Panel panel, string label)
@@ -231,7 +233,7 @@ internal sealed class DesktopWindow : Window
         {
             var hello = await backend.Send("hello");
             if (hello.GetProperty("protocol").GetInt32() != 1) throw new InvalidOperationException("桌面協定版本不符。");
-            var advanced = Page("進階讀取設定");
+            var advanced = Page("進階讀取");
             var capacity = DesignSystem.Card(advanced, "讀取與掃描上限");
             var numericGrid = new System.Windows.Controls.Primitives.UniformGrid { Columns = 2, Margin = new Thickness(0, 0, -16, 0) }; capacity.Children.Add(numericGrid);
             foreach (var field in hello.GetProperty("numbers").EnumerateObject())
@@ -295,6 +297,8 @@ internal sealed class DesktopWindow : Window
             access.Children.Add(accessStatus);
             var monitorPage = new DockPanel(); pageLayouts.Add(monitorPage); UpdatePageLayout();
             monitorPage.Children.Add(Monitor); AddPage("請求監控", monitorPage);
+            var securityPage = new Grid(); securityPage.Children.Add(Security); pageLayouts.Add(securityPage);
+            AddPage("安全中心", securityPage); UpdatePageLayout();
             ready = true; LastStateSuccess = DateTimeOffset.UtcNow; ApplyState(hello.GetProperty("state"), true);
             try { await Source.RefreshIdentity(); } catch (Exception error) { Source.SetHealth(error.Message); }
             UpdateSettingsActions();
@@ -365,6 +369,7 @@ internal sealed class DesktopWindow : Window
             catch (Exception error) { stateError = error.Message; }
             try { Source.Update(await backend.Send("monitor", new { since = Source.Version })); }
             catch (Exception error) { Source.SetHealth(error.Message); }
+            await Security.Poll();
             UpdateBackendStatus();
         }
         finally { polling = false; }

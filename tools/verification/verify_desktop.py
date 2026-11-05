@@ -80,6 +80,8 @@ def main(argv=None) -> int:
     parser.add_argument('--no-build', action='store_true')
     parser.add_argument('--executable', type=Path, help='使用指定的隔離建置；須搭配 --no-build')
     parser.add_argument('--benchmark', action='store_true')
+    parser.add_argument('--checks', nargs='+', choices=('self-test', 'integration-test'),
+                        default=['self-test', 'integration-test'], help='只復測受影響的隔離驗證階段')
     args = parser.parse_args(argv)
     if args.executable and not args.no_build:
         parser.error('--executable requires --no-build')
@@ -87,7 +89,7 @@ def main(argv=None) -> int:
     output.mkdir(parents=True, exist_ok=False)
     executable = args.executable.resolve() if args.executable else (
         ROOT / 'desktop/runtime/McpLocal.Desktop.exe' if args.no_build else output / 'app/McpLocal.Desktop.exe')
-    modes = ['self-test', 'integration-test'] + (['desktop-benchmark'] if args.benchmark else [])
+    modes = list(dict.fromkeys(args.checks)) + (['desktop-benchmark'] if args.benchmark else [])
     results = []
     summary = {'state': 'FAIL', 'results': results, 'executable': str(executable),
                'production_state': 'NOT_READ', 'production_connections': 'NOT_OPERATED',

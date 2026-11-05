@@ -120,6 +120,11 @@ def main():
     suite = (unittest.defaultTestLoader.loadTestsFromNames(args.tests) if args.tests
              else unittest.defaultTestLoader.discover('tests'))
     with ExitStack() as stack:
+        # New standalone servers load the independent safety policy. Redirect
+        # child-process LOCALAPPDATA to this test's own empty state, while the
+        # audit guard above continues protecting the real state directory.
+        isolated_state = stack.enter_context(tempfile.TemporaryDirectory(prefix='mcp-regression-state-'))
+        stack.enter_context(patch.dict(os.environ, {'LOCALAPPDATA': isolated_state}))
         if args.offline:
             suite = unittest.TestSuite(offline_suite(suite))
             stack.enter_context(patch('mcp_local.sandbox_windows.Sandbox.__init__', side_effect=RuntimeError('OFFLINE_NATIVE_BLOCKED')))

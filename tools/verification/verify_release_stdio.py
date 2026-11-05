@@ -89,7 +89,7 @@ def fixtures(root: Path) -> None:
 
 
 async def verify(root: Path, report: dict) -> None:
-    parameters = StdioServerParameters(command=sys.executable, args=[
+    parameters = StdioServerParameters(command=sys.executable, env={'LOCALAPPDATA': str(root.parent / (root.name + '-appdata'))}, args=[
         '-B', str((Path(__file__).resolve().parents[2] / 'local_files_mcp.py')), '--root', str(root)])
     async with stdio_client(parameters) as (read, write):
         async with ClientSession(read, write) as session:

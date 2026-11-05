@@ -70,10 +70,11 @@ def existing_tunnel() -> bool:
 
 class Connection:
     """背景執行連線流程，將狀態送回介面執行緒。"""
-    def __init__(self, stage_timeout: float = 60, *, notify=None, monitor=None):
+    def __init__(self, stage_timeout: float = 60, *, notify=None, monitor=None, security=None):
         from mcp_local.gui_tasks import WakeQueue
         self.events = WakeQueue(notify)
         self.monitor = monitor
+        self.security = security
         self.cancel = CancelEvent()
         self.lock = threading.Lock()
         self.job = None
@@ -104,6 +105,8 @@ class Connection:
             raise
 
     def _stop_monitor(self) -> None:
+        if self.security:
+            self.security.disconnect()
         if self.monitor:
             try:
                 self.monitor.disconnect()
@@ -138,6 +141,10 @@ class Connection:
             commands = build_commands(settings)
             self.error_kind = ConnectionErrorKind.START_FAILED
             environment = os.environ.copy()
+            from mcp_local.local_channel import ENV_NAME as SECURITY_ENV
+            environment.pop(SECURITY_ENV, None)
+            if self.security:
+                environment.update(self.security.environment())
             # Only this GUI's ephemeral channel is inherited. Never save it in a
             # Tunnel profile or accidentally reuse an ambient monitor capability.
             from mcp_local.request_monitor import ENV_NAME

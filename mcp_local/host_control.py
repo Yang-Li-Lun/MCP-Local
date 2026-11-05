@@ -22,6 +22,8 @@ class HostSessions(Sessions):
     def start_host(self, command: str, working_directory: str | None, root_id: str | None,
                    timeout_ms: int, lifetime_seconds: int) -> dict:
         self.require_mode()
+        if self.authorize_input:
+            self.authorize_input()
         if not command.strip() or '\0' in command or len(command) > 8192:
             raise ValueError('COMMAND_LIMIT：命令必須為 1 至 8192 字元。')
         _, cwd = self.files.checked_path(working_directory or '.', root_id)
@@ -36,12 +38,14 @@ class HostSessions(Sessions):
             if len(self.sessions) >= MAX_SESSIONS or sum(not s.done.is_set() for s in self.sessions.values()) >= MAX_ACTIVE:
                 raise ValueError('SESSION_LIMIT：session 名額已滿，請先關閉已完成的 session。')
             process = HostProcess(cwd)
+            process.authorize_start = self.authorize_input
             try:
                 process.start(command)
             except BaseException:
                 process.close()
                 raise
-            session = Session(process, backend='host_process', host_files_access='current_user_trusted_commands')
+            session = Session(process, backend='host_process', host_files_access='current_user_trusted_commands',
+                              output_filter=self.output_filter)
             self.sessions[session.identifier] = session
             drain = threading.Thread(target=self._drain, args=(session,), daemon=True)
             monitor = threading.Thread(target=self._monitor, args=(session, drain, lifetime_seconds), daemon=True)

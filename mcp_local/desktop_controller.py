@@ -48,6 +48,7 @@ class DesktopController:
         self.state = 'IDLE'
         self.active_access_mode = None
         self.request_monitor = Monitor()
+        self.security = None  # Private bridge owns the independent policy lifecycle.
         self.connection = Connection(notify=self.wake_event.set, monitor=self.request_monitor)
         self.tunnel = Value(settings['tunnel'], self.mark_dirty)
         self.hidden = Value(settings['start_hidden'], self.mark_dirty)
@@ -144,6 +145,8 @@ class DesktopController:
         if self.finished:
             return
         self.finished = True
+        if self.security:
+            self.security.close()
         self.request_monitor.close()
         if self.retry_timer is not None:
             self.window.after_cancel(self.retry_timer)
@@ -516,7 +519,7 @@ class DesktopController:
             self.window.after(50, self.launch)
             return
         # 每次連線使用獨立事件佇列，舊事件不會污染新連線。
-        self.connection = Connection(notify=self.wake_event.set, monitor=self.request_monitor)
+        self.connection = Connection(notify=self.wake_event.set, monitor=self.request_monitor, security=self.security)
         try:
             self.connection.start(self.settings.copy(), self.key.get().strip())
             from mcp_local.access_mode import MODE_LABELS

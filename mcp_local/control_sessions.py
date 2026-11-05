@@ -8,6 +8,7 @@ from pathlib import Path
 import threading
 import time
 import uuid
+from typing import Callable
 
 from mcp_local.access_mode import require_full_control
 from mcp_local.control_files import MAX_WRITE_BYTES
@@ -39,6 +40,7 @@ class Session:
     backend: str = 'windows_appcontainer'
     host_files_access: str = 'explicit_import_export_only'
     storage_root: Path | None = None
+    output_filter: Callable | None = None
 
     def append(self, text: str) -> None:
         with self.lock:
@@ -50,14 +52,17 @@ class Session:
 
     def view(self, offset: int = 0, length: int = 24000) -> dict:
         with self.lock:
-            actual = min(max(offset, self.dropped), self.dropped + len(self.output))
-            content = self.output[actual - self.dropped:actual - self.dropped + length]
+            output, security_status = self.output_filter(self) if self.output_filter and length else (self.output, 'disabled')
+            actual = min(max(offset, self.dropped), self.dropped + len(output))
+            content = output[actual - self.dropped:actual - self.dropped + length]
             result = dict(session_id=self.identifier, pid=self.sandbox.pid,
                         completed=self.done.is_set(), exit_code=self.exit_code,
                         reason=self.reason, output=content, offset=actual,
                         next_offset=actual + len(content), dropped_chars=self.dropped,
                         truncated=offset < self.dropped, sandbox=self.backend,
                         host_files_access=self.host_files_access)
+            if security_status != 'disabled':
+                result['security_output'] = security_status
             if self.backend == 'windows_sandbox_vm':
                 result.update(vm_id=self.sandbox.vm_id,
                               vm_stopped=self.sandbox.finished.is_set() and self.sandbox.vm_id is None
@@ -89,6 +94,8 @@ class Sessions:
         self.sessions: dict[str, Session] = {}
         self.lock = threading.RLock()
         self.closed = False
+        self.output_filter = None
+        self.authorize_input = None
 
     def require_mode(self) -> None:
         require_full_control(self.mode)
@@ -135,7 +142,7 @@ class Sessions:
             except BaseException:
                 sandbox.close()
                 raise
-            session = Session(sandbox, storage_root=sandbox.profile.parent)
+            session = Session(sandbox, storage_root=sandbox.profile.parent, output_filter=self.output_filter)
             self.sessions[session.identifier] = session
             drain = threading.Thread(target=self._drain, args=(session,), daemon=True)
             monitor = threading.Thread(target=self._monitor, args=(session, drain, lifetime_seconds), daemon=True)
@@ -195,6 +202,8 @@ class Sessions:
         return session.view(offset, length)
 
     def interact(self, identifier: str, text: str, close_stdin: bool) -> dict:
+        if self.authorize_input:
+            self.authorize_input()
         session = self.get(identifier)
         data = text.encode('utf-8')
         if len(data) > 4096:
@@ -207,6 +216,8 @@ class Sessions:
             failure = []
             def write():
                 try:
+                    if self.authorize_input:
+                        self.authorize_input()
                     session.sandbox.stdin.write(data)
                     if close_stdin:
                         session.sandbox.stdin.close()
