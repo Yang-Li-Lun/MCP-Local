@@ -15,6 +15,13 @@ internal static class SecurityChecks
         window.Tabs.SelectedIndex = 5; window.UpdateLayout();
         var view = window.Security;
         await Task.Delay(100); await view.Refresh();
+        check(view.Sections["overview"].IsVisible && view.Status.IsVisible && !view.Enabled.IsVisible, "security opens on overview with settings hidden");
+        check(view.Actions["grant_5"].IsEnabled && view.Actions["grant_10"].IsEnabled && view.Actions["grant_15"].IsEnabled, "quick durations use saved 15-minute default limit");
+        for (int i = 0; i < 40 && view.Recent.Text == "載入中…"; i++) await Task.Delay(50);
+        check(view.Recent.Text != "載入中…" && !view.Recent.Text.Contains("未確認"), "security overview loads recent events automatically");
+        view.Sections["settings"].RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        view.Advanced.IsExpanded = true; window.UpdateLayout(); await Task.Delay(60);
+        check(view.Enabled.IsVisible && view.Advanced.IsExpanded, "security settings and advanced controls are reachable");
         var pageScroll = (ScrollViewer)view.Content;
         pageScroll.ScrollToTop(); window.UpdateLayout();
         void Wheel(UIElement target, int delta)
@@ -23,7 +30,7 @@ internal static class SecurityChecks
             target.RaiseEvent(preview);
             if (!preview.Handled) target.RaiseEvent(new MouseWheelEventArgs(Mouse.PrimaryDevice, Environment.TickCount, delta) { RoutedEvent = Mouse.MouseWheelEvent });
         }
-        Wheel(view.Status, -120); await Task.Delay(60); window.UpdateLayout();
+        Wheel(view.Enabled, -120); await Task.Delay(60); window.UpdateLayout();
         check(pageScroll.ScrollableHeight > 0 && pageScroll.VerticalOffset > 0, "security page scrolls with mouse wheel");
         pageScroll.ScrollToTop(); window.UpdateLayout();
         var grid = DesignChecks.Children<DataGrid>(view).Single();
@@ -70,6 +77,7 @@ internal static class SecurityChecks
         await Click("defaults");
         check(view.Rules.Count == 5 && view.Dirty && !File.Exists(Path.Combine(fixture, "security-policy.json")), "security defaults restore does not silently save");
         view.Enabled.IsChecked = true;
+        view.Maximum.Text = "10";
         await Click("detect");
         check(view.PreviewText.Contains("findings") && !view.PreviewText.Contains("synthetic_password_123"), "security detector tests synthetic data through private Python pipe");
         await Click("preview");
@@ -83,20 +91,38 @@ internal static class SecurityChecks
             check(saved.RootElement.GetProperty("enabled").GetBoolean() && !view.Dirty, "security policy persisted independently and draft cleared on matching success");
         await backend.Send("fixture_security_peer");
         await Until(() => view.CurrentState.GetProperty("effective").GetString() == "confirmed");
-        view.Minutes.Text = "1";
-        await Click("grant");
-        check(view.CurrentState.GetProperty("authorization").GetProperty("remaining_seconds").GetInt32() > 0, "security local grant reaches authority and displays remaining time");
+        view.SelectSection("overview"); window.UpdateLayout();
+        check(view.Actions["grant_5"].IsEnabled && view.Actions["grant_10"].IsEnabled && !view.Actions["grant_15"].IsEnabled, "security quick grants respect saved maximum");
+        view.Maximum.Text = "15";
+        check(!view.Actions["grant_15"].IsEnabled && view.Dirty, "unsaved maximum cannot enable longer quick grants");
+        window.ConfirmFixture = _ => false;
+        await Click("grant_5");
+        check(!view.CurrentState.GetProperty("authorization").GetProperty("authorized").GetBoolean(), "security quick grant requires local confirmation");
+        window.ConfirmFixture = _ => true;
+        await Click("grant_10");
+        check(view.CurrentState.GetProperty("authorization").GetProperty("remaining_seconds").GetInt32() > 0, "security quick grant reaches authority");
         await Click("revoke");
         check(!view.CurrentState.GetProperty("authorization").GetProperty("authorized").GetBoolean(), "security immediate revoke reaches authority");
         await Click("diagnose"); await Click("recover");
         await Until(() => view.CurrentState.GetProperty("effective").GetString() == "confirmed");
         check(!view.CurrentState.GetProperty("authorization").GetProperty("authorized").GetBoolean(), "security recovery never grants or renews a lease");
-        await Click("events");
+        view.SelectSection("settings"); window.UpdateLayout();
+        view.Maximum.Text = "3"; await Click("save");
+        await Until(() => view.CurrentState.GetProperty("effective").GetString() == "confirmed");
+        view.SelectSection("overview"); window.UpdateLayout();
+        check(!view.Actions["grant_5"].IsEnabled && !view.Actions["grant_10"].IsEnabled && !view.Actions["grant_15"].IsEnabled, "all shortcuts disabled below five-minute saved maximum");
+        view.SelectSection("settings"); window.UpdateLayout();
+        view.Minutes.Text = "1"; await Click("grant");
+        check(view.CurrentState.GetProperty("authorization").GetProperty("authorized").GetBoolean(), "custom duration remains usable below five-minute maximum");
+        await Click("revoke");
+        view.SelectSection("events"); window.UpdateLayout();
+        for (int i = 0; i < 50 && view.Events.ItemsSource is null; i++) await Task.Delay(50);
+        check(view.Events.Items.Count > 0, "security events load automatically when opened");
         view.Events.SelectedIndex = 0;
         for (int i = 0; i < 30 && view.DetailText.Length == 0; i++) await Task.Delay(50);
-        check(view.DetailText.Contains("hash") && view.DetailText.Contains("event"), "security event selection loads verified detail from backend");
+        check(view.DetailText.Contains("hash") && view.EventDetail.Text.Contains("事件識別碼") && !view.EventDetail.Text.Contains("hash"), "security event detail is readable and raw data stays in advanced diagnostics");
         view.Risk.SelectedIndex = 1; await Click("events");
-        check(view.Events.Items.Count > 0 && view.Events.Items.Cast<object>().All(row => row.ToString()!.Contains("high")), "security risk filter affects backend query results");
+        check(view.Events.Items.Count > 0 && view.Events.Items.Cast<object>().All(row => row.ToString()!.Contains("高風險")), "security risk filter affects backend query results");
         view.Risk.SelectedIndex = 0; view.Kind.SelectedIndex = 4; await Click("events");
         check(view.Events.Items.Count == 0, "security kind filter returns no unrelated events");
         view.Kind.SelectedIndex = 0; await Click("events");
@@ -108,19 +134,25 @@ internal static class SecurityChecks
         view.ClearConfirmation.Text = "incorrect"; await Click("clear");
         check(view.Feedback.Text.Contains("SECURITY_AUDIT_CONFIRM"), "security clear rejects wrong confirmation text");
         await Click("events"); view.ClearConfirmation.Text = "清除安全事件"; await Click("clear");
-        var cleared = await backend.Send("security_events");
-        check(cleared.GetProperty("rows")[0].GetProperty("event").GetProperty("kind").GetString() == "audit_cleared", "security controlled clear preserves a boundary event");
+        check(view.Events.Items.Count > 0 && view.Events.Items[0].ToString()!.Contains("事件已清除"), "security controlled clear preserves a boundary event");
         foreach (string theme in new[] { "Light", "Dark", "HighContrast" })
         {
             if (theme == "HighContrast") DesignSystem.PreviewContrast(true); else DesignSystem.Apply(theme);
             window.Width = theme == "Dark" ? 660 : 1120; window.Height = 880;
-            window.UpdateLayout(); await Task.Delay(60);
+            view.SelectSection("overview"); window.UpdateLayout(); await Task.Delay(60);
             check(((SolidColorBrush)view.Status.Foreground).Color == ((SolidColorBrush)Application.Current.FindResource("TextPrimary")).Color,
                 "security live status uses current accessible foreground in " + theme);
             DesignChecks.Capture(window, Path.Combine(Path.GetDirectoryName(report)!, "security-" + theme + ".png"));
-            check(view.ActualWidth > 300 && view.Actions["save"].ActualWidth > 60, "security functional page renders in " + theme);
+            check(view.ActualWidth > 300 && view.Actions["grant_5"].ActualWidth > 30, "security overview renders in " + theme);
+            view.SelectSection("settings"); window.UpdateLayout(); await Task.Delay(60);
+            check(view.Actions["save"].IsVisible && view.Actions["save"].ActualWidth > 60, "security settings render in " + theme);
+            DesignChecks.Capture(window, Path.Combine(Path.GetDirectoryName(report)!, "security-settings-" + theme + ".png"));
+            view.SelectSection("events"); window.UpdateLayout(); await Task.Delay(60);
+            check(view.Events.IsVisible && view.Events.ActualWidth > 150, "security events render in " + theme);
+            DesignChecks.Capture(window, Path.Combine(Path.GetDirectoryName(report)!, "security-events-" + theme + ".png"));
         }
         DesignSystem.Apply("System"); window.Width = 1120;
+        view.SelectSection("settings"); window.UpdateLayout();
         await Click("defaults"); await Click("save");
         window.Tabs.SelectedIndex = 4;
     }
