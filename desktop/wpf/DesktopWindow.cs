@@ -339,6 +339,7 @@ internal sealed class DesktopWindow : Window
     internal async Task Run(string command, object? args = null, bool includeForm = false, bool hydrate = false)
     {
         if (!ready) return;
+        if (command == "quit" && !Security.ConfirmDiscard()) return;
         long version = generation;
         try
         {
