@@ -21,7 +21,7 @@ def check_desktop_runtime() -> None:
         raise OSError(message)
     try:
         result = subprocess.run([executable, '--list-runtimes'], capture_output=True, text=True,
-                                timeout=5, creationflags=subprocess.CREATE_NO_WINDOW)
+                                timeout=20, creationflags=subprocess.CREATE_NO_WINDOW)
         frameworks = {line.split()[0] for line in result.stdout.splitlines()
                       if len(line.split()) > 1 and line.split()[1].startswith('10.0.') and '-' not in line.split()[1]}
         if result.returncode or not {'Microsoft.NETCore.App', 'Microsoft.WindowsDesktop.App'} <= frameworks:
