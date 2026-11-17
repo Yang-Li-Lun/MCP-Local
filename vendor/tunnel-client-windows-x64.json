@@ -1,0 +1,16 @@
+{
+  "archive": {
+    "name": "tunnel-client-v0.0.14-windows-amd64.zip",
+    "bytes": 27824988,
+    "sha256": "784ab8da7b5a88f0109f1fd8aaf0a1c86067430b896dddf307ef7e3cc49fa1a5"
+  },
+  "files": {
+    "tunnel-client.exe": { "bytes": 21826048, "sha256": "fcc85a69ec0ad82518e4f8964f60c45e31787957782a0fc9c1b0c44e82d61b9b" },
+    "cloudflared.exe": { "bytes": 39751680, "sha256": "cd0bc49aec24d0d62a37b6e842dad46000f7b401f6167b4cbace4e170819c9a2" },
+    "cloudflared-manifest.json": { "bytes": 1038, "sha256": "80003d8a8f38d6a0bd74aabc096e9f99a6e8fad8ed4da699e26a8231fa453aa1" },
+    "LICENSE": { "bytes": 10758, "sha256": "f4c1d7ba32ef5bcf5cf03e2eefec5825ebafedf50fa330a36700a49c605c1ef4" },
+    "NOTICE": { "bytes": 551, "sha256": "1364c020d86ecf948b78b7c655175032068203d13aece70fb0bfe112d7802dc2" },
+    "tunnel-client-v0.0.14-windows-amd64-licenses.txt": { "bytes": 13456, "sha256": "ef3c7083e248bb7ccc1a8d2757afbc6e53a1d22ec686ee461b677c4e43699ae4" },
+    "tunnel-client-v0.0.14-windows-amd64.spdx.json": { "bytes": 234305, "sha256": "9b8329305ae13e317fac2bd9284232abd959c1597dad50e7019104b194e76b76" }
+  }
+}

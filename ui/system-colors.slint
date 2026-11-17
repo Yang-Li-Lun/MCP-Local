@@ -1,0 +1,15 @@
+export struct SystemContrastColors {
+    active: bool,
+    window-color: color,
+    window-text: color,
+    button-face: color,
+    button-text: color,
+    highlight: color,
+    highlight-text: color,
+    gray-text: color,
+}
+
+export global WindowsContrast {
+    in property <SystemContrastColors> colors;
+    in-out property <bool> keyboard-navigation: true;
+}

@@ -1,0 +1,267 @@
+import { SettingsCard } from "cards.slint";
+import { Button, CheckBox, ComboBox, LineEdit, Palette, StandardListView } from "std-widgets.slint";
+
+export struct SecurityRule {
+    id: string,
+    pattern: string,
+    kind: int,
+    enabled: bool,
+    risk: int,
+}
+
+export global SecurityState {
+    in property <bool> ready;
+    in-out property <bool> enabled;
+    in-out property <bool> host;
+    in-out property <bool> detector;
+    in-out property <bool> guard;
+    in-out property <int> strategy;
+    in-out property <int> expiry;
+    in-out property <string> maximum;
+    in property <[SecurityRule]> rules;
+    in property <string> saved-state;
+    in property <string> effective;
+    in property <string> runtime-details;
+    in property <string> lease-status;
+    in property <bool> can-grant;
+    in property <bool> can-revoke;
+    in property <bool> can-recover;
+    in property <string> feedback;
+    in property <string> preview;
+    in property <string> recent;
+    in property <[string]> event-kinds;
+    in property <[StandardListViewItem]> events;
+    in property <string> event-status;
+    in property <string> event-detail;
+    in property <bool> can-clear;
+    in property <bool> has-previous;
+    in property <bool> has-next;
+    in-out property <string> clear-confirmation;
+    callback changed();
+    callback save();
+    callback reload();
+    callback grant(string);
+    callback revoke();
+    callback recover();
+    callback defaults();
+    callback edit-rule(int, int, string);
+    callback add-rule();
+    callback remove-rule(int);
+    callback test-sample(int);
+    callback filter-events(int, int);
+    callback select-event(int);
+    callback page-events(int);
+    callback export-events();
+    callback clear-events();
+}
+
+export component SecurityPage inherits VerticalLayout {
+    property <int> section: 0;
+    property <bool> advanced;
+    property <bool> clear-open;
+    property <int> sample;
+    property <int> kind-filter;
+    property <int> risk-filter;
+    property <int> draft-action: -1;
+    property <bool> diagnostics;
+    property <int> duration;
+    property <string> custom-duration;
+    spacing: 12px;
+
+    HorizontalLayout {
+        spacing: 8px;
+        alignment: start;
+        Button { text: "總覽"; primary: root.section == 0; clicked => { root.section = 0; } }
+        Button { text: "設定"; primary: root.section == 1; clicked => { root.section = 1; } }
+        Button { text: "安全事件"; primary: root.section == 2; clicked => { root.section = 2; SecurityState.filter-events(root.kind-filter, root.risk-filter); } }
+    }
+    if !SecurityState.feedback.is-empty: Text { text: SecurityState.feedback; wrap: word-wrap; }
+    if root.section == 0: VerticalLayout {
+        spacing: 12px;
+        SettingsCard {
+            title: "安全狀態";
+            VerticalLayout {
+                spacing: 8px;
+                Text { text: SecurityState.saved-state; wrap: word-wrap; }
+                Text { text: SecurityState.effective; wrap: word-wrap; }
+                HorizontalLayout {
+                    spacing: 8px;
+                    alignment: start;
+                    Button { text: root.diagnostics ? "收起診斷" : "查看診斷"; clicked => { root.diagnostics = !root.diagnostics; } }
+                    Button { text: "重新讀取政策"; clicked => { root.section = 1; root.draft-action = 1; } }
+                    if SecurityState.can-recover: Button { text: "安全復原"; clicked => { SecurityState.recover(); } }
+                }
+                if root.diagnostics: Text { text: SecurityState.runtime-details.is-empty ? SecurityState.effective : SecurityState.runtime-details; wrap: word-wrap; }
+            }
+        }
+        SettingsCard {
+            title: "主機授權";
+            VerticalLayout {
+                spacing: 8px;
+                Text { text: SecurityState.lease-status; wrap: word-wrap; }
+                Text { text: "本機授權需要已確認的主機控制連線。"; wrap: word-wrap; }
+                if SecurityState.can-grant: HorizontalLayout {
+                    spacing: 8px;
+                    ComboBox {
+                        model: ["5 分鐘", "10 分鐘", "15 分鐘", "自訂時間"];
+                        current-index <=> root.duration; accessible-label: "授權時間";
+                    }
+                    if root.duration == 3: LineEdit {
+                        text <=> root.custom-duration; input-type: number; accessible-label: "授權分鐘數";
+                    }
+                }
+                HorizontalLayout {
+                    spacing: 8px; alignment: start;
+                    Button {
+                        text: "本機授權"; enabled: SecurityState.can-grant;
+                        clicked => { SecurityState.grant(root.duration == 3 ? root.custom-duration : root.duration == 2 ? "15" : root.duration == 1 ? "10" : "5"); }
+                    }
+                    Button { text: "立即撤銷"; enabled: SecurityState.can-revoke; clicked => { SecurityState.revoke(); } }
+                }
+            }
+        }
+        SettingsCard {
+            title: "最近安全事件";
+            VerticalLayout {
+                spacing: 8px;
+                Text { text: SecurityState.recent; wrap: word-wrap; }
+                HorizontalLayout {
+                    alignment: start;
+                    Button { text: "查看全部"; clicked => { root.section = 2; SecurityState.filter-events(root.kind-filter, root.risk-filter); } }
+                }
+            }
+        }
+    }
+    if root.section == 1: VerticalLayout {
+        spacing: 12px;
+        SettingsCard {
+            title: "安全政策";
+            VerticalLayout {
+                spacing: 8px;
+                CheckBox { text: "啟用安全政策"; enabled: SecurityState.ready; checked <=> SecurityState.enabled; toggled => { SecurityState.changed(); } }
+                CheckBox { text: "主機授權"; enabled: SecurityState.ready; checked <=> SecurityState.host; toggled => { SecurityState.changed(); } }
+                CheckBox { text: "敏感資訊偵測"; enabled: SecurityState.ready; checked <=> SecurityState.detector; toggled => { SecurityState.changed(); } }
+                CheckBox { text: "回傳防護"; enabled: SecurityState.ready; checked <=> SecurityState.guard; toggled => { SecurityState.changed(); } }
+                Text { text: "偵測到敏感內容時"; }
+                ComboBox {
+                    model: ["遮罩敏感文字", "阻擋敏感回傳"]; enabled: SecurityState.ready;
+                    current-index <=> SecurityState.strategy; accessible-label: "偵測到敏感內容時";
+                    selected(_) => { SecurityState.changed(); }
+                }
+                if SecurityState.enabled && SecurityState.guard && !SecurityState.detector: Text {
+                    text: "回傳防護需要啟用敏感資訊偵測。"; wrap: word-wrap;
+                }
+                HorizontalLayout {
+                    spacing: 8px;
+                    alignment: start;
+                    Button { text: "儲存設定"; primary: true; enabled: SecurityState.ready && (!SecurityState.enabled || !SecurityState.guard || SecurityState.detector); clicked => { SecurityState.save(); } }
+                    Button { text: "捨棄草稿"; clicked => { root.draft-action = 1; } }
+                    Button { text: root.advanced ? "收起進階設定" : "進階設定"; clicked => { root.advanced = !root.advanced; } }
+                }
+                if root.draft-action >= 0: HorizontalLayout {
+                    spacing: 8px;
+                    Text { text: root.draft-action == 1 ? "重新載入儲存設定並捨棄草稿？" : "以預設值取代目前草稿？"; wrap: word-wrap; }
+                    Button { text: "確認"; clicked => { if root.draft-action == 1 { SecurityState.reload(); } else { SecurityState.defaults(); } root.draft-action = -1; } }
+                    Button { text: "取消"; clicked => { root.draft-action = -1; } }
+                }
+            }
+        }
+        if root.advanced: SettingsCard {
+            title: "主機授權設定";
+            VerticalLayout {
+                spacing: 8px;
+                Text { text: "每次授權上限（分鐘，1–60）"; }
+                LineEdit {
+                    text <=> SecurityState.maximum; enabled: SecurityState.ready; input-type: number;
+                    accessible-label: "每次授權上限"; edited(_) => { SecurityState.changed(); }
+                }
+                Text { text: "到期或撤銷時的工作處置"; }
+                ComboBox {
+                    model: ["終止工作", "允許既有工作完成"]; enabled: SecurityState.ready;
+                    current-index <=> SecurityState.expiry; accessible-label: "到期或撤銷時的工作處置";
+                    selected(_) => { SecurityState.changed(); }
+                }
+            }
+        }
+        if root.advanced: SettingsCard {
+            title: "敏感資訊規則";
+            VerticalLayout {
+                spacing: 8px;
+                for rule[index] in SecurityState.rules: HorizontalLayout {
+                    spacing: 6px;
+                    CheckBox { checked: rule.enabled; enabled: SecurityState.ready; accessible-label: "啟用規則 " + rule.id; toggled => { SecurityState.edit-rule(index, 0, self.checked ? "1" : "0"); } }
+                    LineEdit { text: rule.id; enabled: SecurityState.ready; accessible-label: "規則識別碼"; edited(value) => { SecurityState.edit-rule(index, 1, value); } }
+                    ComboBox {
+                        width: 95px; enabled: SecurityState.ready;
+                        model: ["內建", "固定文字"]; current-index: rule.kind; accessible-label: "規則類型";
+                        selected(_) => { SecurityState.edit-rule(index, 2, "" + self.current-index); }
+                    }
+                    LineEdit { text: rule.pattern; enabled: SecurityState.ready; accessible-label: "規則內容"; edited(value) => { SecurityState.edit-rule(index, 3, value); } }
+                    ComboBox {
+                        width: 70px; enabled: SecurityState.ready;
+                        model: ["低", "中", "高"]; current-index: rule.risk; accessible-label: "規則風險";
+                        selected(_) => { SecurityState.edit-rule(index, 4, "" + self.current-index); }
+                    }
+                    Button { text: "移除"; enabled: SecurityState.ready && SecurityState.rules.length > 1; accessible-label: "移除規則 " + rule.id; clicked => { SecurityState.remove-rule(index); } }
+                }
+                Text { text: "自訂規則接受固定文字，請使用合成資料。"; wrap: word-wrap; }
+                HorizontalLayout {
+                    spacing: 8px;
+                    alignment: start;
+                    Button { text: "新增規則"; enabled: SecurityState.ready && SecurityState.rules.length < 32; clicked => { SecurityState.add-rule(); } }
+                    Button { text: "還原預設草稿"; enabled: SecurityState.ready; clicked => { root.draft-action = 0; } }
+                }
+                ComboBox { model: ["合成憑證", "二進位回傳", "一般文字"]; current-index <=> root.sample; accessible-label: "測試資料"; }
+                HorizontalLayout {
+                    spacing: 8px;
+                    alignment: start;
+                    Button { text: "測試回傳防護"; enabled: SecurityState.ready; clicked => { SecurityState.test-sample(root.sample); } }
+                }
+                if !SecurityState.preview.is-empty: Text { text: SecurityState.preview; wrap: word-wrap; }
+            }
+        }
+    }
+    if root.section == 2: VerticalLayout {
+        spacing: 12px;
+        SettingsCard {
+            title: "安全事件";
+            VerticalLayout {
+                spacing: 8px;
+                HorizontalLayout {
+                    spacing: 8px;
+                    ComboBox {
+                        model: SecurityState.event-kinds; current-index <=> root.kind-filter; accessible-label: "事件類型";
+                        selected(_) => { SecurityState.filter-events(root.kind-filter, root.risk-filter); }
+                    }
+                    ComboBox {
+                        model: ["所有風險", "低", "中", "高"]; current-index <=> root.risk-filter; accessible-label: "事件風險";
+                        selected(_) => { SecurityState.filter-events(root.kind-filter, root.risk-filter); }
+                    }
+                }
+                HorizontalLayout {
+                    spacing: 8px;
+                    alignment: start;
+                    Button { text: "更新事件"; clicked => { SecurityState.filter-events(root.kind-filter, root.risk-filter); } }
+                    Button { text: "上一頁"; enabled: SecurityState.has-previous; clicked => { SecurityState.page-events(-1); } }
+                    Button { text: "下一頁"; enabled: SecurityState.has-next; clicked => { SecurityState.page-events(1); } }
+                    Button { text: "匯出全部事件"; clicked => { SecurityState.export-events(); } }
+                }
+                Text { text: SecurityState.event-status; wrap: word-wrap; }
+                StandardListView {
+                    height: 200px; model: SecurityState.events; accessible-label: "安全事件清單";
+                    changed current-item => { SecurityState.select-event(self.current-item); }
+                }
+                if !SecurityState.event-detail.is-empty: Text { text: SecurityState.event-detail; wrap: word-wrap; }
+                HorizontalLayout {
+                    alignment: start;
+                    Button { text: root.clear-open ? "收起清除" : "清除安全事件"; enabled: SecurityState.can-clear; clicked => { root.clear-open = !root.clear-open; } }
+                }
+                if root.clear-open: HorizontalLayout {
+                    spacing: 8px;
+                    LineEdit { text <=> SecurityState.clear-confirmation; placeholder-text: "輸入「清除安全事件」"; accessible-label: "清除安全事件確認文字"; }
+                    Button { text: "確認清除全部事件"; enabled: SecurityState.can-clear && SecurityState.clear-confirmation == "清除安全事件"; clicked => { SecurityState.clear-events(); } }
+                }
+            }
+        }
+    }
+}

@@ -1,0 +1,817 @@
+import { SettingsCard } from "cards.slint";
+import {
+    AboutSlint, Button, CheckBox, ComboBox, LineEdit, RadioGroup,
+    ListView, Palette, ScrollView, TextEdit,
+} from "std-widgets.slint";
+import { ListItem } from "std-widgets-impl.slint";
+import { RequestMonitor, RequestRow, RequestCounts, DetailPage, JsonField } from "monitor.slint";
+import { SecurityPage, SecurityState, SecurityRule } from "security.slint";
+import { WindowsContrast, SystemContrastColors } from "system-colors.slint";
+export { RequestRow, RequestCounts, DetailPage, JsonField }
+export { SecurityState, SecurityRule }
+export { Palette, WindowsContrast, SystemContrastColors }
+
+export struct FolderRow {
+    text: string,
+    selected: bool,
+}
+
+component FolderList inherits FocusScope {
+    in property <[FolderRow]> items;
+    in-out property <int> cursor: -1;
+    in-out property <bool> keyboard-navigation;
+    callback select(int, bool, bool);
+    callback select-all();
+    property <length> row-height: 32px;
+
+    function move-to(index: int) {
+        root.cursor = min(root.items.length - 1, max(0, index));
+        if root.cursor >= 0 {
+            let top = root.cursor * root.row-height;
+            let bottom = top + root.row-height;
+            if top < -listing.content-y {
+                listing.content-y = -top;
+            } else if bottom > -listing.content-y + listing.visible-height {
+                listing.content-y = listing.visible-height - bottom;
+            }
+        }
+    }
+
+    key-pressed(event) => {
+        if root.items.length == 0 || event.modifiers.alt {
+            return reject;
+        }
+        if event.modifiers.control && event.text == "a" {
+            if root.cursor < 0 { root.move-to(0); }
+            root.select-all();
+            return accept;
+        }
+        if event.text == " " {
+            if root.cursor < 0 { root.move-to(0); }
+            root.select(root.cursor, event.modifiers.shift, event.modifiers.control);
+            return accept;
+        }
+        let page-rows = max(1, floor(listing.visible-height / root.row-height));
+        if event.text == Key.UpArrow { root.move-to(root.cursor - 1); }
+        else if event.text == Key.DownArrow { root.move-to(root.cursor + 1); }
+        else if event.text == Key.Home { root.move-to(0); }
+        else if event.text == Key.End { root.move-to(root.items.length - 1); }
+        else if event.text == Key.PageUp { root.move-to(root.cursor - page-rows); }
+        else if event.text == Key.PageDown { root.move-to(root.cursor + page-rows); }
+        else { return reject; }
+        if !event.modifiers.control || event.modifiers.shift {
+            root.select(root.cursor, event.modifiers.shift, event.modifiers.control);
+        }
+        return accept;
+    }
+
+    listing := ListView {
+        accessible-label: "授權資料夾";
+        accessible-delegate-focus: root.cursor;
+        accessible-item-count: root.items.length;
+        for row[index] in root.items: ListItem {
+            height: root.row-height;
+            item: { text: row.text };
+            index: index;
+            is-selected: row.selected;
+            has-focus: root.keyboard-navigation && root.has-focus && root.cursor == index;
+            has-hover: true;
+            pressed: pointer.pressed;
+            pressed-x: pointer.pressed-x;
+            pressed-y: pointer.pressed-y;
+            accessible-action-default => {
+                root.focus();
+                root.move-to(index);
+                root.select(index, false, false);
+            }
+            pointer := TouchArea {
+                pointer-event(event) => {
+                    if event.button == PointerEventButton.left && event.kind == PointerEventKind.down {
+                        root.keyboard-navigation = false;
+                        root.focus();
+                        root.move-to(index);
+                        root.select(index, event.modifiers.shift, event.modifiers.control);
+                    }
+                }
+            }
+            Tooltip { text: @markdown("\{row.text}"); }
+        }
+    }
+}
+
+component Heading inherits Text {
+    font-size: 28px;
+    font-weight: 600;
+    color: Palette.foreground;
+    vertical-alignment: center;
+}
+
+component FormField inherits VerticalLayout {
+    in property <string> label;
+    in property <InputType> input-type: InputType.text;
+    in-out property <string> text <=> edit.text;
+    spacing: 8px;
+    Text { text: root.label; }
+    edit := LineEdit {
+        input-type: root.input-type;
+        accessible-label: root.label;
+    }
+}
+
+component NameEditor inherits VerticalLayout {
+    in property <string> label;
+    in property <[StandardListViewItem]> items;
+    in property <bool> busy;
+    callback update(int, string);
+    callback remove(int);
+    property <int> editing: -2;
+
+    function start-edit(index: int, value: string) {
+        if !root.busy {
+            root.editing = index;
+            item.text = value;
+            item.focus();
+            item.select-all();
+        }
+    }
+    function delete-item(index: int) {
+        if !root.busy {
+            root.remove(index);
+            root.editing = -2;
+        }
+    }
+    function apply() {
+        if root.editing >= -1 && !root.busy && !item.text.is-empty {
+            root.update(root.editing, item.text);
+            root.editing = -2;
+            add.focus();
+        }
+    }
+    spacing: 8px;
+    HorizontalLayout {
+        height: 32px;
+        spacing: 8px;
+        Text { text: root.label; font-weight: 600; vertical-alignment: center; horizontal-stretch: 1; }
+        add := Button {
+            text: "新增"; accessible-label: "新增" + root.label; enabled: !root.busy && root.items.length < 128;
+            clicked => { root.start-edit(-1, ""); }
+        }
+    }
+    if root.items.length > 0: FlexboxLayout {
+        vertical-stretch: 0;
+        flex-wrap: wrap;
+        spacing-vertical: 8px;
+        spacing-horizontal: 8px;
+        for entry[index] in root.items: FocusScope {
+            min-width: 42px;
+            max-width: 330px;
+            height: 32px;
+            enabled: !root.busy;
+            focus-on-tab-navigation: false;
+            key-pressed(event) => {
+                if event.text == Key.Delete { root.delete-item(index); add.focus(); return accept; }
+                reject
+            }
+            ContextMenuArea {
+                Menu {
+                    MenuItem { title: "編輯"; activated => { root.start-edit(index, entry.text); } }
+                    MenuItem { title: "移除"; activated => { root.delete-item(index); add.focus(); } }
+                }
+                Button {
+                    text: entry.text; accessible-label: entry.text;
+                    primary: root.editing == index;
+                    enabled: !root.busy;
+                    clicked => { root.start-edit(index, entry.text); }
+                    Tooltip { text: @markdown("\{entry.text}"); }
+                }
+            }
+        }
+    }
+    HorizontalLayout {
+        height: root.editing >= -1 ? 34px : 0px;
+        visible: root.editing >= -1;
+        spacing: 8px;
+        item := LineEdit {
+            accessible-label: root.label;
+            accepted(_) => { root.apply(); }
+            key-pressed(event) => {
+                if event.text == Key.Escape { root.editing = -2; add.focus(); return accept; }
+                reject
+            }
+        }
+        Button { text: "套用"; enabled: !root.busy && !item.text.is-empty; clicked => { root.apply(); } }
+        if root.editing >= 0: Button { text: "移除"; enabled: !root.busy; clicked => { root.delete-item(root.editing); add.focus(); } }
+        Button { text: "取消"; clicked => { root.editing = -2; add.focus(); } }
+    }
+}
+
+export component Desktop inherits Window {
+    title: "MCP-Local";
+    icon: root.applied-icon-image;
+    default-font-family: "Segoe UI";
+    default-font-size: 14px;
+    out property <length> initial-width: 1120px;
+    out property <length> initial-height: 880px;
+    preferred-width: root.initial-width;
+    preferred-height: root.initial-height;
+    min-width: 750px;
+    min-height: 550px;
+    background: root.mica-enabled ? transparent : Palette.background;
+
+    in-out property <int> page: 0;
+    in-out property <int> theme: 0;
+    in-out property <int> icon-choice: 0;
+    in property <int> applied-icon: 0;
+    out property <image> applied-icon-image: root.applied-icon == 1 ? @image-url("../assets/folder-link.png") : @image-url("../assets/classic.png");
+    in-out property <int> access-mode: 0;
+    in property <string> connection-mode;
+    in property <[FolderRow]> folders;
+    in-out property <int> folder-cursor: -1;
+    in-out property <int> folder-anchor: -1;
+    in property <int> folder-selection-count;
+    in property <int> single-folder: -1;
+    in property <[StandardListViewItem]> extensions;
+    in property <[StandardListViewItem]> text-names;
+    in property <[StandardListViewItem]> exclusions;
+    in-out property <string> tunnel;
+    in-out property <string> api-key;
+    in-out property <string> file-mib;
+    in-out property <string> scan-mib;
+    in-out property <string> scan-files;
+    in-out property <string> scan-entries;
+    in-out property <bool> start-hidden;
+    in-out property <bool> auto-start;
+    in property <string> startup-status: "登入自啟動：尚未檢查";
+    in property <bool> checking-startup;
+    in property <string> key-status;
+    in property <string> status: "已停止";
+    in property <string> diagnostic;
+    in property <bool> active;
+    in property <bool> retry-pending;
+    in property <bool> tray-ready;
+    in property <bool> busy;
+
+    in property <[RequestRow]> records;
+    in property <DetailPage> record-document;
+    in property <[JsonField]> record-fields;
+    in property <[string]> record-tool-options: ["全部操作"];
+    in property <bool> record-enabled: true;
+    in property <string> record-health;
+    in property <string> record-link: "未連線";
+    in property <RequestCounts> record-counts;
+    in property <bool> record-capture-issues;
+    in property <length> record-header-limit: 128px;
+    in-out property <int> record-selected <=> monitor.selected;
+    in-out property <string> record-search <=> monitor.search;
+    in-out property <int> record-filter <=> monitor.status-filter;
+    in-out property <string> record-tool <=> monitor.tool-filter;
+    in-out property <int> record-tool-index <=> monitor.tool-index;
+    in-out property <bool> record-follow <=> monitor.following;
+    in-out property <bool> record-details <=> monitor.details;
+    in-out property <int> record-tab <=> monitor.tab;
+    in-out property <bool> record-tree <=> monitor.tree;
+    in-out property <int> record-sort <=> monitor.sort;
+    in-out property <bool> record-descending <=> monitor.descending;
+
+    callback about();
+    callback hide-to-tray();
+    callback quit();
+    callback save();
+    callback toggle-connection();
+    callback reconnect();
+    callback check-startup();
+    callback folder(int);
+    callback select-folder(int, bool, bool);
+    callback select-all-folders();
+    callback remove-folders();
+    callback reset-numbers(bool);
+    callback update-name(int, int, string);
+    callback remove-name(int, int);
+    callback theme-changed(int);
+    callback refresh-records();
+    callback record-page(int);
+    callback record-detach();
+    callback record-clear();
+    callback record-pause();
+    callback record-copy(bool);
+    callback record-save();
+    callback record-advanced();
+    callback record-find(string, int);
+    callback record-field(string, int);
+
+    changed theme => {
+        Palette.color-scheme = root.theme == 1 ? ColorScheme.light : root.theme == 2 ? ColorScheme.dark : ColorScheme.unknown;
+        root.theme-changed(root.theme);
+    }
+
+    in property <bool> compact: false;
+    in property <bool> mica-enabled: false;
+    property <int> nav-focus: -1;
+    property <bool> keyboard-navigation <=> WindowsContrast.keyboard-navigation;
+    property <[string]> pages: ["連線設定", "進階讀取", "外觀", "權限模式", "請求監控", "安全中心"];
+    property <[string]> glyphs: ["\u{e839}", "\u{e713}", "\u{e790}", "\u{e72e}", "\u{e9d9}", "\u{ea18}"];
+
+    function activate-page(index: int) {
+        root.page = index;
+        root.nav-focus = index;
+    }
+    MenuBar {
+        Menu {
+            title: "應用程式";
+            MenuItem {
+                title: "儲存設定"; shortcut: @keys(Control + S);
+                enabled: root.page == 5 ? SecurityState.ready : !root.busy;
+                activated => { if root.page == 5 { SecurityState.save(); } else { root.save(); } }
+            }
+            MenuItem { title: "獨立監控視窗"; activated => { root.record-detach(); } }
+            MenuItem { title: "縮到系統匣"; enabled: root.tray-ready; activated => { root.hide-to-tray(); } }
+            MenuItem { title: "退出程式"; activated => { root.quit(); } }
+        }
+        Menu {
+            title: "說明";
+            MenuItem { title: "關於 MCP-Local"; activated => { root.about(); } }
+        }
+    }
+    FocusScope {
+        focus-on-click: false;
+        focus-on-tab-navigation: false;
+        capture-key-pressed(event) => {
+            root.keyboard-navigation = true;
+            if event.modifiers.control && !event.modifiers.alt && event.text == Key.Tab {
+                root.activate-page(Math.mod(root.page + (event.modifiers.shift ? 5 : 1), 6));
+                return accept;
+            }
+            if event.modifiers.alt && !event.modifiers.control {
+                if event.text == "1" { root.activate-page(0); return accept; }
+                if event.text == "2" { root.activate-page(1); return accept; }
+                if event.text == "3" { root.activate-page(2); return accept; }
+                if event.text == "4" { root.activate-page(3); return accept; }
+                if event.text == "5" { root.activate-page(4); return accept; }
+                if event.text == "6" { root.activate-page(5); return accept; }
+            }
+            reject
+        }
+        VerticalLayout {
+            spacing: 0px;
+            HorizontalLayout {
+                vertical-stretch: 1;
+                Rectangle {
+                    width: root.compact ? 72px : 208px;
+                    background: root.mica-enabled ? transparent : Palette.background;
+                    VerticalLayout {
+                        padding: 10px;
+                        padding-top: 20px;
+                        spacing: 6px;
+                        alignment: start;
+                        if !root.compact: Text { text: "MCP-Local"; font-size: 20px; font-weight: 600; height: 52px; width: parent.width - 20px; vertical-alignment: top; x: 10px; color: Palette.foreground; }
+                        for name[index] in root.pages: FocusScope {
+                            height: 40px;
+                            focus-on-click: false;
+                            focus-on-tab-navigation: false;
+                            property <bool> take-focus: root.nav-focus == index;
+                            changed take-focus => { if self.take-focus { nav-button.focus(); } }
+                            capture-key-pressed(event) => {
+                                if !event.modifiers.control && !event.modifiers.alt
+                                    && (event.text == Key.UpArrow || event.text == Key.DownArrow) {
+                                    root.activate-page(Math.mod(index + (event.text == Key.UpArrow ? 5 : 1), 6));
+                                    return accept;
+                                }
+                                reject
+                            }
+                            nav-button := FocusScope {
+                                width: 100%; height: 100%;
+                                accessible-role: button;
+                                accessible-label: name;
+                                key-pressed(event) => {
+                                    if event.text == " " || event.text == Key.Return {
+                                        root.activate-page(index); return accept;
+                                    }
+                                    reject
+                                }
+                                Rectangle {
+                                    border-radius: WindowsContrast.colors.active ? 0px : 4px;
+                                    background: root.page == index ? (WindowsContrast.colors.active ? Palette.accent-background : Palette.alternate-background) : hit.has-hover ? Palette.alternate-background : transparent;
+                                    border-width: root.keyboard-navigation && nav-button.has-focus ? 1px : 0px;
+                                    border-color: Palette.accent-background;
+                                    if !root.compact: Text {
+                                        x: 48px; width: parent.width - 56px;
+                                        text: name; color: WindowsContrast.colors.active && root.page == index ? Palette.accent-foreground : Palette.foreground;
+                                        vertical-alignment: center;
+                                    }
+                                    hit := TouchArea { clicked => { root.keyboard-navigation = false; root.activate-page(index); nav-button.focus(); } }
+                                }
+                                Tooltip { text: @markdown("\{name}"); }
+                            }
+                            if root.page == index: Rectangle {
+                                x: 2px;
+                                y: (parent.height - self.height) / 2;
+                                width: 3px;
+                                height: 24px;
+                                border-radius: 2px;
+                                background: WindowsContrast.colors.active ? Palette.accent-foreground : Palette.accent-background;
+                            }
+                            Text {
+                                x: root.compact ? 0px : 10px;
+                                width: root.compact ? parent.width : 24px;
+                                text: root.glyphs[index];
+                                font-family: "Segoe Fluent Icons";
+                                color: WindowsContrast.colors.active && root.page == index ? Palette.accent-foreground : Palette.foreground;
+                                horizontal-alignment: center;
+                                vertical-alignment: center;
+                            }
+                        }
+                    }
+                }
+                VerticalLayout {
+                    padding-left: root.compact ? 16px : 28px;
+                    padding-right: root.compact ? 16px : 28px;
+                    padding-top: root.compact ? 16px : 24px;
+                    padding-bottom: 16px;
+                    spacing: 16px;
+                    Rectangle {
+                        vertical-stretch: 1;
+                        min-height: 200px;
+                        ScrollView {
+                            visible: root.page != 4;
+                            width: parent.width;
+                            height: parent.height;
+                            content-height: settings.preferred-height;
+                            settings := VerticalLayout {
+                                width: parent.width;
+                                spacing: 16px;
+                                if root.page == 0: VerticalLayout {
+                                    spacing: 16px;
+                                    SettingsCard {
+                                        title: "授權資料夾";
+                                        VerticalLayout {
+                                            spacing: 8px;
+                                            FolderList {
+                                                items: root.folders;
+                                                cursor <=> root.folder-cursor;
+                                                keyboard-navigation <=> root.keyboard-navigation;
+                                                preferred-height: 100px;
+                                                enabled: !root.busy;
+                                                select(index, extend, toggle) => { root.select-folder(index, extend, toggle); }
+                                                select-all => { root.select-all-folders(); }
+                                            }
+                                            HorizontalLayout {
+                                                spacing: 8px;
+                                                alignment: start;
+                                                Button { text: "加入資料夾…"; enabled: !root.busy && root.folders.length < 8; clicked => { root.folder(-1); } }
+                                                Button { text: "變更選取…"; enabled: !root.busy && root.single-folder >= 0; clicked => { root.folder(root.single-folder); } }
+                                                Button { text: "移除選取"; enabled: !root.busy && root.folder-selection-count > 0; clicked => { root.remove-folders(); } }
+                                            }
+                                        }
+                                    }
+                                    SettingsCard {
+                                        title: "連線";
+                                        VerticalLayout {
+                                            spacing: 8px;
+                                            spot := FormField { label: "通道識別碼"; text <=> root.tunnel; }
+                                            token := FormField { label: "API 金鑰"; input-type: InputType.password; text <=> root.api-key; }
+                                            Text { text: root.key-status; wrap: word-wrap; }
+                                        }
+                                    }
+                                    SettingsCard {
+                                        title: "啟動與背景執行";
+                                        VerticalLayout {
+                                            spacing: 8px;
+                                            CheckBox { text: "啟動時縮到系統匣"; enabled: root.tray-ready; checked <=> root.start-hidden; }
+                                            CheckBox { text: "Windows 登入後啟動到系統匣並自動連線"; checked <=> root.auto-start; }
+                                            Text { text: root.startup-status; wrap: word-wrap; }
+                                            HorizontalLayout {
+                                                Button { text: "更新自啟動狀態"; enabled: !root.checking-startup && !root.busy; clicked => { root.check-startup(); } }
+                                                Rectangle { horizontal-stretch: 1; }
+                                            }
+                                        }
+                                    }
+                                }
+                                if root.page == 1: VerticalLayout {
+                                    spacing: 16px;
+                                    SettingsCard {
+                                        title: "讀取與掃描上限";
+                                        VerticalLayout {
+                                            spacing: 8px;
+                                            HorizontalLayout {
+                                                spacing: 16px;
+                                                FormField { label: "單檔讀取上限（MiB）"; text <=> root.file-mib; }
+                                                FormField { label: "搜尋累計讀取上限（MiB）"; text <=> root.scan-mib; }
+                                            }
+                                            HorizontalLayout {
+                                                spacing: 16px;
+                                                FormField { label: "掃描檔案上限（個）"; text <=> root.scan-files; }
+                                                FormField { label: "掃描項目上限（個）"; text <=> root.scan-entries; }
+                                            }
+                                            HorizontalLayout {
+                                                spacing: 8px;
+                                                alignment: start;
+                                                Button { text: "最大值"; clicked => { root.reset-numbers(true); } }
+                                                Button { text: "還原進階預設值"; clicked => { root.reset-numbers(false); } }
+                                            }
+                                        }
+                                    }
+                                    SettingsCard {
+                                        title: "檔案類型與排除";
+                                        VerticalLayout {
+                                            spacing: 16px;
+                                            NameEditor {
+                                                label: "文字 reader 副檔名";
+                                                busy: root.busy;
+                                                items: root.extensions;
+                                                update(index, value) => { root.update-name(0, index, value); }
+                                                remove(index) => { root.remove-name(0, index); }
+                                            }
+                                            NameEditor {
+                                                label: "文字 reader 完整檔名";
+                                                busy: root.busy;
+                                                items: root.text-names;
+                                                update(index, value) => { root.update-name(1, index, value); }
+                                                remove(index) => { root.remove-name(1, index); }
+                                            }
+                                            NameEditor {
+                                                label: "額外排除名稱";
+                                                busy: root.busy;
+                                                items: root.exclusions;
+                                                update(index, value) => { root.update-name(2, index, value); }
+                                                remove(index) => { root.remove-name(2, index); }
+                                            }
+                                            Text { text: "固定安全排除、隱藏路徑與連結防護持續生效。"; wrap: word-wrap; }
+                                        }
+                                    }
+                                }
+                                if root.page == 2: VerticalLayout {
+                                    spacing: 16px;
+                                    SettingsCard {
+                                        title: "色彩模式";
+                                        ComboBox {
+                                            model: ["跟隨 Windows", "淺色", "深色"];
+                                            current-index <=> root.theme;
+                                            accessible-label: "色彩模式";
+                                        }
+                                    }
+                                    SettingsCard {
+                                        title: "應用程式圖示";
+                                        HorizontalLayout {
+                                            alignment: start;
+                                            icon-options := Rectangle {
+                                                width: 216px;
+                                                height: 80px;
+                                                property <[string]> names: ["經典資料夾", "連結資料夾"];
+                                                for name[index] in icon-options.names: FocusScope {
+                                                    x: index * 120px; width: 96px; height: 80px;
+                                                    enabled: !root.busy;
+                                                    accessible-role: radio-button;
+                                                    accessible-label: name;
+                                                    accessible-checkable: true;
+                                                    accessible-checked: root.icon-choice == index;
+                                                    accessible-action-default => { root.icon-choice = index; }
+                                                    key-pressed(event) => {
+                                                        if event.text == " " || event.text == Key.Return { root.icon-choice = index; return accept; }
+                                                        if event.text == Key.LeftArrow || event.text == Key.RightArrow { root.icon-choice = 1 - root.icon-choice; return accept; }
+                                                        reject
+                                                    }
+                                                    Rectangle {
+                                                        x: 0px; y: 30px; width: 20px; height: 20px; border-radius: 10px;
+                                                        border-width: root.icon-choice == index ? 6px : 1px;
+                                                        border-color: root.icon-choice == index ? Palette.accent-background : Palette.foreground;
+                                                        background: Palette.alternate-background;
+                                                    }
+                                                    Image {
+                                                        source: index == 0 ? @image-url("../assets/classic.png") : @image-url("../assets/folder-link.png");
+                                                        x: 28px; y: 8px; width: 64px; height: 64px;
+                                                    }
+                                                    TouchArea { clicked => { root.icon-choice = index; parent.focus(); } }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                if root.page == 3: VerticalLayout {
+                                    spacing: 16px;
+                                    SettingsCard {
+                                        title: "連線權限";
+                                        VerticalLayout {
+                                            spacing: 12px;
+                                            RadioGroup {
+                                                enabled: !root.busy;
+                                                selected(value) => { root.access-mode = value == "主機控制" ? 2 : value == "開發控制" ? 1 : 0; }
+                                                RadioButton { text: "唯讀"; checked: root.access-mode == 0; }
+                                                RadioButton { text: "開發控制"; checked: root.access-mode == 1; }
+                                                RadioButton { text: "主機控制"; checked: root.access-mode == 2; }
+                                            }
+                                            Text {
+                                                text: root.access-mode == 2
+                                                    ? "36 個工具 · 以目前 Windows 使用者執行主機命令，無 VM 隔離。"
+                                                    : root.access-mode == 1
+                                                    ? "34 個工具 · Windows Sandbox VM 可直接修改授權資料夾；工具鏈唯讀。"
+                                                    : "22 個工具 · 僅讀取授權資料夾。";
+                                                wrap: word-wrap;
+                                            }
+                                        }
+                                    }
+                                    if root.active: Text { text: "目前連線：" + root.connection-mode; wrap: word-wrap; }
+                                }
+                                if root.page == 5: SecurityPage {}
+                            }
+                        }
+                        monitor := RequestMonitor {
+                            visible: root.page == 4;
+                            width: parent.width;
+                            height: parent.height;
+                            rows: root.records;
+                            document: root.record-document;
+                            fields: root.record-fields;
+                            health: root.record-health;
+                            compact: root.compact;
+                            header-limit: root.record-header-limit;
+                            link: root.record-link;
+                            counts: root.record-counts;
+                            capture-issues: root.record-capture-issues;
+                            tool-options: root.record-tool-options;
+                            monitoring: root.record-enabled;
+                            refresh => { root.refresh-records(); }
+                            detail-page(step) => { root.record-page(step); }
+                            detail-find(term, direction) => { root.record-find(term, direction); }
+                            detail-field(pointer, action) => { root.record-field(pointer, action); }
+                            detach => { root.record-detach(); }
+                            clear => { root.record-clear(); }
+                            pause => { root.record-pause(); }
+                            copy(whole) => { root.record-copy(whole); }
+                            save-record => { root.record-save(); }
+                            advanced => { root.record-advanced(); }
+                        }
+                    }
+                }
+            }
+            Rectangle {
+                height: 54px;
+                background: Palette.alternate-background;
+                HorizontalLayout {
+                    padding: 8px;
+                    padding-left: 16px;
+                    padding-right: 16px;
+                    spacing: 12px;
+                    Rectangle {
+                        width: 10px;
+                        Rectangle {
+                            y: (parent.height - self.height) / 2;
+                            width: 10px;
+                            height: 10px;
+                            border-radius: 5px;
+                            background: WindowsContrast.colors.active ? Palette.foreground
+                                : root.status == "通道程序執行中" ? #28a745
+                                : root.active || root.retry-pending ? #d99000
+                                : #888888;
+                        }
+                    }
+                    VerticalLayout {
+                        alignment: center;
+                        spacing: 2px;
+                        horizontal-stretch: 1;
+                        Text { text: root.status; overflow: elide; font-weight: 600; }
+                        if !root.diagnostic.is-empty: Text {
+                            text: root.diagnostic; overflow: elide; font-size: 12px;
+                            accessible-label: root.diagnostic;
+                            Tooltip { text: @markdown("\{root.diagnostic}"); }
+                        }
+                    }
+                    if root.page < 4: Button { text: "儲存設定"; enabled: !root.busy; clicked => { root.save(); } }
+                    if root.page < 4 && root.active: Button { text: "儲存並重連"; enabled: !root.busy; clicked => { root.reconnect(); } }
+                    Button {
+                        text: root.active || root.retry-pending ? "停止連線" : "啟動連線";
+                        enabled: !root.busy;
+                        primary: true;
+                        clicked => { root.toggle-connection(); }
+                    }
+                }
+            }
+        }
+    }
+}
+
+export component MonitorWindow inherits Window {
+    title: "MCP-Local｜請求監控";
+    default-font-family: "Segoe UI";
+    default-font-size: 14px;
+    out property <length> initial-width: 1120px;
+    out property <length> initial-height: 880px;
+    preferred-width: root.initial-width;
+    preferred-height: root.initial-height;
+    min-width: 620px;
+    min-height: 480px;
+    background: Palette.background;
+    in property <bool> compact: false;
+    in property <int> theme;
+    changed theme => {
+        Palette.color-scheme = root.theme == 1 ? ColorScheme.light : root.theme == 2 ? ColorScheme.dark : ColorScheme.unknown;
+    }
+    in property <[RequestRow]> records;
+    in property <DetailPage> record-document;
+    in property <[JsonField]> record-fields;
+    in property <[string]> record-tool-options: ["全部操作"];
+    in property <bool> record-enabled: true;
+    in property <string> record-health;
+    in property <string> record-link: "未連線";
+    in property <RequestCounts> record-counts;
+    in property <bool> record-capture-issues;
+    in property <length> record-header-limit: 128px;
+    in-out property <int> record-selected <=> monitor.selected;
+    in-out property <string> record-search <=> monitor.search;
+    in-out property <int> record-filter <=> monitor.status-filter;
+    in-out property <string> record-tool <=> monitor.tool-filter;
+    in-out property <int> record-tool-index <=> monitor.tool-index;
+    in-out property <bool> record-follow <=> monitor.following;
+    in-out property <bool> record-details <=> monitor.details;
+    in-out property <int> record-tab <=> monitor.tab;
+    in-out property <bool> record-tree <=> monitor.tree;
+    in-out property <int> record-sort <=> monitor.sort;
+    in-out property <bool> record-descending <=> monitor.descending;
+    callback refresh-records();
+    callback record-page(int);
+    callback record-clear();
+    callback record-pause();
+    callback record-copy(bool);
+    callback record-save();
+    callback record-advanced();
+    callback record-find(string, int);
+    callback record-field(string, int);
+    VerticalLayout {
+        padding-left: root.compact ? 16px : 28px;
+        padding-right: root.compact ? 16px : 28px;
+        padding-top: root.compact ? 16px : 24px;
+        padding-bottom: 16px;
+        monitor := RequestMonitor {
+            detached: true;
+            rows: root.records;
+            document: root.record-document;
+            fields: root.record-fields;
+            health: root.record-health;
+            compact: root.compact;
+            header-limit: root.record-header-limit;
+            link: root.record-link;
+            counts: root.record-counts;
+            capture-issues: root.record-capture-issues;
+            tool-options: root.record-tool-options;
+            monitoring: root.record-enabled;
+            refresh => { root.refresh-records(); }
+            detail-page(step) => { root.record-page(step); }
+            detail-find(term, direction) => { root.record-find(term, direction); }
+            detail-field(pointer, action) => { root.record-field(pointer, action); }
+            clear => { root.record-clear(); }
+            pause => { root.record-pause(); }
+            copy(whole) => { root.record-copy(whole); }
+            save-record => { root.record-save(); }
+            advanced => { root.record-advanced(); }
+        }
+    }
+}
+
+export component MonitorDiagnosticsWindow inherits Window {
+    title: "監控診斷";
+    default-font-family: "Segoe UI";
+    preferred-width: 610px;
+    preferred-height: 560px;
+    min-width: 350px;
+    min-height: 250px;
+    background: Palette.background;
+    in property <int> theme;
+    in property <string> snapshot;
+    changed theme => {
+        Palette.color-scheme = root.theme == 1 ? ColorScheme.light : root.theme == 2 ? ColorScheme.dark : ColorScheme.unknown;
+    }
+    VerticalLayout {
+        padding: 10px;
+        reader := TextEdit {
+            text: root.snapshot;
+            wrap: word-wrap;
+            read-only: true;
+            font-family: "Consolas";
+            font-size: 14px;
+            accessible-label: "監控診斷內容";
+        }
+    }
+    public function focus-snapshot() {
+        reader.content-y = 0px;
+        reader.clear-selection();
+        reader.focus();
+    }
+}
+
+export component AboutWindow inherits Window {
+    title: "關於 MCP-Local";
+    default-font-family: "Segoe UI";
+    preferred-width: 370px;
+    preferred-height: 190px;
+    background: Palette.background;
+    in property <int> theme;
+    changed theme => {
+        Palette.color-scheme = root.theme == 1 ? ColorScheme.light : root.theme == 2 ? ColorScheme.dark : ColorScheme.unknown;
+    }
+    VerticalLayout {
+        padding: 16px;
+        spacing: 8px;
+        Heading { text: "MCP-Local"; horizontal-alignment: center; }
+        AboutSlint { }
+    }
+}
+

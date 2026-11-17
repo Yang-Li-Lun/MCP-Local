@@ -1,60 +1,16 @@
-.venv/
-/.venv-*/
-/.release-work/
-/release/
-/.test-tmp/
-/engineering-unittest-*.txt
-/performance-*.log
-__pycache__/
-*.py[cod]
-*$py.class
+/target/
+/mcp-local-rust.exe
+/third_party/tunnel-client/*.exe
+/third_party/tunnel-client/*.zip
+/SHA256SUMS.json
+*.pdb
+*.db
+*.sqlite
+*.sqlite3
+*.pem
+*.pfx
+*.key
 .env
 .env.*
 settings.json
-settings.json.*
-local-files-gui.json
-local-files-gui.json.*
-*.key
-*.pem
-*.p12
-*.pfx
-
-# Local backups and benchmark/test outputs
-/engineering-backup-*/
-/performance-backup-*/
-/engineering-*.json
-/performance-*.json
-/engineering-tests.txt
-
-# Vendor binaries and archives are kept locally or published as Releases
-cloudflared.exe
-tunnel-client.exe
-tunnel-client-*.zip
-tunnel-client-*.spdx.json
-tunnel-client-*-licenses.txt
-
-/engineering-unit-tests.txt
-
-# Private credentials, connection snapshots, and local captures
-*.dpapi
-settings.json.*.bak
-local-files-gui.json.*.bak
-/profiles/
-/control-plane*.json
-/codex-clipboard-*
-
-# Generated validation runs and recovery snapshots stay local.
-/reports/validation/
-/reports/performance/runs/
-/reports/engineering/legacy-root/
-/reports/performance/legacy-root/
-/reports/engineering/worktree-layout-20261026/source-before.zip
-/reports/engineering/worktree-layout-20261026/link-documents-before.zip
-/reports/engineering/worktree-layout-20261026/fixtures/
-/reports/engineering/worktree-layout-20261026/packages/
-/reports/engineering/worktree-layout-20261026/deployed/
-
-# Local evidence and retained backups are not public source delivery.
-/archive/
-/reports/
-/NVIDIA Corporation/
+settings-backups/

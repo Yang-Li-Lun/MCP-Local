@@ -1,0 +1,22 @@
+import { Palette } from "std-widgets.slint";
+import { WindowsContrast } from "system-colors.slint";
+
+export component SettingsCard inherits Rectangle {
+    in property <string> title;
+    background: Palette.alternate-background;
+    border-radius: WindowsContrast.colors.active ? 0px : 8px;
+    border-width: WindowsContrast.colors.active ? 1px : 0px;
+    border-color: Palette.foreground;
+    VerticalLayout {
+        padding: 20px;
+        spacing: 12px;
+        if !root.title.is-empty: Text {
+            text: root.title;
+            font-size: 16px;
+            font-weight: 600;
+            color: Palette.foreground;
+            wrap: word-wrap;
+        }
+        @children
+    }
+}

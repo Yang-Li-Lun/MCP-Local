@@ -1,1 +1,0 @@
-"""MCP-Local tools/verification."""

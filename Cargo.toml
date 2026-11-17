@@ -1,0 +1,63 @@
+[package]
+name = "mcp-local-rust"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.95"
+license = "Apache-2.0"
+build = "build.rs"
+
+[features]
+default = ["desktop"]
+desktop = ["dep:slint", "dep:slint-build", "dep:i-slint-compiler", "dep:rfd", "dep:arboard", "dep:windows"]
+
+[dependencies]
+anyhow = "1"
+arboard = { version = "3.7", optional = true, default-features = false }
+avif-rust = "=0.1.2"
+base64 = "0.22"
+caseless = "0.2"
+chrono = { version = "0.4", default-features = false, features = ["std"] }
+crc32fast = "1"
+ed25519-dalek = "=2.2.0"
+flate2 = "1"
+gamut-isobmff = "=2.0.1"
+getrandom = "0.4"
+hmac = "0.12"
+image = { version = "0.25", default-features = false, features = ["bmp", "gif", "ico", "jpeg", "png", "pnm", "tiff", "webp"] }
+encoding_rs = "0.8"
+html5ever = "=0.40.1"
+libloading = "0.8"
+lofty = "=0.25.5"
+lopdf = { version = "=0.47.0", default-features = false }
+mail-parser = { version = "=1.0.1", features = ["full_encoding"] }
+num-bigint = "0.4"
+percent-encoding = "2"
+regex = "1"
+rmcp = { version = "=3.10.0", default-features = false, features = ["server", "transport-io"] }
+rfd = { version = "0.18", optional = true, default-features = false }
+roxmltree = "0.21"
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["arbitrary_precision", "preserve_order"] }
+sha2 = "0.10"
+slint = { version = "=1.19.0", optional = true, default-features = false, features = ["std", "backend-winit", "renderer-software", "compat-1-2", "accessibility", "unstable-winit-030"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "net", "io-util"] }
+tokio-util = "0.7"
+toml = { version = "1", features = ["preserve_order"] }
+tiff = { version = "0.11", default-features = false }
+uuid = "1"
+windows = { version = "=0.62.2", optional = true, features = ["Win32_Foundation", "Win32_System_Com", "Win32_System_Ole", "Win32_System_TaskScheduler", "Win32_System_Variant"] }
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Graphics_Gdi", "Win32_Security", "Win32_Security_Authorization", "Win32_Security_Cryptography", "Win32_Security_Isolation", "Win32_Storage_FileSystem", "Win32_Storage_Packaging_Appx", "Win32_System_Com", "Win32_System_Diagnostics_ToolHelp", "Win32_System_JobObjects", "Win32_System_LibraryLoader", "Win32_System_Memory", "Win32_System_Pipes", "Win32_System_SystemInformation", "Win32_System_Threading", "Win32_System_WindowsProgramming", "Win32_UI_Accessibility", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
+zeroize = "1"
+yaml-rust2 = "0.11"
+
+[build-dependencies]
+sha2 = "0.10"
+i-slint-compiler = { version = "=1.19.0", optional = true, default-features = false }
+slint-build = { version = "=1.19.0", optional = true }
+
+[dev-dependencies]
+tempfile = "3"
+
+[patch.crates-io]
+# Slint 1.19.0 with Windows glyph hinting and light-text coverage correction.
+i-slint-renderer-software = { path = "vendor/slint-software-renderer" }
