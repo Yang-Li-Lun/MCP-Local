@@ -102,6 +102,8 @@ fn contrast(source: &str, styling: bool) -> String {
             let value = match name {
                 "background" => "dark-color-scheme ? #202020 : #F3F3F3;",
                 "alternate-background" => "dark-color-scheme ? #2B2B2B : #FFFFFF;",
+                "control-border" => "dark-color-scheme ? #FFFFFF39 : #00000038;",
+                "text-disabled" => "dark-color-scheme ? #FFFFFF88 : #00000080;",
                 _ => value,
             };
             code.push_str(&format!("    out property <brush> {name}: WindowsContrast.colors.active ? {role} : {value}\n"));

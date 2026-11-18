@@ -205,8 +205,41 @@ component NameEditor inherits VerticalLayout {
     }
 }
 
+component CaptionButton inherits FocusScope {
+    in property <string> label;
+    in property <string> glyph;
+    in property <bool> destructive;
+    callback activate();
+    width: 46px;
+    height: 32px;
+    accessible-role: button;
+    accessible-label: root.label;
+    accessible-action-default => { root.activate(); }
+    key-pressed(event) => {
+        if event.text == Key.Return || event.text == " " { root.activate(); return accept; }
+        reject
+    }
+    Rectangle {
+        background: pointer.has-hover
+            ? (WindowsContrast.colors.active ? Palette.accent-background : root.destructive ? #c42b1c : Palette.alternate-background)
+            : transparent;
+        border-width: root.has-focus && WindowsContrast.keyboard-navigation ? 1px : 0px;
+        border-color: Palette.foreground;
+        Text {
+            text: root.glyph; font-family: "Segoe MDL2 Assets"; font-size: 10px;
+            color: pointer.has-hover && WindowsContrast.colors.active ? Palette.accent-foreground
+                : pointer.has-hover && root.destructive ? white : Palette.foreground;
+            horizontal-alignment: center; vertical-alignment: center;
+        }
+        pointer := TouchArea { clicked => { root.activate(); } }
+    }
+    Tooltip { text: @markdown("\{root.label}"); }
+}
+
 export component Desktop inherits Window {
-    title: "MCP-Local";
+    title: "MCP-Local 設定";
+    no-frame: true;
+    resize-border-width: root.maximized ? 0px : 5px;
     icon: root.applied-icon-image;
     default-font-family: "Segoe UI";
     default-font-size: 14px;
@@ -216,7 +249,7 @@ export component Desktop inherits Window {
     preferred-height: root.initial-height;
     min-width: 750px;
     min-height: 550px;
-    background: root.mica-enabled ? transparent : Palette.background;
+    background: root.mica-enabled && !WindowsContrast.colors.active ? transparent : Palette.background;
 
     in-out property <int> page: 0;
     in-out property <int> theme: 0;
@@ -304,8 +337,9 @@ export component Desktop inherits Window {
         root.theme-changed(root.theme);
     }
 
-    in property <bool> compact: false;
+    in property <bool> compact: root.width < 920px;
     in property <bool> mica-enabled: false;
+    out property <bool> dark-palette: Palette.background.to-hsv().value < Palette.foreground.to-hsv().value;
     property <int> nav-focus: -1;
     property <bool> keyboard-navigation <=> WindowsContrast.keyboard-navigation;
     property <[string]> pages: ["連線設定", "進階讀取", "外觀", "權限模式", "請求監控", "安全中心"];
@@ -315,28 +349,16 @@ export component Desktop inherits Window {
         root.page = index;
         root.nav-focus = index;
     }
-    MenuBar {
-        Menu {
-            title: "應用程式";
-            MenuItem {
-                title: "儲存設定"; shortcut: @keys(Control + S);
-                enabled: root.page == 5 ? SecurityState.ready : !root.busy;
-                activated => { if root.page == 5 { SecurityState.save(); } else { root.save(); } }
-            }
-            MenuItem { title: "獨立監控視窗"; activated => { root.record-detach(); } }
-            MenuItem { title: "縮到系統匣"; enabled: root.tray-ready; activated => { root.hide-to-tray(); } }
-            MenuItem { title: "退出程式"; activated => { root.quit(); } }
-        }
-        Menu {
-            title: "說明";
-            MenuItem { title: "關於 MCP-Local"; activated => { root.about(); } }
-        }
-    }
     FocusScope {
         focus-on-click: false;
         focus-on-tab-navigation: false;
         capture-key-pressed(event) => {
             root.keyboard-navigation = true;
+            if event.modifiers.control && !event.modifiers.alt && event.text == "s" {
+                if root.page == 5 { if SecurityState.ready { SecurityState.save(); } }
+                else if !root.busy { root.save(); }
+                return accept;
+            }
             if event.modifiers.control && !event.modifiers.alt && event.text == Key.Tab {
                 root.activate-page(Math.mod(root.page + (event.modifiers.shift ? 5 : 1), 6));
                 return accept;
@@ -352,18 +374,50 @@ export component Desktop inherits Window {
             reject
         }
         VerticalLayout {
+            x: 0px; y: 0px;
+            width: root.width; height: root.height;
             spacing: 0px;
+            Rectangle {
+                height: 44px;
+                background: transparent;
+                WindowMoveArea {
+                    x: 0px;
+                    width: parent.width - 184px;
+                    Text {
+                        x: 20px; width: parent.width - 20px; height: parent.height;
+                        text: root.title; font-size: 12px; font-weight: 600;
+                        color: Palette.foreground; vertical-alignment: center;
+                    }
+                    TouchArea { double-clicked => { root.maximized = !root.maximized; } }
+                }
+                HorizontalLayout {
+                    x: parent.width - self.width; y: 0px; width: 184px; height: 32px;
+                    app-menu := ContextMenuArea {
+                        width: 46px;
+                        Menu {
+                            MenuItem { title: "儲存設定  Ctrl+S"; enabled: root.page == 5 ? SecurityState.ready : !root.busy; activated => { if root.page == 5 { SecurityState.save(); } else { root.save(); } } }
+                            MenuItem { title: "獨立監控視窗"; activated => { root.record-detach(); } }
+                            MenuItem { title: "縮到系統匣"; enabled: root.tray-ready; activated => { root.hide-to-tray(); } }
+                            MenuItem { title: "關於 MCP-Local"; activated => { root.about(); } }
+                            MenuItem { title: "退出程式"; activated => { root.quit(); } }
+                        }
+                        CaptionButton { label: "應用程式選單"; glyph: "\u{e712}"; activate => { app-menu.show({ x: 0px, y: self.height }); } }
+                    }
+                    CaptionButton { label: "最小化"; glyph: "\u{e921}"; activate => { root.minimized = true; } }
+                    CaptionButton { label: root.maximized ? "還原" : "最大化"; glyph: root.maximized ? "\u{e923}" : "\u{e922}"; activate => { root.maximized = !root.maximized; } }
+                    CaptionButton { label: "關閉"; glyph: "\u{e8bb}"; destructive: true; activate => { root.close(); } }
+                }
+            }
             HorizontalLayout {
                 vertical-stretch: 1;
                 Rectangle {
                     width: root.compact ? 72px : 208px;
-                    background: root.mica-enabled ? transparent : Palette.background;
+                    background: transparent;
                     VerticalLayout {
                         padding: 10px;
-                        padding-top: 20px;
+                        padding-top: 6px;
                         spacing: 6px;
                         alignment: start;
-                        if !root.compact: Text { text: "MCP-Local"; font-size: 20px; font-weight: 600; height: 52px; width: parent.width - 20px; vertical-alignment: top; x: 10px; color: Palette.foreground; }
                         for name[index] in root.pages: FocusScope {
                             height: 40px;
                             focus-on-click: false;
@@ -390,7 +444,7 @@ export component Desktop inherits Window {
                                 }
                                 Rectangle {
                                     border-radius: WindowsContrast.colors.active ? 0px : 4px;
-                                    background: root.page == index ? (WindowsContrast.colors.active ? Palette.accent-background : Palette.alternate-background) : hit.has-hover ? Palette.alternate-background : transparent;
+                                    background: root.page == index ? (WindowsContrast.colors.active ? Palette.accent-background : (root.dark-palette ? #ffffff29 : #00000016)) : hit.has-hover ? Palette.foreground.with-alpha(0.06) : transparent;
                                     border-width: root.keyboard-navigation && nav-button.has-focus ? 1px : 0px;
                                     border-color: Palette.accent-background;
                                     if !root.compact: Text {
@@ -435,8 +489,10 @@ export component Desktop inherits Window {
                             visible: root.page != 4;
                             width: parent.width;
                             height: parent.height;
+                            content-width: self.visible-width;
                             content-height: settings.preferred-height;
                             settings := VerticalLayout {
+                                height: self.preferred-height;
                                 width: parent.width;
                                 spacing: 16px;
                                 if root.page == 0: VerticalLayout {
@@ -449,7 +505,7 @@ export component Desktop inherits Window {
                                                 items: root.folders;
                                                 cursor <=> root.folder-cursor;
                                                 keyboard-navigation <=> root.keyboard-navigation;
-                                                preferred-height: 100px;
+                                                height: 100px;
                                                 enabled: !root.busy;
                                                 select(index, extend, toggle) => { root.select-folder(index, extend, toggle); }
                                                 select-all => { root.select-all-folders(); }
@@ -645,7 +701,7 @@ export component Desktop inherits Window {
             }
             Rectangle {
                 height: 54px;
-                background: Palette.alternate-background;
+                background: WindowsContrast.colors.active ? Palette.alternate-background : Palette.alternate-background.with-alpha(0.65);
                 HorizontalLayout {
                     padding: 8px;
                     padding-left: 16px;

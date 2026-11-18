@@ -1809,7 +1809,7 @@ pub fn run(import: Option<&Path>, at_login: bool) -> Result<()> {
         let state = state.clone();
         let history = history.clone();
         let mut appearance_checked = Instant::now();
-        let mut mica_checked = Instant::now() - Duration::from_secs(1);
+        let mut backdrop_checked = Instant::now() - Duration::from_secs(1);
         timer.start(TimerMode::Repeated, Duration::from_millis(200), move || {
             let Some(ui) = weak.upgrade() else { return };
             if instance.activated() {
@@ -1828,7 +1828,6 @@ pub fn run(import: Option<&Path>, at_login: bool) -> Result<()> {
                     ui.invoke_save();
                 }
             }
-            ui.set_compact(compact(ui.window()));
             ui.set_record_header_limit(monitor_header_limit(ui.window()));
             if let Some(monitor) = weak_monitor.upgrade() {
                 monitor.set_compact(compact(monitor.window()));
@@ -1911,9 +1910,9 @@ pub fn run(import: Option<&Path>, at_login: bool) -> Result<()> {
                 }
                 appearance_checked = Instant::now();
             }
-            if mica_checked.elapsed() >= Duration::from_secs(1) {
-                appearance.refresh_mica(&ui);
-                mica_checked = Instant::now();
+            if backdrop_checked.elapsed() >= Duration::from_secs(1) {
+                appearance.refresh_backdrop(&ui);
+                backdrop_checked = Instant::now();
             }
             while let Ok(observation) = startup_receiver.try_recv() {
                 let enabled = state

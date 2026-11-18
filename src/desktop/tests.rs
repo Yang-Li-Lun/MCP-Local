@@ -118,14 +118,58 @@ impl Platform for SoftwarePlatform {
     }
 }
 
+// Capture the composed caption. Window::take_snapshot() only sees Slint's layer.
+fn capture_window(hwnd: windows_sys::Win32::Foundation::HWND, name: &str) -> bool {
+    use windows_sys::Win32::{
+        Foundation::POINT, Graphics::Gdi::*, UI::WindowsAndMessaging::WindowFromPoint,
+    };
+    use windows_sys::Win32::{Foundation::RECT, UI::WindowsAndMessaging::GetWindowRect};
+    let mut outer = RECT::default();
+    assert_ne!(unsafe { GetWindowRect(hwnd, &mut outer) }, 0);
+    let width = outer.right - outer.left;
+    let height = outer.bottom - outer.top;
+    let origin = POINT {
+        x: outer.left,
+        y: outer.top,
+    };
+    let mut image = image::RgbImage::new(width as u32, height as u32);
+    unsafe {
+        for x in [outer.left + 10, outer.right - 11] {
+            for y in [outer.top + 10, outer.bottom - 11] {
+                if WindowFromPoint(POINT { x, y }) != hwnd {
+                    return false;
+                }
+            }
+        }
+        let screen = GetDC(std::ptr::null_mut());
+        let memory = CreateCompatibleDC(screen);
+        let bitmap = CreateCompatibleBitmap(screen, width, height);
+        let previous = SelectObject(memory, bitmap);
+        let copied = BitBlt(
+            memory, 0, 0, width, height, screen, origin.x, origin.y, SRCCOPY,
+        );
+        for (x, y, pixel) in image.enumerate_pixels_mut() {
+            let [r, g, b, _] = GetPixel(memory, x as i32, y as i32).to_le_bytes();
+            *pixel = image::Rgb([r, g, b]);
+        }
+        SelectObject(memory, previous);
+        DeleteObject(bitmap);
+        DeleteDC(memory);
+        ReleaseDC(std::ptr::null_mut(), screen);
+        assert_ne!(copied, 0);
+    }
+    let dir = std::env::var_os("MCP_LOCAL_RUST_UI_FIXTURE_DIR").unwrap();
+    image.save(Path::new(&dir).join(name)).unwrap();
+    true
+}
+
 #[test]
 #[ignore = "requires an interactive Windows session and the native Slint backend"]
 fn native_main_window_maximizes_and_restores() {
     use windows_sys::Win32::{
-        Foundation::HWND,
-        UI::WindowsAndMessaging::{
-            IsWindowVisible, IsZoomed, PostMessageW, SC_MAXIMIZE, SC_RESTORE, WM_SYSCOMMAND,
-        },
+        Foundation::{HWND, POINT, RECT},
+        Graphics::Gdi::ClientToScreen,
+        UI::WindowsAndMessaging::{GetMenu, GetWindowRect, IsWindowVisible, IsZoomed},
     };
 
     slint::BackendSelector::new()
@@ -134,10 +178,20 @@ fn native_main_window_maximizes_and_restores() {
         .select()
         .unwrap();
     let ui = Desktop::new().unwrap();
+    ui.set_theme(2);
+    ui.set_page(2);
+    let mut appearance = super::appearance::Appearance::default();
+    let diagnostics = MonitorDiagnosticsWindow::new().unwrap();
+    appearance.refresh(
+        &ui,
+        &MonitorWindow::new().unwrap(),
+        &AboutWindow::new().unwrap(),
+        [&diagnostics, &diagnostics],
+    );
     super::prepare_native_window(
         ui.window(),
         (ui.get_initial_width(), ui.get_initial_height()),
-        None,
+        Some(ui.as_weak()),
         |_| {},
     );
     ui.show().unwrap();
@@ -148,13 +202,15 @@ fn native_main_window_maximizes_and_restores() {
         Maximizing,
         Restoring,
         Restored,
-        MessageFailed(u32),
     }
 
     let state = Rc::new(Cell::new(State::AwaitingWindow));
     let observed = state.clone();
     let weak = ui.as_weak();
-    let deadline = Instant::now() + Duration::from_secs(8);
+    let raised = Cell::new(false);
+    let dark_captured = Cell::new(false);
+    let started = Instant::now();
+    let deadline = started + Duration::from_secs(8);
     let timer = slint::Timer::default();
     timer.start(
         slint::TimerMode::Repeated,
@@ -172,10 +228,61 @@ fn native_main_window_maximizes_and_restores() {
             if unsafe { IsWindowVisible(hwnd) } == 0 {
                 return;
             }
+            if std::env::var_os("MCP_LOCAL_RUST_UI_FIXTURE_DIR").is_some() && !raised.replace(true)
+            {
+                use windows_sys::Win32::UI::WindowsAndMessaging::*;
+                unsafe {
+                    SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE);
+                    if SetForegroundWindow(hwnd) == 0 {
+                        SwitchToThisWindow(hwnd, 1);
+                    }
+                }
+            }
+            appearance.refresh_backdrop(&ui);
             let maximized = unsafe { IsZoomed(hwnd) } != 0;
-            let (command, next) = match (observed.get(), maximized, window.is_maximized()) {
-                (State::AwaitingWindow, false, false) => (SC_MAXIMIZE, State::Maximizing),
-                (State::Maximizing, true, true) => (SC_RESTORE, State::Restoring),
+            let next = match (observed.get(), maximized, window.is_maximized()) {
+                (State::AwaitingWindow, false, false) => {
+                    let mut origin = POINT::default();
+                    let mut outer = RECT::default();
+                    unsafe {
+                        assert!(GetMenu(hwnd).is_null());
+                        assert_ne!(GetWindowRect(hwnd, &mut outer), 0);
+                        assert_ne!(ClientToScreen(hwnd, &mut origin), 0);
+                    }
+                    assert!(
+                        (origin.y - outer.top).abs() <= 2,
+                        "system caption is visible"
+                    );
+                    if std::env::var_os("MCP_LOCAL_RUST_UI_FIXTURE_DIR").is_some() {
+                        if started.elapsed() < Duration::from_secs(2) {
+                            return;
+                        }
+                        let light = ui.get_theme() == 1;
+                        if light && started.elapsed() < Duration::from_secs(4) {
+                            return;
+                        }
+                        let name = if light {
+                            "mica-light.png"
+                        } else {
+                            "mica-dark.png"
+                        };
+                        use windows_sys::Win32::UI::WindowsAndMessaging::GetForegroundWindow;
+                        eprintln!("Foreground at capture: {}", unsafe { GetForegroundWindow() } == hwnd);
+                        if !capture_window(hwnd, name) {
+                            return;
+                        }
+                        eprintln!(
+                            "Captured {name}, native Mica enabled = {}",
+                            ui.get_mica_enabled()
+                        );
+                        if !dark_captured.replace(true) {
+                            ui.set_theme(1);
+                            return;
+                        }
+                    }
+                    State::Maximizing
+                }
+                (State::Maximizing, true, true) => State::Restoring,
                 (State::Restoring, false, false) => {
                     observed.set(State::Restored);
                     slint::quit_event_loop().unwrap();
@@ -183,12 +290,9 @@ fn native_main_window_maximizes_and_restores() {
                 }
                 _ => return,
             };
-            if unsafe { PostMessageW(hwnd, WM_SYSCOMMAND, command as usize, 0) } == 0 {
-                observed.set(State::MessageFailed(command));
-                slint::quit_event_loop().unwrap();
-            } else {
-                observed.set(next);
-            }
+            observed.set(next);
+            let logical_width = window.size().width as f32 / window.scale_factor();
+            click(window, logical_width - 69., 16.);
         },
     );
     slint::run_event_loop_until_quit().unwrap();
@@ -684,6 +788,47 @@ fn save_fixture(window: &Window, name: &str) {
 }
 
 #[test]
+fn minimum_window_scrolls_settings_without_moving_caption_or_footer() {
+    set_platform(Box::new(SoftwarePlatform)).unwrap();
+    let ui = Desktop::new().unwrap();
+    fill_settings(&ui, &Config::default());
+    ui.set_theme(2);
+    let window = ui.window();
+    window.set_size(LogicalSize::new(750., 550.));
+    ui.show().unwrap();
+    assert!(ui.get_compact());
+    for page in 0..6 {
+        ui.set_page(page);
+        save_fixture(window, &format!("minimum-page-{page}.png"));
+    }
+    ui.set_page(0);
+    let before = window.take_snapshot().unwrap();
+    window.dispatch_event(WindowEvent::PointerScrolled {
+        position: LogicalPosition::new(400., 405.),
+        delta_x: 0.,
+        delta_y: -420.,
+    });
+    let after = window.take_snapshot().unwrap();
+    let row = before.width() as usize * 4;
+    assert_eq!(
+        &before.as_bytes()[..44 * row],
+        &after.as_bytes()[..44 * row]
+    );
+    assert_ne!(
+        &before.as_bytes()[70 * row..470 * row],
+        &after.as_bytes()[70 * row..470 * row]
+    );
+    assert_eq!(
+        &before.as_bytes()[500 * row..],
+        &after.as_bytes()[500 * row..]
+    );
+    save_fixture(window, "minimum-settings-scrolled.png");
+    window.set_size(LogicalSize::new(1120., 880.));
+    assert!(!ui.get_compact());
+    ui.hide().unwrap();
+}
+
+#[test]
 fn six_pages_render_in_both_themes_at_three_scale_factors() {
     set_platform(Box::new(SoftwarePlatform)).unwrap();
     let ui = Desktop::new().unwrap();
@@ -940,11 +1085,11 @@ fn fluent_monitor_renders_and_restores_keyboard_selection() {
     let clear_count = Rc::new(Cell::new(0));
     let cleared = clear_count.clone();
     ui.on_record_clear(move || cleared.set(cleared.get() + 1));
-    click(ui.window(), 790., 155.);
+    click(ui.window(), 772., 163.);
     save_fixture(ui.window(), "monitor-more-menu.png");
-    click(ui.window(), 630., 192.);
+    click(ui.window(), 700., 196.);
     assert_eq!(clear_count.get(), 1);
-    click(ui.window(), 100., 272.);
+    click(ui.window(), 100., 303.);
     assert!(!ui.get_record_follow());
     assert_eq!(ui.get_record_selected(), 0);
     assert!(!ui.get_record_details());
@@ -1007,11 +1152,14 @@ fn fluent_monitor_renders_and_restores_keyboard_selection() {
     assert_eq!(ui.get_record_selected(), 1);
     key(ui.window(), Key::UpArrow);
     assert_eq!(ui.get_record_selected(), 0);
-    click(ui.window(), 913., 43.);
+    click(ui.window(), 880., 252.);
     assert!(ui.get_record_details());
-    click(ui.window(), 913., 43.);
+    click(ui.window(), 100., 161.);
+    assert_eq!(ui.get_record_selected(), 1);
+    assert!(ui.get_record_details());
+    click(ui.window(), 880., 60.);
     assert!(!ui.get_record_details());
-    assert_eq!(ui.get_record_selected(), 0);
+    assert_eq!(ui.get_record_selected(), 1);
     ui.hide().unwrap();
 
     let main = Desktop::new().unwrap();
@@ -1033,7 +1181,7 @@ fn fluent_monitor_renders_and_restores_keyboard_selection() {
     let edited = Rc::new(Cell::new(None));
     let received = edited.clone();
     main.on_update_name(move |kind, index, value| received.set(Some((kind, index, value))));
-    click(main.window(), 128., 478.);
+    click(main.window(), 128., 426.);
     key(main.window(), "log");
     key(main.window(), Key::Return);
     assert_eq!(edited.take(), Some((0, 0, "log".into())));

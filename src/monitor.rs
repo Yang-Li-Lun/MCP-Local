@@ -302,8 +302,35 @@ fn capture(value: Value, notes: &mut Vec<String>) -> Value {
         return value;
     }
     let end = data.floor_char_boundary(CAPTURE / 8);
-    notes.push("內容超過擷取上限，只保留開頭預覽。".into());
-    json!({"preview": &data[..end], "capture": "內容已截斷"})
+    let mut note = "內容超過擷取上限，只保留開頭預覽。";
+    let mut preview = json!({"preview": &data[..end], "capture": "內容已截斷"});
+    if let Some(args) = value
+        .pointer("/params/arguments")
+        .and_then(Value::as_object)
+    {
+        let mut targets = serde_json::Map::new();
+        for key in [
+            "root_id",
+            "right_root_id",
+            "path",
+            "source",
+            "destination",
+            "left",
+            "right",
+        ] {
+            if let Some(text) = args.get(key).and_then(Value::as_str)
+                && text.len() <= 16 * 1024
+            {
+                targets.insert(key.into(), json!(text));
+            }
+        }
+        if !targets.is_empty() {
+            preview["params"] = json!({"arguments": targets});
+            note = "內容超過擷取上限，保留開頭預覽與可擷取的目標路徑。";
+        }
+    }
+    notes.push(note.into());
+    preview
 }
 
 fn clock() -> (String, String, String) {
@@ -411,6 +438,29 @@ mod tests {
         assert!(receiver.runtime_identity().is_none());
         drop(attachment);
         assert!(receiver.runtime_identity().is_none());
+    }
+
+    #[test]
+    fn monitor_shows_file_targets_and_individual_read_results() {
+        let request = json!({"params":{"arguments":{"files":[{"path":"a.txt"},{"path":"b.txt"},{"path":"c.txt"}]}}});
+        let mut record = Record::begin(request, "read_files", Mode::ReadOnly).unwrap();
+        assert!(presentation::row(&record).0.contains("c.txt"));
+        assert!(presentation::detail(&record).contains("等待回應 · b.txt"));
+        let response = json!({"result":{"structuredContent":{"files":[
+            {"index":0,"returned_lines":0},{"index":1,"skipped_reason":"missing"}
+        ]}}});
+        record.finish(Status::Success, Instant::now(), Some(response), None);
+        let detail = presentation::detail(&record);
+        for expected in ["已讀取 · a.txt", "略過 · b.txt", "結果未確認 · c.txt"] {
+            assert!(detail.contains(expected));
+        }
+
+        let request =
+            json!({"params":{"arguments":{"content":"x".repeat(CAPTURE),"path":"large.txt"}}});
+        let write = Record::begin(request, "write_file", Mode::HostControl).unwrap();
+        assert_eq!(presentation::row(&write).0, "large.txt");
+        assert!(!write.request_notes.is_empty());
+        assert!(write.request.unwrap().to_string().len() < CAPTURE);
     }
 
     #[test]

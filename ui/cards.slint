@@ -3,10 +3,11 @@ import { WindowsContrast } from "system-colors.slint";
 
 export component SettingsCard inherits Rectangle {
     in property <string> title;
-    background: Palette.alternate-background;
+    property <bool> dark: Palette.background.to-hsv().value < Palette.foreground.to-hsv().value;
+    background: WindowsContrast.colors.active ? Palette.alternate-background : root.dark ? #ffffff10 : #ffffffb8;
     border-radius: WindowsContrast.colors.active ? 0px : 8px;
-    border-width: WindowsContrast.colors.active ? 1px : 0px;
-    border-color: Palette.foreground;
+    border-width: 1px;
+    border-color: WindowsContrast.colors.active ? Palette.foreground : root.dark ? #ffffff0c : #00000012;
     VerticalLayout {
         padding: 20px;
         spacing: 12px;

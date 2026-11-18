@@ -52,25 +52,6 @@ fn windows_colors() -> Option<SystemContrastColors> {
     })
 }
 
-#[repr(C)]
-struct Margins {
-    left: i32,
-    right: i32,
-    top: i32,
-    bottom: i32,
-}
-
-#[link(name = "dwmapi")]
-unsafe extern "system" {
-    fn DwmSetWindowAttribute(
-        hwnd: isize,
-        attribute: u32,
-        value: *const std::ffi::c_void,
-        size: u32,
-    ) -> i32;
-    fn DwmExtendFrameIntoClientArea(hwnd: isize, margins: *const Margins) -> i32;
-}
-
 #[link(name = "advapi32")]
 unsafe extern "system" {
     fn RegGetValueW(
@@ -106,14 +87,23 @@ fn personalization(name: &str) -> Option<u32> {
     (result == 0 && size == size_of::<u32>() as u32).then_some(value)
 }
 
-fn mica_allowed(colors: Option<&SystemContrastColors>, transparency: Option<u32>) -> bool {
+fn tint_allowed(colors: Option<&SystemContrastColors>, transparency: Option<u32>) -> bool {
     colors.is_some_and(|colors| !colors.active) && transparency == Some(1)
+}
+
+#[link(name = "dwmapi")]
+unsafe extern "system" {
+    fn DwmSetWindowAttribute(hwnd: isize, attribute: u32, value: *const u32, size: u32) -> i32;
+}
+
+fn set_attribute(hwnd: isize, attribute: u32, value: u32) -> bool {
+    unsafe { DwmSetWindowAttribute(hwnd, attribute, &value, size_of::<u32>() as u32) >= 0 }
 }
 
 #[derive(Default)]
 pub(super) struct Appearance {
     colors: Option<SystemContrastColors>,
-    mica: Option<(isize, bool, bool)>,
+    backdrop: Option<(isize, bool, bool)>,
 }
 
 impl Appearance {
@@ -133,73 +123,26 @@ impl Appearance {
         }
     }
 
-    pub(super) fn refresh_mica(&mut self, ui: &Desktop) {
+    pub(super) fn refresh_backdrop(&mut self, ui: &Desktop) {
         let Some(hwnd) = super::hwnd(ui.window()) else {
             return;
         };
-        let allowed = mica_allowed(self.colors.as_ref(), personalization("EnableTransparency"));
-        let dark = match ui.get_theme() {
-            1 => false,
-            2 => true,
-            _ => personalization("AppsUseLightTheme") == Some(0),
-        };
+        let allowed = tint_allowed(self.colors.as_ref(), personalization("EnableTransparency"));
+        let dark = ui.get_dark_palette();
         let state = (hwnd, allowed, dark);
-        if self.mica == Some(state) {
+        if self.backdrop == Some(state) {
             return;
         }
-        self.mica = Some(state);
-        let backdrop: i32 = if allowed { 2 } else { 1 };
-        let dark_mode: i32 = dark.into();
-        let margins = if allowed {
-            Margins {
-                left: -1,
-                right: -1,
-                top: -1,
-                bottom: -1,
-            }
-        } else {
-            Margins {
-                left: 0,
-                right: 0,
-                top: 0,
-                bottom: 0,
-            }
-        };
-        let applied = unsafe {
-            let _ = DwmSetWindowAttribute(
-                hwnd,
-                20,
-                (&dark_mode as *const i32).cast(),
-                size_of::<i32>() as u32,
-            );
-            let backdrop_result = DwmSetWindowAttribute(
-                hwnd,
-                38,
-                (&backdrop as *const i32).cast(),
-                size_of::<i32>() as u32,
-            );
-            let frame_result = DwmExtendFrameIntoClientArea(hwnd, &margins);
-            allowed && backdrop_result >= 0 && frame_result >= 0
-        };
-        if allowed && !applied {
-            let none: i32 = 1;
-            let margins = Margins {
-                left: 0,
-                right: 0,
-                top: 0,
-                bottom: 0,
-            };
-            unsafe {
-                let _ = DwmSetWindowAttribute(
-                    hwnd,
-                    38,
-                    (&none as *const i32).cast(),
-                    size_of::<i32>() as u32,
-                );
-                let _ = DwmExtendFrameIntoClientArea(hwnd, &margins);
-            }
-        }
-        ui.set_mica_enabled(applied);
+        self.backdrop = Some(state);
+        const IMMERSIVE_DARK_MODE: u32 = 20;
+        const WINDOW_CORNER_PREFERENCE: u32 = 33;
+        const SYSTEM_BACKDROP_TYPE: u32 = 38;
+        set_attribute(hwnd, IMMERSIVE_DARK_MODE, dark.into());
+        set_attribute(hwnd, WINDOW_CORNER_PREFERENCE, 2); // DWMWCP_ROUND
+        // Slint's winit surface already supplies per-pixel alpha. Extending the
+        // non-client frame over it would expose the system caption and buttons.
+        let applied = set_attribute(hwnd, SYSTEM_BACKDROP_TYPE, if allowed { 2 } else { 1 });
+        ui.set_mica_enabled(allowed && applied);
     }
 }
 
@@ -237,16 +180,16 @@ mod tests {
     }
 
     #[test]
-    fn mica_requires_transparency_and_confirmed_non_high_contrast() {
+    fn tint_requires_transparency_and_confirmed_non_high_contrast() {
         let normal = SystemContrastColors::default();
         let high_contrast = SystemContrastColors {
             active: true,
             ..normal.clone()
         };
-        assert!(mica_allowed(Some(&normal), Some(1)));
-        assert!(!mica_allowed(Some(&normal), Some(0)));
-        assert!(!mica_allowed(Some(&normal), None));
-        assert!(!mica_allowed(None, Some(1)));
-        assert!(!mica_allowed(Some(&high_contrast), Some(1)));
+        assert!(tint_allowed(Some(&normal), Some(1)));
+        assert!(!tint_allowed(Some(&normal), Some(0)));
+        assert!(!tint_allowed(Some(&normal), None));
+        assert!(!tint_allowed(None, Some(1)));
+        assert!(!tint_allowed(Some(&high_contrast), Some(1)));
     }
 }

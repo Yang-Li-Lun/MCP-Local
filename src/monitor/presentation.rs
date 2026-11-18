@@ -105,22 +105,27 @@ pub fn row(record: &Record) -> (String, String) {
     };
     let tool = record.tool.as_str();
     match tool {
-        "read_files" => {
-            let Some(files) = args.get("files").and_then(Value::as_array) else {
-                return ("未擷取批次目標".into(), format!("{root} · 讀取範圍未確認"));
+        "read_files" | "hash_files" => {
+            let key = if tool == "read_files" {
+                "files"
+            } else {
+                "paths"
             };
-            let path = |value: &Value| match value {
-                Value::Object(object) => object
-                    .get("path")
-                    .map_or_else(|| "未擷取".into(), |path| preview(path, 160)),
-                other => preview(other, 160),
+            let Some(files) = args.get(key).and_then(Value::as_array) else {
+                return ("未擷取批次目標".into(), root);
             };
-            let target = files.first().map_or_else(|| "無已擷取目標".into(), path);
-            let mut context = files.get(1).map_or_else(String::new, path);
-            if files.len() > 2 {
-                context.push_str(&format!(" · 另有 {} 個", files.len() - 2));
-            }
-            (target, with_root(context))
+            let targets = files
+                .iter()
+                .map(|entry| {
+                    entry
+                        .get("path")
+                        .unwrap_or(entry)
+                        .as_str()
+                        .map_or_else(|| "未擷取路徑".into(), |path| shorten(path, 4096))
+                })
+                .collect::<Vec<_>>()
+                .join("、");
+            (targets, with_root(format!("{} 個目標", files.len())))
         }
         "read_file" | "read_host_file" | "read_file_ranges" | "read_binary" | "read_document"
         | "read_image" => {
@@ -210,10 +215,21 @@ pub fn row(record: &Record) -> (String, String) {
             field(args, "left", "未擷取來源"),
             format!("↔ {}", field(args, "right", "未擷取比較目標")),
         ),
-        "move_file" => (
-            field(args, "source", "未擷取來源"),
-            format!("→ {}", field(args, "destination", "未擷取目的地")),
-        ),
+        "move_file" | "export_session_file" => {
+            let source = if tool == "move_file" {
+                "source"
+            } else {
+                "path"
+            };
+            (
+                format!(
+                    "{} → {}",
+                    field(args, source, "未擷取來源"),
+                    field(args, "destination", "未擷取目的地")
+                ),
+                with_root(String::new()),
+            )
+        }
         "start_process" => (
             field(args, "command", "未擷取指令"),
             format!("工作目錄：{}", field(args, "working_directory", missing)),
@@ -259,8 +275,30 @@ pub fn detail(record: &Record) -> String {
             text.push_str(&line);
         }
     }
-    if record.tool == "read_files" {
-        text.push_str("\n各目標的讀取結果請查看回應。");
+    if record.tool == "read_files"
+        && let Some(files) = args.get("files").and_then(Value::as_array)
+    {
+        let results = record
+            .response
+            .as_ref()
+            .and_then(|response| response.pointer("/result/structuredContent/files"))
+            .and_then(Value::as_array);
+        for (index, file) in files.iter().enumerate() {
+            let result = results
+                .and_then(|rows| rows.get(index))
+                .filter(|row| row["index"].as_u64() == Some(index as u64));
+            let state = match result {
+                Some(row) if row["skipped_reason"].is_string() => "略過",
+                Some(row) if row["returned_lines"].is_u64() => "已讀取",
+                _ if record.status == Status::Running => "等待回應",
+                _ => "結果未確認",
+            };
+            let path = file
+                .get("path")
+                .and_then(Value::as_str)
+                .unwrap_or("未擷取路徑");
+            text.push_str(&format!("\n{state} · {}", shorten(path, 4096)));
+        }
     }
     text.push_str("\n\n已擷取的提交參數\n");
     text.push_str(&serde_json::to_string_pretty(args).unwrap_or_default());

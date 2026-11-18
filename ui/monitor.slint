@@ -1,3 +1,4 @@
+import { SettingsCard } from "cards.slint";
 import { Button, CheckBox, ComboBox, LineEdit, ListView, Palette, ScrollView } from "std-widgets.slint";
 import { WindowsContrast } from "system-colors.slint";
 
@@ -72,19 +73,13 @@ component OutcomeText inherits Text {
     overflow: elide;
 }
 
-component OverviewCard inherits Rectangle {
+component MonitorStat inherits Rectangle {
     in property <MonitorMetric> metric;
     min-width: 0px;
-    min-height: 56px;
     horizontal-stretch: 1;
-    border-radius: WindowsContrast.colors.active ? 0px : 8px;
-    border-width: WindowsContrast.colors.active ? 1px : 0px;
-    border-color: Palette.foreground;
-    background: Palette.alternate-background;
     accessible-role: groupbox;
     accessible-label: root.metric.label + " " + root.metric.value;
     VerticalLayout {
-        padding-left: 12px; padding-right: 12px; padding-top: 6px; padding-bottom: 6px;
         spacing: 2px;
         Text {
             text: root.metric.label; font-size: 13px; overflow: elide;
@@ -145,6 +140,7 @@ component RecordLine inherits HorizontalLayout {
 }
 
 component JsonPane inherits FocusScope {
+    in property <bool> compact;
     in property <DetailPage> document;
     in property <[JsonField]> fields;
     in property <bool> json;
@@ -257,7 +253,7 @@ component JsonPane inherits FocusScope {
             }
         }
         Rectangle {
-            min-height: 120px;
+            min-height: root.compact ? 76px : 120px;
             vertical-stretch: 1;
             background: Palette.control-background;
             border-color: Palette.border;
@@ -419,7 +415,7 @@ export component RequestMonitor inherits FocusScope {
         { label: "請求失敗", value: "" + root.counts.failed, failed: root.counts.failed > 0 },
     ];
     property <bool> valid-selection: selected >= 0 && selected < rows.length;
-    property <length> row-height: 56px;
+    property <length> row-height: 48px;
     focus-on-tab-navigation: false;
     focus-on-click: false;
     function select(index: int) {
@@ -445,6 +441,7 @@ export component RequestMonitor inherits FocusScope {
         } else if root.valid-selection {
             root.following = false;
             root.details = true;
+            root.reveal-selection();
             root.detail-page(0);
             reader.focus-content();
         }
@@ -454,7 +451,7 @@ export component RequestMonitor inherits FocusScope {
         root.sort = value;
         root.refresh();
     }
-    changed selected => { if root.following && !root.details { root.reveal-selection(); } }
+    changed selected => { if root.following || root.details { root.reveal-selection(); } }
     capture-key-pressed(event) => {
         if root.details && event.modifiers.alt && !event.modifiers.control && event.text == Key.LeftArrow {
             root.toggle-details();
@@ -463,237 +460,205 @@ export component RequestMonitor inherits FocusScope {
         reject
     }
 
-    VerticalLayout {
-        spacing: 8px;
-        if root.details: HorizontalLayout {
-            min-height: 40px;
-            spacing: 8px;
-            Rectangle { horizontal-stretch: 1; }
-            Rectangle {
-                width: 36px;
-                details-button := Button {
-                    width: parent.width; height: parent.height;
-                    accessible-label: root.details ? "返回完整列表" : "以整頁開啟詳情";
-                    enabled: root.valid-selection || root.details;
-                    clicked => { root.toggle-details(); }
-                    Tooltip { text: @markdown("\{details-button.accessible-label}"); }
-                }
-                Text {
-                    text: root.details ? "\u{e8fd}" : "\u{e943}";
-                    font-family: "Segoe Fluent Icons";
-                    color: details-button.enabled ? Palette.foreground : Palette.foreground.with-alpha(0.5);
-                    horizontal-alignment: center; vertical-alignment: center;
-                }
-            }
-        }
-        if !root.details: HorizontalLayout {
-            spacing: 8px;
-            OverviewCard { metric: root.metrics[0]; }
-            OverviewCard { metric: root.metrics[1]; }
-            OverviewCard { metric: root.metrics[2]; }
-            OverviewCard { metric: root.metrics[3]; }
-        }
-        if !root.details: Rectangle {
-            height: root.width >= 780px ? 32px : 72px;
-            Text { x: 0px; text: "搜尋"; width: 36px; height: 32px; vertical-alignment: center; }
-            query := LineEdit {
-                x: 36px; height: 32px;
-                width: parent.width - (root.width >= 780px ? 632px : 244px);
-                text <=> root.search; accessible-label: "搜尋監控紀錄";
-                edited(_) => { filters.delay-refresh(); }
-            }
-            HorizontalLayout {
-                x: root.width >= 780px ? query.x + query.width + 8px : 0px;
-                y: root.width >= 780px ? 0px : 40px;
-                width: root.width >= 780px ? 380px : parent.width;
-                height: 32px; spacing: 8px;
-                ComboBox {
-                    min-width: 0px; horizontal-stretch: 3;
-                    model: root.tool-options; current-index <=> root.tool-index; accessible-label: "操作篩選";
-                    selected(value) => { root.tool-filter = self.current-index > 0 ? value : ""; root.refresh(); }
-                }
-                ComboBox {
-                    min-width: 0px; horizontal-stretch: 2;
-                    model: ["全部狀態", "等待中", "已回應", "請求錯誤", "已取消", "已暫停", "已斷線", "無法對應", "紀錄不完整", "傳輸錯誤"];
-                    current-index <=> root.status-filter; accessible-label: "狀態篩選";
-                    selected(_) => { root.refresh(); }
-                }
-                CheckBox { text: "追蹤最新"; checked <=> root.following; toggled => { root.refresh(); } }
-            }
-            Rectangle {
-                x: parent.width - 200px; width: 36px; height: 32px;
-                open-details-button := Button {
-                    width: parent.width; height: parent.height;
-                    accessible-label: "以整頁開啟詳情";
-                    enabled: root.valid-selection;
-                    clicked => { root.toggle-details(); }
-                    Tooltip { text: @markdown("\{open-details-button.accessible-label}"); }
-                }
-                Text {
-                    text: "\u{e943}";
-                    font-family: "Segoe Fluent Icons";
-                    color: open-details-button.enabled ? Palette.foreground : Palette.foreground.with-alpha(0.5);
-                    horizontal-alignment: center; vertical-alignment: center;
-                }
-            }
-            Button {
-                x: parent.width - 156px; width: 88px; height: 32px;
-                text: root.monitoring ? "暫停監控" : "恢復監控";
-                enabled: root.link == "監控中" || root.link == "等待接入";
-                clicked => { root.pause(); }
-            }
-            more-menu := ContextMenuArea {
-                x: parent.width - 60px; width: 60px; height: 32px;
-                Menu {
-                    MenuItem { title: "清除紀錄"; activated => { root.clear(); } }
-                    MenuItem { title: "重設篩選"; activated => { root.search = ""; root.status-filter = 0; root.tool-filter = ""; root.tool-index = 0; root.refresh(); } }
-                    MenuSeparator {}
-                    MenuItem { title: "複製完整紀錄"; enabled: root.valid-selection; activated => { root.copy(true); } }
-                    MenuItem { title: "匯出選取紀錄…"; enabled: root.valid-selection; activated => { root.save-record(); } }
-                    MenuSeparator {}
-                    if !root.detached: MenuItem { title: "獨立視窗"; activated => { root.detach(); } }
-                }
-                Button { text: "更多"; width: parent.width; height: parent.height; clicked => { more-menu.show({x: 0px, y: self.height}); } }
-            }
-        }
-        if !root.details: Rectangle {
-            height: 32px;
-            background: Palette.alternate-background;
-            HorizontalLayout {
-                padding-left: 12px; padding-right: 4px; spacing: 12px;
-                Text { text: "操作紀錄"; font-weight: 600; vertical-alignment: center; horizontal-stretch: 1; }
-                Button { width: 80px; text: root.sort == 0 ? (root.descending ? "時間 ↓" : "時間 ↑") : "時間"; clicked => { root.by-column(0); } }
-                Button { width: 124px; text: root.sort == 1 ? (root.descending ? "狀態 / 耗時 ↓" : "狀態 / 耗時 ↑") : "狀態 / 耗時"; clicked => { root.by-column(1); } }
-            }
-        }
-        if root.details && root.valid-selection: HorizontalLayout {
-            spacing: 8px;
-            record-summary := ScrollView {
-                property <RequestRow> record: root.rows[root.selected];
-                horizontal-stretch: 1;
-                height: min(summary.preferred-height, root.header-limit);
-                content-height: summary.preferred-height;
-                content-width: self.visible-width;
-                summary := VerticalLayout {
-                    width: parent.width;
-                    height: self.preferred-height;
-                    spacing: 6px;
-                    Text {
-                        text: record-summary.record.operation; font-size: 18px; font-weight: 600; overflow: elide;
-                        Tooltip { text: @markdown("\{record-summary.record.tool}"); }
-                    }
-                    Text {
-                        text: record-summary.record.arguments + (record-summary.record.context.is-empty ? "" : "\n" + record-summary.record.context);
-                        wrap: word-wrap;
-                    }
-                    HorizontalLayout {
-                        alignment: start;
-                        spacing: 16px;
-                        Text { text: record-summary.record.full-time; font-size: 13px; vertical-alignment: center; }
-                        OutcomeText { text: record-summary.record.result; failed: record-summary.record.failed; font-size: 13px; }
-                        Text { text: record-summary.record.elapsed; font-size: 13px; vertical-alignment: center; }
-                        CaptureText { text: record-summary.record.capture; warned: record-summary.record.warned; font-size: 13px; }
-                    }
-                }
-            }
-            VerticalLayout {
-                alignment: center;
+    viewport := ScrollView {
+        content-width: self.visible-width;
+        content-height: content.height;
+        content := VerticalLayout {
+            width: viewport.visible-width;
+            height: max(viewport.visible-height, self.min-height);
+            spacing: 16px;
+            if !root.details: SettingsCard {
                 HorizontalLayout {
-                    spacing: 4px;
-                    Button { width: 36px; text: "<"; accessible-label: "上一筆紀錄"; enabled: root.selected > 0; clicked => { root.select(root.selected - 1); } }
-                    Text { text: (root.selected + 1) + " / " + root.rows.length; vertical-alignment: center; }
-                    Button { width: 36px; text: ">"; accessible-label: "下一筆紀錄"; enabled: root.selected + 1 < root.rows.length; clicked => { root.select(root.selected + 1); } }
+                    spacing: 16px;
+                    for metric in root.metrics: MonitorStat { metric: metric; }
+                }
+                HorizontalLayout {
+                    spacing: 8px;
+                    LineEdit {
+                        min-width: 0px; horizontal-stretch: 3;
+                        placeholder-text: "搜尋檔名、路徑或關鍵字"; text <=> root.search; accessible-label: "搜尋監控紀錄";
+                        edited(_) => { filters.delay-refresh(); }
+                    }
+                    ComboBox {
+                        min-width: 0px; horizontal-stretch: 3;
+                        model: root.tool-options; current-index <=> root.tool-index; accessible-label: "操作篩選";
+                        selected(value) => { root.tool-filter = self.current-index > 0 ? value : ""; root.refresh(); }
+                    }
+                    ComboBox {
+                        min-width: 0px; horizontal-stretch: 2;
+                        model: ["全部狀態", "等待中", "已回應", "請求錯誤", "已取消", "已暫停", "已斷線", "無法對應", "紀錄不完整", "傳輸錯誤"];
+                        current-index <=> root.status-filter; accessible-label: "狀態篩選";
+                        selected(_) => { root.refresh(); }
+                    }
+                }
+                HorizontalLayout {
+                    spacing: 8px;
+                    CheckBox { text: "追蹤最新"; checked <=> root.following; toggled => { root.refresh(); } }
+                    Rectangle { horizontal-stretch: 1; }
+                    Button {
+                        text: root.monitoring ? "暫停監控" : "恢復監控";
+                        enabled: root.link == "監控中" || root.link == "等待接入";
+                        clicked => { root.pause(); }
+                    }
+                    more-menu := ContextMenuArea {
+                        width: 60px; height: 32px;
+                        Menu {
+                            MenuItem { title: "清除紀錄"; activated => { root.clear(); } }
+                            MenuItem { title: "重設篩選"; activated => { root.search = ""; root.status-filter = 0; root.tool-filter = ""; root.tool-index = 0; root.refresh(); } }
+                            MenuSeparator {}
+                            MenuItem { title: "複製完整紀錄"; enabled: root.valid-selection; activated => { root.copy(true); } }
+                            MenuItem { title: "匯出選取紀錄…"; enabled: root.valid-selection; activated => { root.save-record(); } }
+                            MenuSeparator {}
+                            if !root.detached: MenuItem { title: "獨立視窗"; activated => { root.detach(); } }
+                        }
+                        Button { text: "更多"; width: parent.width; height: parent.height; clicked => { more-menu.show({x: 0px, y: self.height}); } }
+                    }
                 }
             }
-        }
-        if root.details: HorizontalLayout {
-            spacing: 8px;
-            for label[index] in ["完整參數 / JSON", "回應 / JSON", "操作內容"]: Rectangle {
-                width: 144px; height: 36px;
-                property <int> page-index: index == 2 ? 0 : index + 1;
-                background: root.tab == self.page-index ? Palette.alternate-background : transparent;
-                Button { text: label; width: parent.width; height: parent.height; clicked => { root.tab = parent.page-index; root.detail-page(0); } }
-                if root.tab == self.page-index: Rectangle { y: parent.height - 3px; height: 3px; background: Palette.accent-background; }
-            }
-            Rectangle { horizontal-stretch: 1; }
-        }
-        Rectangle {
-            min-height: 150px; vertical-stretch: 1;
-            background: Palette.alternate-background;
-            border-radius: WindowsContrast.colors.active ? 0px : 8px;
-            list-keys := FocusScope {
-                visible: !root.details;
-                accessible-role: list;
-                accessible-label: "請求紀錄";
-                accessible-delegate-focus: root.selected;
-                key-pressed(event) => {
-                    if root.rows.length == 0 { return reject; }
-                    if event.text == Key.Return && root.valid-selection {
-                        root.toggle-details();
-                        return accept;
-                    }
-                    if !event.modifiers.control && !event.modifiers.alt {
-                        if event.text == Key.UpArrow { root.select(max(0, root.selected - 1)); }
-                        else if event.text == Key.DownArrow { root.select(min(root.rows.length - 1, root.selected + 1)); }
-                        else if event.text == Key.Home { root.select(0); }
-                        else if event.text == Key.End { root.select(root.rows.length - 1); }
-                        else if event.text == Key.PageUp { root.select(max(0, root.selected - floor(listing.visible-height / root.row-height))); }
-                        else if event.text == Key.PageDown { root.select(min(root.rows.length - 1, root.selected + floor(listing.visible-height / root.row-height))); }
-                        else { return reject; }
-                        root.reveal-selection();
-                        return accept;
-                    }
-                    reject
+            SettingsCard {
+                vertical-stretch: 1;
+                HorizontalLayout {
+                    spacing: 8px;
+                    Text { text: "請求紀錄"; font-size: 16px; font-weight: 600; vertical-alignment: center; horizontal-stretch: 1; }
+                    if !root.details: Button { text: root.sort == 0 ? (root.descending ? "時間 ↓" : "時間 ↑") : "時間"; clicked => { root.by-column(0); } }
+                    if !root.details: Button { text: root.sort == 1 ? (root.descending ? "耗時 ↓" : "耗時 ↑") : "耗時"; clicked => { root.by-column(1); } }
+                    Button { text: root.details ? "收合詳情" : "詳情"; enabled: root.valid-selection || root.details; clicked => { root.toggle-details(); } }
                 }
-                listing := ListView {
-                    for row[index] in root.rows: Rectangle {
-                        height: root.row-height;
-                        width: parent.width;
-                        property <bool> highlighted: WindowsContrast.colors.active && root.selected == index;
-                        background: highlighted ? Palette.selection-background : root.selected == index ? Palette.accent-background.with-alpha(0.20) :
-                            area.has-hover && !WindowsContrast.colors.active ? Palette.control-background : transparent;
-                        border-color: WindowsContrast.keyboard-navigation && list-keys.has-focus && root.selected == index ? (highlighted ? Palette.selection-foreground : Palette.accent-background) : transparent;
-                        border-width: 1px;
-                        accessible-role: list-item;
-                        accessible-label: row.when + " " + row.operation + " " + row.arguments + " " + row.result;
-                        accessible-checkable: true;
-                        accessible-checked: root.selected == index;
-                        accessible-action-default => { root.select(index); list-keys.focus(); }
-                        if root.selected == index: Rectangle { width: 3px; x: 0px; background: highlighted ? Palette.selection-foreground : Palette.accent-background; }
-                        RecordLine { cells: row; highlighted: parent.highlighted; }
-                        area := TouchArea {
-                            clicked => { root.select(index); list-keys.focus(); }
-                            double-clicked => { root.select(index); root.toggle-details(); }
+                Rectangle {
+                    min-height: root.details ? root.row-height * 3 : 150px;
+                    max-height: root.details ? root.row-height * 3 : 100000px;
+                    vertical-stretch: 1;
+                    list-keys := FocusScope {
+                        accessible-role: list;
+                        accessible-label: "請求紀錄";
+                        accessible-delegate-focus: root.selected;
+                        key-pressed(event) => {
+                            if root.rows.length == 0 { return reject; }
+                            if event.text == Key.Return && root.valid-selection {
+                                root.toggle-details();
+                                return accept;
+                            }
+                            if !event.modifiers.control && !event.modifiers.alt {
+                                if event.text == Key.UpArrow { root.select(max(0, root.selected - 1)); }
+                                else if event.text == Key.DownArrow { root.select(min(root.rows.length - 1, root.selected + 1)); }
+                                else if event.text == Key.Home { root.select(0); }
+                                else if event.text == Key.End { root.select(root.rows.length - 1); }
+                                else if event.text == Key.PageUp { root.select(max(0, root.selected - floor(listing.visible-height / root.row-height))); }
+                                else if event.text == Key.PageDown { root.select(min(root.rows.length - 1, root.selected + floor(listing.visible-height / root.row-height))); }
+                                else { return reject; }
+                                root.reveal-selection();
+                                return accept;
+                            }
+                            reject
+                        }
+                        listing := ListView {
+                            for row[index] in root.rows: Rectangle {
+                                height: root.row-height;
+                                width: parent.width;
+                                property <bool> highlighted: WindowsContrast.colors.active && root.selected == index;
+                                background: highlighted ? Palette.selection-background : root.selected == index ? Palette.accent-background.with-alpha(0.20) :
+                                    area.has-hover && !WindowsContrast.colors.active ? Palette.control-background : transparent;
+                                border-color: WindowsContrast.keyboard-navigation && list-keys.has-focus && root.selected == index ? (highlighted ? Palette.selection-foreground : Palette.accent-background) : transparent;
+                                border-width: 1px;
+                                accessible-role: list-item;
+                                accessible-label: row.when + " " + row.operation + " " + row.arguments + " " + row.result;
+                                accessible-checkable: true;
+                                accessible-checked: root.selected == index;
+                                accessible-action-default => { root.select(index); list-keys.focus(); }
+                                if root.selected == index: Rectangle { width: 3px; x: 0px; background: highlighted ? Palette.selection-foreground : Palette.accent-background; }
+                                RecordLine { cells: row; highlighted: parent.highlighted; }
+                                area := TouchArea {
+                                    clicked => { root.select(index); list-keys.focus(); }
+                                    double-clicked => { root.select(index); root.toggle-details(); }
+                                }
+                            }
+                        }
+                    }
+                    if root.rows.length == 0: Text {
+                        text: root.search.is-empty && root.status-filter == 0 && root.tool-index == 0 ? "尚無操作紀錄" : "沒有符合條件的操作紀錄";
+                        horizontal-alignment: center; vertical-alignment: center;
+                    }
+                }
+                if root.details && root.valid-selection && !root.compact: HorizontalLayout {
+                    spacing: 8px;
+                    record-summary := ScrollView {
+                        property <RequestRow> record: root.rows[root.selected];
+                        horizontal-stretch: 1;
+                        height: min(summary.preferred-height, root.header-limit);
+                        content-height: summary.preferred-height;
+                        content-width: self.visible-width;
+                        summary := VerticalLayout {
+                            width: parent.width;
+                            height: self.preferred-height;
+                            spacing: 6px;
+                            Text {
+                                text: record-summary.record.operation; font-size: 18px; font-weight: 600; overflow: elide;
+                                Tooltip { text: @markdown("\{record-summary.record.tool}"); }
+                            }
+                            Text {
+                                text: record-summary.record.arguments + (record-summary.record.context.is-empty ? "" : "\n" + record-summary.record.context);
+                                wrap: word-wrap;
+                            }
+                            HorizontalLayout {
+                                alignment: start;
+                                spacing: 16px;
+                                Text { text: record-summary.record.full-time; font-size: 13px; vertical-alignment: center; }
+                                OutcomeText { text: record-summary.record.result; failed: record-summary.record.failed; font-size: 13px; }
+                                Text { text: record-summary.record.elapsed; font-size: 13px; vertical-alignment: center; }
+                                CaptureText { text: record-summary.record.capture; warned: record-summary.record.warned; font-size: 13px; }
+                            }
+                        }
+                    }
+                    VerticalLayout {
+                        alignment: center;
+                        HorizontalLayout {
+                            spacing: 4px;
+                            Button { width: 36px; text: "<"; accessible-label: "上一筆紀錄"; enabled: root.selected > 0; clicked => { root.select(root.selected - 1); } }
+                            Text { text: (root.selected + 1) + " / " + root.rows.length; vertical-alignment: center; }
+                            Button { width: 36px; text: ">"; accessible-label: "下一筆紀錄"; enabled: root.selected + 1 < root.rows.length; clicked => { root.select(root.selected + 1); } }
                         }
                     }
                 }
+                if root.details: HorizontalLayout {
+                    spacing: 8px;
+                    for label[index] in ["完整參數 / JSON", "回應 / JSON", "操作內容"]: Rectangle {
+                        width: 144px; height: 36px;
+                        property <int> page-index: index == 2 ? 0 : index + 1;
+                        background: root.tab == self.page-index ? Palette.alternate-background : transparent;
+                        Button { text: label; width: parent.width; height: parent.height; clicked => { root.tab = parent.page-index; root.detail-page(0); } }
+                        if root.tab == self.page-index: Rectangle { y: parent.height - 3px; height: 3px; background: Palette.accent-background; }
+                    }
+                    Rectangle { horizontal-stretch: 1; }
+                }
+                Rectangle {
+                    min-height: root.details ? reader.min-height : 0px;
+                    max-height: root.details ? 100000px : 0px;
+                    vertical-stretch: root.details ? 1 : 0;
+                    reader := JsonPane {
+                        compact: root.compact;
+                        visible: root.details; vertical-stretch: 1; document: root.document; fields: root.fields; json: root.tab > 0;
+                        tree <=> root.tree; wrap <=> root.wrap;
+                        refresh => { root.detail-page(0); }
+                        page-step(step) => { root.detail-page(step); }
+                        search(term, direction) => { root.detail-find(term, direction); }
+                        field(pointer, action) => { root.detail-field(pointer, action); }
+                        copy => { root.copy(false); }
+                    }
+                }
             }
-            if !root.details && root.rows.length == 0: Text {
-                text: root.search.is-empty && root.status-filter == 0 && root.tool-index == 0 ? "尚無操作紀錄" : "沒有符合條件的操作紀錄";
-                horizontal-alignment: center; vertical-alignment: center;
-            }
-            reader := JsonPane {
-                visible: root.details; document: root.document; fields: root.fields; json: root.tab > 0;
-                tree <=> root.tree; wrap <=> root.wrap;
-                refresh => { root.detail-page(0); }
-                page-step(step) => { root.detail-page(step); }
-                search(term, direction) => { root.detail-find(term, direction); }
-                field(pointer, action) => { root.detail-field(pointer, action); }
-                copy => { root.copy(false); }
-            }
-        }
-        HorizontalLayout {
-            spacing: 8px;
-            Text {
-                text: "顯示 " + root.rows.length + " / 保留 " + root.counts.retained + " 筆" +
-                    (root.health.is-empty ? "" : "   ·   " + root.health);
-                horizontal-stretch: 1; overflow: elide; vertical-alignment: center;
-                Tooltip { text: @markdown("\{parent.text}\n\n擷取內容可能含敏感資料。"); }
-            }
-            Button {
-                text: root.capture-issues || root.link == "監控異常" ? "進階檢視 !" : "進階檢視";
-                accessible-label: "進階檢視";
-                clicked => { root.advanced(); }
+            HorizontalLayout {
+                spacing: 8px;
+                Text {
+                    text: "顯示 " + root.rows.length + " / 保留 " + root.counts.retained + " 筆" +
+                        (root.health.is-empty ? "" : "   ·   " + root.health);
+                    horizontal-stretch: 1; overflow: elide; vertical-alignment: center;
+                    Tooltip { text: @markdown("\{parent.text}\n\n擷取內容可能含敏感資料。"); }
+                }
+                Button {
+                    text: root.capture-issues || root.link == "監控異常" ? "進階檢視 !" : "進階檢視";
+                    accessible-label: "進階檢視";
+                    clicked => { root.advanced(); }
+                }
             }
         }
     }
